@@ -57,16 +57,9 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
           <div className="flex items-center justify-center md:justify-start space-x-2">
             <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
             {coach.subscriptionTier === 'premium' && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Crown className="h-7 w-7 text-yellow-500 fill-yellow-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Premium Coach</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Badge className="bg-yellow-500 text-white hover:bg-yellow-600 text-sm px-3 py-1">
+                Premium
+              </Badge>
             )}
           </div>
           {coach.location && (
