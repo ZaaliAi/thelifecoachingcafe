@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, ChangeEvent } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,27 +12,29 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle, UploadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
 import Link from 'next/link';
-// import Image from 'next/image'; // Image preview temporarily removed
+import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { setUserProfile } from '@/lib/firestore';
+import { setUserProfile, getUserProfile } from '@/lib/firestore'; // Assuming getUserProfile might be useful for pre-fill
 import type { FirestoreUserProfile } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { uploadProfileImage } from '@/services/imageUpload';
 
-const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
+const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile'; // This might be less relevant now
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'), // Kept for display, not for update
+  email: z.string().email('Invalid email address.'), // For display, not direct update by user
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
   keywords: z.string().optional(),
+  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   certifications: z.string().optional(),
   location: z.string().optional(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
@@ -56,6 +58,10 @@ export default function CoachRegistrationPage() {
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
+  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null);
+
 
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -65,10 +71,11 @@ export default function CoachRegistrationPage() {
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
       name: '',
-      email: '', // Will be pre-filled from auth user
+      email: '',
       bio: '',
       selectedSpecialties: [],
       keywords: '',
+      profileImageUrl: '',
       location: '',
       certifications: '',
       websiteUrl: '',
@@ -80,41 +87,70 @@ export default function CoachRegistrationPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      toast({ title: "Authentication Required", description: "Please sign up or log in as a coach first.", variant: "destructive" });
-      router.push('/signup?role=coach');
+      toast({ title: "Authentication Required", description: "Please sign up or log in first.", variant: "destructive" });
+      router.push('/signup?role=coach'); // Redirect to signup with coach role intent
+      return;
+    }
+    if (user && user.role !== 'coach') {
+      toast({ title: "Access Denied", description: "This page is for coach profile completion.", variant: "destructive" });
+      router.push('/dashboard/user'); // Or their actual dashboard
       return;
     }
     if (user) {
-      let pendingName = user.name || '';
-      let pendingEmail = user.email || '';
-      try {
-        const pendingProfileStr = localStorage.getItem(PENDING_COACH_PROFILE_KEY);
-        if (pendingProfileStr) {
-          const pendingProfile = JSON.parse(pendingProfileStr);
-          pendingName = pendingProfile.name || pendingName;
-          // Email should always come from the authenticated user object
-          pendingEmail = user.email || pendingProfile.email || pendingEmail;
+      // Fetch existing profile from Firestore to pre-fill the form
+      const fetchProfile = async () => {
+        const existingProfile = await getUserProfile(user.id);
+        if (existingProfile) {
+          reset({
+            name: existingProfile.name || user.name || '',
+            email: existingProfile.email || user.email || '', // Email should be from auth, non-editable
+            bio: existingProfile.bio || '',
+            selectedSpecialties: existingProfile.specialties || [],
+            keywords: existingProfile.keywords?.join(', ') || '',
+            profileImageUrl: existingProfile.profileImageUrl || '',
+            certifications: existingProfile.certifications?.join(', ') || '',
+            location: existingProfile.location || '',
+            websiteUrl: existingProfile.websiteUrl || '',
+            introVideoUrl: existingProfile.introVideoUrl || '',
+            socialLinkPlatform: existingProfile.socialLinks?.[0]?.platform || '',
+            socialLinkUrl: existingProfile.socialLinks?.[0]?.url || '',
+          });
+          if (existingProfile.profileImageUrl) {
+            setCurrentProfileImageUrl(existingProfile.profileImageUrl);
+            setImagePreviewUrl(existingProfile.profileImageUrl); // For initial preview
+          }
+          const allSpecs = new Set([...allSpecialtiesList, ...(existingProfile.specialties || [])]);
+          setAvailableSpecialties(Array.from(allSpecs));
+        } else {
+          // If no Firestore profile, use auth details
+           reset({
+            name: user.name || '',
+            email: user.email || '',
+            // other fields remain default empty
+          });
         }
-      } catch (e) {
-        console.error("Error reading pending coach profile from localStorage", e);
-      }
-      reset({
-        name: pendingName,
-        email: pendingEmail, // This will make it read-only in the form
-        bio: '',
-        selectedSpecialties: [],
-        keywords: '',
-        location: '',
-        certifications: '',
-        websiteUrl: '',
-        introVideoUrl: '',
-        socialLinkPlatform: '',
-        socialLinkUrl: '',
-      });
+      };
+      fetchProfile();
     }
   }, [user, authLoading, router, toast, reset]);
 
+
   const bioValue = watch('bio');
+
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setSelectedFileForUpload(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedFileForUpload(null);
+      setImagePreviewUrl(currentProfileImageUrl); // Revert to current stored image if selection is cleared
+    }
+  };
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -145,50 +181,61 @@ export default function CoachRegistrationPage() {
   }, [bioValue, fetchSuggestions]);
 
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
-    if (!user) {
-      toast({ title: "Authentication Error", description: "You must be logged in to register as a coach.", variant: "destructive"});
-      router.push('/login');
+    if (!user || user.role !== 'coach') {
+      toast({ title: "Authorization Error", description: "You must be logged in as a coach.", variant: "destructive" });
       return;
     }
-    if (user.role !== 'coach') {
-        toast({ title: "Incorrect Role", description: "This form is for coach profile completion.", variant: "destructive"});
-        router.push('/dashboard/user'); // Or some other appropriate page
-        return;
-    }
     setIsSubmitting(true);
+
+    let finalProfileImageUrl = currentProfileImageUrl; // Start with existing image or null
+
+    if (selectedFileForUpload) {
+      try {
+        console.log(`[RegisterCoachPage] Uploading new profile image for user: ${user.id}`);
+        finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id, currentProfileImageUrl);
+        setCurrentProfileImageUrl(finalProfileImageUrl); // Update current image URL state
+        setValue('profileImageUrl', finalProfileImageUrl); // Update form value for Zod validation
+        console.log(`[RegisterCoachPage] New image URL: ${finalProfileImageUrl}`);
+      } catch (uploadError: any) {
+        console.error("[RegisterCoachPage] Profile image upload failed:", uploadError);
+        toast({ title: "Image Upload Failed", description: uploadError.message || "Could not upload your profile picture.", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
+    } else if (data.profileImageUrl === '' && currentProfileImageUrl) {
+      // This case handles if user explicitly clears a URL field without uploading a new file,
+      // potentially to remove an existing image. We'll save null.
+      finalProfileImageUrl = null;
+    }
+
 
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
     
-    // Data for UPDATING the existing user document.
-    // DO NOT include 'role', 'email', or 'subscriptionTier' here as users shouldn't change them via this form.
-    // 'createdAt' should also not be sent for an update.
-    // 'updatedAt' will be handled by setUserProfile using serverTimestamp.
     const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'updatedAt' | 'subscriptionTier'>> = {
-        name: data.name, // Name can be updated
+        name: data.name,
         bio: data.bio,
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
+        profileImageUrl: finalProfileImageUrl || null, // Ensure null if empty/undefined
         certifications: certificationsArray,
         location: data.location || null,
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
     };
-    
-    // console.log("[RegisterCoachPage] Attempting to update profile for user:", user.id, "with data:", JSON.stringify(profileToSave, null, 2));
 
     try {
-        await setUserProfile(user.id, profileToSave); // setUserProfile will merge and add/update updatedAt
-        localStorage.removeItem(PENDING_COACH_PROFILE_KEY);
+        console.log("[RegisterCoachPage] Calling setUserProfile with data:", JSON.stringify(profileToSave, null, 2));
+        await setUserProfile(user.id, profileToSave); 
         toast({
-          title: "Coach Profile Completed!",
-          description: "Your coach profile details have been saved.",
+          title: "Coach Profile Saved!",
+          description: "Your coach profile details have been updated successfully.",
           action: <CheckCircle2 className="text-green-500" />,
         });
         router.push('/dashboard/coach');
     } catch (error: any) {
-        console.error('Error saving coach profile to Firestore:', error);
+        console.error('[RegisterCoachPage] Error saving coach profile to Firestore:', error);
         toast({ title: "Profile Save Error", 
         description: `Could not save your profile. ${error.message || 'Please try again.'}`, 
         variant: "destructive" });
@@ -236,7 +283,7 @@ export default function CoachRegistrationPage() {
           <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Complete Your Coach Profile</CardTitle>
           <CardDescription>
-            Welcome, {user.name || user.email}! Let's build your coach profile to help clients find you.
+            Welcome, {getValues('name') || user.email}! Let's build your coach profile to help clients find you.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -258,6 +305,19 @@ export default function CoachRegistrationPage() {
 
             <section className="space-y-6">
               <h3 className="text-lg font-semibold border-b pb-2">Profile Details</h3>
+              
+              <div className="space-y-2">
+                <Label htmlFor="profileImage">Profile Image</Label>
+                <Input id="profileImage" type="file" accept="image/*" onChange={handleImageChange} className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+                {imagePreviewUrl && (
+                  <div className="mt-2 relative w-32 h-32">
+                    <Image src={imagePreviewUrl} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
+                  </div>
+                )}
+                <Input type="hidden" {...register('profileImageUrl')} /> {/* For Zod validation, value set by upload logic */}
+                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} placeholder="Tell us about your coaching philosophy, experience, and what makes you unique..." className={errors.bio ? 'border-destructive' : ''} />
@@ -414,7 +474,7 @@ export default function CoachRegistrationPage() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>Profile Submission</AlertTitle>
               <AlertDescription>
-                Your profile information will be saved and may be subject to admin review before appearing in the directory.
+                Your profile information will be saved. New coaches may require admin review before appearing publicly.
               </AlertDescription>
             </Alert>
 
@@ -434,5 +494,3 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
-
-    
