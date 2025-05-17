@@ -240,7 +240,9 @@ export default function CoachRegistrationPage() {
                         Supercharge Your Profile with Premium!
                     </AlertTitle>
                     <AlertDescription className="text-muted-foreground mt-2">
-                        Unlock powerful features like a Premium Badge, link your personal website, embed an engaging intro video, and connect your social media for only £9.99/month. Attract more clients and stand out from the crowd.
+                        Unlock powerful features like a Premium Badge, link your personal website, embed an engaging intro video, 
+                        and connect your social media for <strong className="font-semibold text-foreground/90">only £9.99/month</strong>. 
+                        Attract more clients and stand out from the crowd.
                     </AlertDescription>
                     <div className="mt-4 flex flex-col sm:flex-row gap-2">
                         <Button asChild variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
