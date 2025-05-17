@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
 import Link from 'next/link';
+// import Image from 'next/image'; // Image preview temporarily removed
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { setUserProfile } from '@/lib/firestore';
@@ -27,12 +28,11 @@ const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'),
+  email: z.string().email('Invalid email address.'), // Kept for display, not for update
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
   keywords: z.string().optional(),
-  // profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')), // Temporarily removed
   certifications: z.string().optional(),
   location: z.string().optional(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
@@ -65,10 +65,9 @@ export default function CoachRegistrationPage() {
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
       name: '',
-      email: '',
+      email: '', // Will be pre-filled from auth user
       bio: '',
       selectedSpecialties: [],
-      // profileImageUrl: '', // Temporarily removed
       keywords: '',
       location: '',
       certifications: '',
@@ -93,6 +92,7 @@ export default function CoachRegistrationPage() {
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
           pendingName = pendingProfile.name || pendingName;
+          // Email should always come from the authenticated user object
           pendingEmail = user.email || pendingProfile.email || pendingEmail;
         }
       } catch (e) {
@@ -100,10 +100,9 @@ export default function CoachRegistrationPage() {
       }
       reset({
         name: pendingName,
-        email: pendingEmail,
+        email: pendingEmail, // This will make it read-only in the form
         bio: '',
         selectedSpecialties: [],
-        // profileImageUrl: user.profileImageUrl || '', // Temporarily removed
         keywords: '',
         location: '',
         certifications: '',
@@ -125,9 +124,7 @@ export default function CoachRegistrationPage() {
         setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          console.log("Calling AI suggestCoachSpecialties with bio (first 100 chars):", bioText.substring(0,100));
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
-          console.log("AI suggestCoachSpecialties response:", response);
           setSuggestedSpecialtiesState(response.specialties || []);
           setSuggestedKeywordsState(response.keywords || []);
         } catch (error) {
@@ -153,44 +150,48 @@ export default function CoachRegistrationPage() {
       router.push('/login');
       return;
     }
+    if (user.role !== 'coach') {
+        toast({ title: "Incorrect Role", description: "This form is for coach profile completion.", variant: "destructive"});
+        router.push('/dashboard/user'); // Or some other appropriate page
+        return;
+    }
     setIsSubmitting(true);
 
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
-    const isAttemptingPremium = !!(data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl));
-    const subscriptionTier = isAttemptingPremium ? 'premium' : 'free'; // For now, this doesn't charge, just sets the tier
-
-    const profileToSave: Partial<FirestoreUserProfile> = {
-        name: data.name,
+    
+    // Data for UPDATING the existing user document.
+    // DO NOT include 'role', 'email', or 'subscriptionTier' here as users shouldn't change them via this form.
+    // 'createdAt' should also not be sent for an update.
+    // 'updatedAt' will be handled by setUserProfile using serverTimestamp.
+    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'updatedAt' | 'subscriptionTier'>> = {
+        name: data.name, // Name can be updated
         bio: data.bio,
-        role: 'coach',
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        // profileImageUrl field is not set here anymore
         certifications: certificationsArray,
         location: data.location || null,
-        subscriptionTier: subscriptionTier,
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        updatedAt: new Date(), // This will be converted to serverTimestamp by setUserProfile if configured
     };
     
-    // Email is not part of profileToSave here, as it's taken from the authenticated user by setUserProfile
-    // and is immutable in Firestore rules by user action after creation.
+    // console.log("[RegisterCoachPage] Attempting to update profile for user:", user.id, "with data:", JSON.stringify(profileToSave, null, 2));
 
     try {
-        await setUserProfile(user.id, profileToSave);
+        await setUserProfile(user.id, profileToSave); // setUserProfile will merge and add/update updatedAt
         localStorage.removeItem(PENDING_COACH_PROFILE_KEY);
         toast({
-          title: "Coach Profile Submitted!",
-          description: "Your coach profile has been created/updated. It may be subject to admin review.",
+          title: "Coach Profile Completed!",
+          description: "Your coach profile details have been saved.",
           action: <CheckCircle2 className="text-green-500" />,
         });
         router.push('/dashboard/coach');
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error saving coach profile to Firestore:', error);
-        toast({ title: "Profile Save Error", description: "Could not save your profile to the database.", variant: "destructive" });
+        toast({ title: "Profile Save Error", 
+        description: `Could not save your profile. ${error.message || 'Please try again.'}`, 
+        variant: "destructive" });
     } finally {
         setIsSubmitting(false);
     }
@@ -235,7 +236,7 @@ export default function CoachRegistrationPage() {
           <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Complete Your Coach Profile</CardTitle>
           <CardDescription>
-            You've created an account! Now, let's build your coach profile to help clients find you.
+            Welcome, {user.name || user.email}! Let's build your coach profile to help clients find you.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -249,7 +250,7 @@ export default function CoachRegistrationPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address (from signup)</Label>
+                <Label htmlFor="email">Email Address (from signup - cannot be changed here)</Label>
                 <Input id="email" type="email" {...register('email')} readOnly className={`bg-muted/50 ${errors.email ? 'border-destructive' : ''}`} />
                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
               </div>
@@ -341,8 +342,6 @@ export default function CoachRegistrationPage() {
                  <p className="text-xs text-muted-foreground">Help clients find you by adding relevant keywords.</p>
               </div>
               
-              {/* Profile Image Upload Removed */}
-
               <div className="space-y-2">
                 <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
                 <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
@@ -413,9 +412,9 @@ export default function CoachRegistrationPage() {
 
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>Admin Review</AlertTitle>
+              <AlertTitle>Profile Submission</AlertTitle>
               <AlertDescription>
-                Your profile information will be saved. Listing on the directory may be subject to admin review.
+                Your profile information will be saved and may be subject to admin review before appearing in the directory.
               </AlertDescription>
             </Alert>
 
@@ -426,7 +425,7 @@ export default function CoachRegistrationPage() {
                   Saving Profile...
                 </>
               ) : (
-                'Save Coach Profile'
+                'Complete and Save Coach Profile'
               )}
             </Button>
           </form>
@@ -435,3 +434,5 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
+
+    
