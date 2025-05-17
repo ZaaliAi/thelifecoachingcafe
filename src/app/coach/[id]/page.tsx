@@ -33,14 +33,16 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
         </Button>
       {/* Coach Header */}
       <section className="flex flex-col md:flex-row items-center md:items-start gap-8 p-6 bg-card rounded-lg shadow-xl">
-        <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary relative">
-          <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "professional portrait"} />
-          <AvatarFallback className="text-4xl">{coach.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+        <div className="relative">
+          <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary">
+            <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "professional portrait"} />
+            <AvatarFallback className="text-4xl">{coach.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+          </Avatar>
           {coach.subscriptionTier === 'premium' && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-full border-2 border-card">
+                  <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-full border-2 border-card shadow-md">
                     <Crown className="h-5 w-5 text-yellow-300 fill-yellow-400" />
                   </div>
                 </TooltipTrigger>
@@ -50,7 +52,7 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
               </Tooltip>
             </TooltipProvider>
           )}
-        </Avatar>
+        </div>
         <div className="flex-1 text-center md:text-left">
           <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
           {coach.location && (
