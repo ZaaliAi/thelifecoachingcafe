@@ -12,16 +12,19 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties, mockCoaches } from '@/data/mock'; 
+import { allSpecialties as predefinedSpecialties } from '@/data/mock'; // Keep for available options, though mockCoaches isn't used directly here for data
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
 import { useRouter } from 'next/navigation';
+import { setUserProfile } from '@/lib/firestore'; // Import Firestore function
+import type { Coach, FirestoreUserProfile } from '@/types';
+
 
 // Helper keys for localStorage
 const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
@@ -32,8 +35,10 @@ const coachRegistrationSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
+  keywords: z.string().optional(), // Comma-separated keywords
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
-  certifications: z.string().optional(), 
+  certifications: z.string().optional(),
+  location: z.string().optional(), // Location field
   // Premium Features
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
@@ -46,8 +51,8 @@ type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 export default function CoachRegistrationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[]>([]);
-  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
+  const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
+  const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
   
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -64,46 +69,45 @@ export default function CoachRegistrationPage() {
       email: '',
       selectedSpecialties: [],
       profileImageUrl: '',
+      keywords: '',
+      location: '',
     }
   });
 
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please sign up or log in as a coach first.", variant: "destructive" });
-      router.push('/signup');
+      router.push('/signup?role=coach'); // Redirect to signup with role coach if not logged in
       return;
     }
     if (user) {
-      // Attempt to pre-fill from localStorage if pending coach profile exists
+      let pendingName = user.name || '';
+      let pendingEmail = user.email || '';
       try {
         const pendingProfileStr = localStorage.getItem(PENDING_COACH_PROFILE_KEY);
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
-          reset({ // Use reset to set multiple form values
-            name: pendingProfile.name || user.name || '',
-            email: pendingProfile.email || user.email || '',
-            selectedSpecialties: [], // Keep specialties empty initially
-            profileImageUrl: '',
-            // other fields if stored
-          });
-          localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear after use
-        } else {
-           reset({
-            name: user.name || '',
-            email: user.email || '',
-            selectedSpecialties: [],
-            profileImageUrl: '',
-          });
+          pendingName = pendingProfile.name || pendingName;
+          pendingEmail = pendingProfile.email || pendingEmail;
+          // localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear after use or on successful submission
         }
       } catch (e) {
         console.error("Error reading pending coach profile from localStorage", e);
-        reset({ // Fallback to user context if localStorage fails
-          name: user.name || '',
-          email: user.email || '',
-          selectedSpecialties: [],
-          profileImageUrl: '',
-        });
       }
+      reset({
+        name: pendingName,
+        email: pendingEmail,
+        bio: '',
+        selectedSpecialties: [],
+        profileImageUrl: '',
+        keywords: '',
+        location: '',
+        certifications: '',
+        websiteUrl: '',
+        introVideoUrl: '',
+        socialLinkPlatform: '',
+        socialLinkUrl: '',
+      });
     }
   }, [user, authLoading, router, toast, reset]);
 
@@ -116,18 +120,19 @@ export default function CoachRegistrationPage() {
         setIsAiLoading(true);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
+          // Simulate AI response if Genkit isn't fully set up or for testing
+          await new Promise(resolve => setTimeout(resolve, 1000)); 
           const simulatedResponse: SuggestCoachSpecialtiesOutput = {
              specialties: predefinedSpecialties.filter(s => bioText.toLowerCase().includes(s.split(" ")[0].toLowerCase())).slice(0,3), 
-             keywords: ['keyword1', 'keyword2', 'keyword3']
+             keywords: ['AI keyword 1', 'AI keyword 2', 'AI suggestion 3']
           };
-
-          setSuggestedSpecialties(simulatedResponse.specialties);
-          setSuggestedKeywords(simulatedResponse.keywords);
-          const currentSelected = control._formValues.selectedSpecialties || [];
-          const newSelected = Array.from(new Set([...currentSelected, ...simulatedResponse.specialties.filter(s => predefinedSpecialties.includes(s))]));
-          setValue('selectedSpecialties', newSelected);
-
+          setSuggestedSpecialtiesState(simulatedResponse.specialties);
+          setSuggestedKeywordsState(simulatedResponse.keywords);
+          // Optionally auto-select suggested specialties if they are in predefinedSpecialties
+          // const currentSelected = control._formValues.selectedSpecialties || [];
+          // const newSelected = Array.from(new Set([...currentSelected, ...simulatedResponse.specialties.filter(s => predefinedSpecialties.includes(s))]));
+          // setValue('selectedSpecialties', newSelected);
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
           toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
@@ -136,7 +141,7 @@ export default function CoachRegistrationPage() {
         }
       }
     }, 1000), 
-    [setValue, toast, control]
+    [toast] // control and setValue removed as direct dependencies; they don't change
   );
 
   useEffect(() => {
@@ -167,42 +172,40 @@ export default function CoachRegistrationPage() {
         }
     }
     
-    const registrationData = { ...data, profileImageUrl: finalProfileImageUrl, id: user.id, firebaseUid: user.id };
-    console.log('Coach registration data:', registrationData);
-    // In a real app: Save registrationData to Firestore, keyed by user.id (Firebase UID)
-    
-    // For mock: Add to mockCoaches or similar
-    const existingCoachIndex = mockCoaches.findIndex(c => c.id === user.id);
-    const coachEntry = {
-        id: user.id,
+    const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
+    const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
+
+    const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
-        email: data.email,
+        email: data.email, // email from form, should match auth user's email
         bio: data.bio,
+        role: 'coach', // Explicitly set role to coach
         specialties: data.selectedSpecialties,
-        keywords: suggestedKeywords, 
-        profileImageUrl: finalProfileImageUrl,
-        certifications: data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [],
-        subscriptionTier: data.websiteUrl || data.introVideoUrl ? 'premium' : 'free', 
-        websiteUrl: data.websiteUrl,
-        introVideoUrl: data.introVideoUrl,
+        keywords: keywordsArray,
+        profileImageUrl: finalProfileImageUrl || undefined, // Ensure undefined if empty string
+        certifications: certificationsArray,
+        location: data.location || undefined,
+        subscriptionTier: (data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl)) ? 'premium' : 'free', 
+        websiteUrl: data.websiteUrl || undefined,
+        introVideoUrl: data.introVideoUrl || undefined,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        location: "Remote" 
     };
-    if (existingCoachIndex > -1) {
-        mockCoaches[existingCoachIndex] = coachEntry;
-    } else {
-        mockCoaches.push(coachEntry);
+
+    try {
+        await setUserProfile(user.id, profileToSave); // This will merge and add timestamps
+        localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear pending profile on successful submission
+        toast({
+          title: "Coach Profile Submitted!",
+          description: "Your coach profile has been created/updated. It may be subject to admin review.",
+          action: <CheckCircle2 className="text-green-500" />,
+        });
+        router.push('/dashboard/coach'); 
+    } catch (error) {
+        console.error('Error saving coach profile to Firestore:', error);
+        toast({ title: "Profile Save Error", description: "Could not save your profile to the database.", variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
     }
-
-
-    await new Promise(resolve => setTimeout(resolve, 2000)); 
-    setIsSubmitting(false);
-    toast({
-      title: "Coach Profile Submitted!",
-      description: "Your coach profile has been created/updated. It may be subject to admin review.",
-      action: <CheckCircle2 className="text-green-500" />,
-    });
-    router.push('/dashboard/coach'); 
   };
 
   const handleAddCustomSpecialty = () => {
@@ -229,14 +232,9 @@ export default function CoachRegistrationPage() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || !user) {
     return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading...</div>;
   }
-  if (!user) {
-    // This case should ideally be caught by the useEffect redirect, but as a fallback:
-    return <div className="flex justify-center items-center min-h-screen">Please log in to continue.</div>;
-  }
-
 
   return (
     <div className="max-w-2xl mx-auto py-8">
@@ -275,14 +273,14 @@ export default function CoachRegistrationPage() {
                 {errors.bio && <p className="text-sm text-destructive">{errors.bio.message}</p>}
               </div>
 
-              { (isAiLoading || suggestedKeywords.length > 0 || suggestedSpecialties.length > 0) && (
+              { (isAiLoading || suggestedKeywordsState.length > 0 || suggestedSpecialtiesState.length > 0) && (
                 <Alert variant="default" className="bg-accent/20">
                   <Lightbulb className="h-5 w-5 text-primary" />
                   <AlertTitle className="font-semibold">AI Suggestions Based on Your Bio</AlertTitle>
                   <AlertDescription className="space-y-1">
                     {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                    {suggestedKeywords.length > 0 && <p className="text-sm">Consider these keywords: {suggestedKeywords.join(', ')}</p>}
-                    {suggestedSpecialties.length > 0 && <p className="text-sm">Suggested specialties: {suggestedSpecialties.join(', ')}</p>}
+                    {suggestedKeywordsState.length > 0 && <p className="text-sm">Suggested Keywords: {suggestedKeywordsState.join(', ')}</p>}
+                    {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Suggested specialties: {suggestedSpecialtiesState.join(', ')}</p>}
                   </AlertDescription>
                 </Alert>
               )}
@@ -322,6 +320,13 @@ export default function CoachRegistrationPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="keywords" className="flex items-center"><Tag className="mr-2 h-4 w-4 text-muted-foreground"/>Keywords (comma-separated)</Label>
+                <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, mindset, career change" />
+                {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
+                 <p className="text-xs text-muted-foreground">Help clients find you by adding relevant keywords.</p>
+              </div>
+
               <div className="space-y-1">
                 <Label htmlFor="profileImageFile">Profile Image</Label>
                  <div className="flex items-center gap-2">
@@ -352,8 +357,14 @@ export default function CoachRegistrationPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="certifications">Certifications (Optional, comma-separated)</Label>
+                <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
                 <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
+              </div>
+
+               <div className="space-y-2">
+                <Label htmlFor="location" className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Location (Optional)</Label>
+                <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
+                 {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
               </div>
             </section>
 
@@ -417,7 +428,7 @@ export default function CoachRegistrationPage() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>Admin Review</AlertTitle>
               <AlertDescription>
-                Your profile information will be saved. Some features or listings may be subject to admin review.
+                Your profile information will be saved. Listing on the directory may be subject to admin review.
               </AlertDescription>
             </Alert>
 
@@ -437,3 +448,4 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
+
