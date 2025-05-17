@@ -73,7 +73,7 @@ export default function PricingPage() {
             <CardDescription>Unlock all features to maximize your visibility and client engagement.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow space-y-4">
-            <p className="text-3xl font-bold">$19 <span className="text-sm font-normal text-muted-foreground">/ month (billed annually)</span></p>
+            <p className="text-3xl font-bold">£9.99 <span className="text-sm font-normal text-muted-foreground">billed monthly</span></p>
             <ul className="space-y-2">
               {premiumFeatures.map((feature, index) => (
                 <li key={index} className="flex items-center">
