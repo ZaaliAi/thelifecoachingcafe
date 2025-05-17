@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Simulate loading user from storage
+    setLoading(true); // Explicitly set loading to true at the start
     try {
       const storedUser = localStorage.getItem('coachconnect-user');
       if (storedUser) {
@@ -32,8 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (removeError) {
         console.error("Failed to remove corrupted user item from localStorage:", removeError);
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = (email: string, role: UserRole) => {
