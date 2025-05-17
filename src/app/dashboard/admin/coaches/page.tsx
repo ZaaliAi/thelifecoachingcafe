@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Users, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Users, Loader2, Eye } from "lucide-react";
 import { mockCoaches } from '@/data/mock'; // Using mock data for now
 import type { Coach } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 // Simulate coach application status
 type CoachApplication = Coach & { status: 'pending' | 'approved' | 'rejected' };
@@ -103,7 +104,11 @@ export default function AdminManageCoachesPage() {
                         <CheckCircle2 className="mr-1 h-4 w-4" /> Re-approve
                       </Button>
                    )}
-                  <Button variant="outline" size="sm">View Details</Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/coach/${coach.id}`} target="_blank" rel="noopener noreferrer">
+                      <Eye className="mr-1 h-4 w-4" /> View Details
+                    </Link>
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
