@@ -7,12 +7,14 @@ import { mockBlogPosts } from '@/data/mock';
 import { Search, Filter } from 'lucide-react';
 import type { BlogPost } from '@/types';
 
+const ALL_CATEGORIES_VALUE = "_all_";
+
 // This would be a server component fetching posts in a real app
 async function getBlogPosts(filters?: { category?: string, searchTerm?: string }): Promise<BlogPost[]> {
   // Simulate fetching and filtering
   await new Promise(resolve => setTimeout(resolve, 200)); // Simulate delay
   let posts = mockBlogPosts.filter(p => p.status === 'published');
-  if (filters?.category) {
+  if (filters?.category && filters.category !== ALL_CATEGORIES_VALUE) { // Ensure not to filter by the special value
     posts = posts.filter(post => post.tags?.includes(filters.category!));
   }
   if (filters?.searchTerm) {
@@ -27,9 +29,13 @@ async function getBlogPosts(filters?: { category?: string, searchTerm?: string }
 const categories = Array.from(new Set(mockBlogPosts.flatMap(post => post.tags || [])));
 
 export default async function BlogPage({ searchParams }: { searchParams?: { category?: string, search?: string } }) {
-  const category = searchParams?.category;
+  const rawCategory = searchParams?.category;
   const searchTerm = searchParams?.search;
-  const posts = await getBlogPosts({ category, searchTerm });
+
+  // If category is "_all_" or undefined/empty, then treat as no category filter for getBlogPosts
+  const effectiveCategory = (rawCategory === ALL_CATEGORIES_VALUE || !rawCategory) ? undefined : rawCategory;
+
+  const posts = await getBlogPosts({ category: effectiveCategory, searchTerm });
 
   return (
     <div className="space-y-12">
@@ -59,12 +65,12 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
           </div>
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-foreground mb-1">Filter by Category</label>
-            <Select name="category" defaultValue={category}>
+            <Select name="category" defaultValue={rawCategory || ALL_CATEGORIES_VALUE}>
               <SelectTrigger id="category" className="w-full">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
