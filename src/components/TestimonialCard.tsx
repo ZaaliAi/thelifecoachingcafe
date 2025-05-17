@@ -13,22 +13,19 @@ export function TestimonialCard({ testimonial }: TestimonialCardProps) {
     <Card className="overflow-hidden shadow-lg">
       <CardContent className="p-6">
         <div className="flex items-center mb-4">
-          <Image
-            src={testimonial.imageUrl || `https://placehold.co/80x80.png`}
-            alt={testimonial.name}
-            width={60}
-            height={60}
-            className="rounded-full mr-4 object-cover"
-            data-ai-hint={testimonial.dataAiHint as string || "person face"}
-          />
+          {testimonial.imageUrl && (
+            <Image
+              src={testimonial.imageUrl}
+              alt={testimonial.name}
+              width={60}
+              height={60}
+              className="rounded-full mr-4 object-cover"
+              data-ai-hint={testimonial.dataAiHint as string || "person face"}
+            />
+          )}
           <div>
             <h3 className="font-semibold text-lg">{testimonial.name}</h3>
-            {/* The following line rendering designation has been removed */}
-            {/*
-            {testimonial.designation && (
-              <p className="text-sm text-muted-foreground">{testimonial.designation}</p>
-            )}
-            */}
+            {/* Designation removed as per request */}
           </div>
         </div>
         <div className="flex mb-2">

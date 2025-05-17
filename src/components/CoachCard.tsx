@@ -24,10 +24,12 @@ export function CoachCard({ coach }: CoachCardProps) {
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
       <CardHeader className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-6">
-        <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
-          <AvatarImage src={coach.profileImageUrl || `https://placehold.co/96x96.png`} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person portrait"} />
-          <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
-        </Avatar>
+        {coach.profileImageUrl && (
+          <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
+            <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person portrait"} />
+            <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
+          </Avatar>
+        )}
         <div className="flex-1 text-center sm:text-left">
           <div className="flex items-center justify-center sm:justify-start gap-2">
             <CardTitle className="text-xl font-semibold">{coach.name}</CardTitle>

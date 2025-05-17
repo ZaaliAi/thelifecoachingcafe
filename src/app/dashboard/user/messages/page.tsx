@@ -3,13 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Search, Edit } from "lucide-react";
+import { MessageSquare, Search } from "lucide-react";
 import type { Message } from "@/types"; // Assuming a Message type
 import { format } from "date-fns";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
 
-// Mock messages for placeholder (user's perspective)
+// Mock messages for placeholder (user's perspective) - replace with Firestore
 const mockUserMessages: (Message & { otherPartyName: string, otherPartyAvatar?: string, dataAiHint?: string })[] = [
   { id: 'um1', senderId: 'coach1', receiverId: 'user1', content: "Hi Alex, thanks for reaching out! Happy to discuss your career goals.", timestamp: new Date(Date.now() - 1000 * 60 * 20).toISOString(), read: false, otherPartyName: "Dr. Eleanor Vance", otherPartyAvatar: "https://placehold.co/40x40.png", dataAiHint: "professional woman" },
   { id: 'um2', senderId: 'user1', receiverId: 'coach2', content: "Just confirming our consultation for tomorrow.", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 23).toISOString(), read: true, otherPartyName: "Marcus Chen", otherPartyAvatar: "https://placehold.co/40x40.png", dataAiHint: "confident man" },
@@ -18,8 +17,8 @@ const mockUserMessages: (Message & { otherPartyName: string, otherPartyAvatar?: 
 
 
 export default function UserMessagesPage() {
-  // In a real app, fetch messages for the logged-in user
-  const messages = mockUserMessages;
+  // In a real app, fetch messages for the logged-in user from Firestore
+  const messages = mockUserMessages; // Replace this
 
   return (
     <div className="space-y-8">
@@ -46,10 +45,12 @@ export default function UserMessagesPage() {
           {messages.map((message) => (
             <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== 'user1' ? 'border-primary border-2' : ''}`}> {/* Assuming current user ID is 'user1' */}
               <CardContent className="p-4 flex items-start space-x-4">
-                <Avatar className="h-10 w-10 border">
-                  <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName} data-ai-hint={message.dataAiHint} />
-                  <AvatarFallback>{message.otherPartyName.charAt(0)}</AvatarFallback>
-                </Avatar>
+                {message.otherPartyAvatar && (
+                  <Avatar className="h-10 w-10 border">
+                    <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName} data-ai-hint={message.dataAiHint} />
+                    <AvatarFallback>{message.otherPartyName.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                )}
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">{message.otherPartyName}</h3>
@@ -89,4 +90,3 @@ export default function UserMessagesPage() {
     </div>
   );
 }
-

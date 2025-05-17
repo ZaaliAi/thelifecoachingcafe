@@ -3,11 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Search, UserCircle } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import type { Message } from "@/types"; // Assuming a Message type
 import { format } from "date-fns";
 
-// Mock messages for placeholder
+// Mock messages for placeholder - replace with Firestore fetching
 const mockMessages: (Message & { userName: string, userAvatar?: string, dataAiHint?: string })[] = [
   { id: '1', senderId: 'user1', receiverId: 'coach1', content: "Hello Coach, I'm interested in your services.", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), read: false, userName: "Alex Johnson", userAvatar: "https://placehold.co/40x40.png", dataAiHint: "person face" },
   { id: '2', senderId: 'user2', receiverId: 'coach1', content: "I'd like to schedule a consultation.", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), read: true, userName: "Samantha Lee", userAvatar: "https://placehold.co/40x40.png", dataAiHint: "woman smiling" },
@@ -16,8 +16,8 @@ const mockMessages: (Message & { userName: string, userAvatar?: string, dataAiHi
 
 
 export default function CoachMessagesPage() {
-  // In a real app, fetch messages for the logged-in coach
-  const messages = mockMessages;
+  // In a real app, fetch messages for the logged-in coach from Firestore
+  const messages = mockMessages; // Replace this with actual data fetching
 
   return (
     <div className="space-y-8">
@@ -31,9 +31,6 @@ export default function CoachMessagesPage() {
         </CardHeader>
         <CardContent>
           {/* Add search/filter for messages if needed */}
-          {/* <div className="mb-6">
-            <Input placeholder="Search messages..." className="max-w-sm" icon={<Search className="h-4 w-4" />} />
-          </div> */}
         </CardContent>
       </Card>
 
@@ -42,10 +39,12 @@ export default function CoachMessagesPage() {
           {messages.map((message) => (
             <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read ? 'border-primary border-2' : ''}`}>
               <CardContent className="p-4 flex items-start space-x-4">
-                <Avatar className="h-10 w-10 border">
-                  <AvatarImage src={message.userAvatar} alt={message.userName} data-ai-hint={message.dataAiHint} />
-                  <AvatarFallback>{message.userName.charAt(0)}</AvatarFallback>
-                </Avatar>
+                {message.userAvatar && (
+                  <Avatar className="h-10 w-10 border">
+                    <AvatarImage src={message.userAvatar} alt={message.userName} data-ai-hint={message.dataAiHint} />
+                    <AvatarFallback>{message.userName.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                )}
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">{message.userName}</h3>

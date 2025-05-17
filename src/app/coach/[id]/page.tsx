@@ -1,7 +1,6 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { mockCoaches, mockBlogPosts } from '@/data/mock';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,10 +10,10 @@ import type { Coach } from '@/types';
 import { notFound } from 'next/navigation';
 import { BlogPostCard } from '@/components/BlogPostCard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getCoachById, getAllCoachIds, getBlogPostsByAuthor } from '@/lib/firestore';
 
-async function getCoachDetails(id: string): Promise<Coach | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 100)); // Simulate API delay
-  return mockCoaches.find(coach => coach.id === id);
+async function getCoachDetails(id: string): Promise<Coach | null> {
+  return getCoachById(id);
 }
 
 export default async function CoachProfilePage({ params }: { params: { id: string } }) {
@@ -24,7 +23,7 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
     notFound();
   }
 
-  const coachBlogPosts = mockBlogPosts.filter(post => post.authorId === coach.id && post.status === 'published').slice(0, 2);
+  const coachBlogPosts = await getBlogPostsByAuthor(coach.id, 2); // Fetch 2 most recent published posts
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12">
@@ -33,26 +32,28 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
         </Button>
       {/* Coach Header */}
       <section className="flex flex-col md:flex-row items-center md:items-start gap-8 p-6 bg-card rounded-lg shadow-xl">
-        <div className="relative">
-          <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary">
-            <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "professional portrait"} />
-            <AvatarFallback className="text-4xl">{coach.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-          </Avatar>
-          {coach.subscriptionTier === 'premium' && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-full border-2 border-card shadow-md">
-                    <Crown className="h-5 w-5 text-yellow-300 fill-yellow-400" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Premium Coach</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+        {coach.profileImageUrl && (
+          <div className="relative">
+            <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary">
+              <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "professional portrait"} />
+              <AvatarFallback className="text-4xl">{coach.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+            </Avatar>
+            {coach.subscriptionTier === 'premium' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-full border-2 border-card shadow-md">
+                      <Crown className="h-5 w-5 text-yellow-300 fill-yellow-400" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Premium Coach</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        )}
         <div className="flex-1 text-center md:text-left">
           <div className="flex items-center justify-center md:justify-start space-x-2">
             <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
@@ -182,6 +183,6 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
 }
 
 export async function generateStaticParams() {
-  return mockCoaches.map(coach => ({ id: coach.id }));
+  const coachIds = await getAllCoachIds();
+  return coachIds.map(id => ({ id }));
 }
-

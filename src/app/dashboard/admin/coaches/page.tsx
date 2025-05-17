@@ -1,5 +1,5 @@
 
-"use client"; // For client-side actions like approve/reject
+"use client"; 
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { mockCoaches } from '@/data/mock'; // Using mock data for now
 import type { Coach } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { getAllCoaches, updateCoachSubscriptionTier, setUserProfile } from '@/lib/firestore'; // Assuming setUserProfile can update status
 
-// Simulate coach application status and subscription tier
-type CoachApplication = Coach & { status: 'pending' | 'approved' | 'rejected' };
+type CoachApplication = Coach & { status?: 'pending' | 'approved' | 'rejected' }; // Make status optional
 
 export default function AdminManageCoachesPage() {
   const [coachApplications, setCoachApplications] = useState<CoachApplication[]>([]);
@@ -23,34 +22,57 @@ export default function AdminManageCoachesPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate fetching coach applications
-    const applications: CoachApplication[] = mockCoaches.map((coach, index) => ({
-      ...coach, // This already includes subscriptionTier from mockCoaches
-      status: index % 3 === 0 ? 'pending' : (index % 3 === 1 ? 'approved' : 'rejected'),
-    }));
-    setCoachApplications(applications);
-    setIsLoading(false);
-  }, []);
+    const fetchCoaches = async () => {
+      setIsLoading(true);
+      try {
+        const coaches = await getAllCoaches(); 
+        // Simulate application status if not present in Firestore model
+        const applications: CoachApplication[] = coaches.map((coach, index) => ({
+          ...coach,
+          status: coach.status || (index % 3 === 0 ? 'pending' : (index % 3 === 1 ? 'approved' : 'rejected')), // Fallback status logic
+        }));
+        setCoachApplications(applications);
+      } catch (error) {
+        console.error("Failed to fetch coaches:", error);
+        toast({ title: "Error", description: "Could not fetch coach data.", variant: "destructive" });
+      }
+      setIsLoading(false);
+    };
+    fetchCoaches();
+  }, [toast]);
 
-  const handleApproval = (coachId: string, newStatus: 'approved' | 'rejected') => {
-    // Simulate API call
-    setCoachApplications(prev => 
-      prev.map(app => app.id === coachId ? { ...app, status: newStatus } : app)
-    );
-    toast({
-      title: `Coach Application ${newStatus}`,
-      description: `Coach application for ${coachApplications.find(c=>c.id===coachId)?.name} has been ${newStatus}.`,
-    });
+  const handleApproval = async (coachId: string, newStatus: 'approved' | 'rejected') => {
+    try {
+      // In Firestore, 'status' might be part of the user profile or a separate collection.
+      // Assuming it's part of the user profile for now.
+      await setUserProfile(coachId, { status: newStatus as any }); // You might need to adjust FirestoreUserProfile type
+      setCoachApplications(prev => 
+        prev.map(app => app.id === coachId ? { ...app, status: newStatus } : app)
+      );
+      toast({
+        title: `Coach Application ${newStatus}`,
+        description: `Coach application for ${coachApplications.find(c=>c.id===coachId)?.name} has been ${newStatus}.`,
+      });
+    } catch (error) {
+      console.error("Failed to update coach status:", error);
+      toast({ title: "Update Failed", description: "Could not update coach status.", variant: "destructive" });
+    }
   };
 
-  const handleSubscriptionTierChange = (coachId: string, newTier: 'free' | 'premium') => {
-    setCoachApplications(prev =>
-      prev.map(app => app.id === coachId ? { ...app, subscriptionTier: newTier } : app)
-    );
-    toast({
-      title: "Subscription Tier Updated",
-      description: `Coach ${coachApplications.find(c => c.id === coachId)?.name}'s subscription tier set to ${newTier}.`,
-    });
+  const handleSubscriptionTierChange = async (coachId: string, newTier: 'free' | 'premium') => {
+    try {
+      await updateCoachSubscriptionTier(coachId, newTier);
+      setCoachApplications(prev =>
+        prev.map(app => app.id === coachId ? { ...app, subscriptionTier: newTier } : app)
+      );
+      toast({
+        title: "Subscription Tier Updated",
+        description: `Coach ${coachApplications.find(c => c.id === coachId)?.name}'s subscription tier set to ${newTier}.`,
+      });
+    } catch (error) {
+      console.error("Failed to update subscription tier:", error);
+      toast({ title: "Update Failed", description: "Could not update subscription tier.", variant: "destructive" });
+    }
   };
 
   if (isLoading) {
@@ -82,17 +104,19 @@ export default function AdminManageCoachesPage() {
             {coachApplications.map((coach) => (
               <TableRow key={coach.id}>
                 <TableCell>
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person avatar"} />
-                    <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
+                  {coach.profileImageUrl && (
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person avatar"} />
+                      <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  )}
                 </TableCell>
                 <TableCell className="font-medium">{coach.name}</TableCell>
                 <TableCell>{coach.email || `${coach.name.toLowerCase().replace(' ', '.')}@example.com`}</TableCell>
                 <TableCell>{coach.specialties.slice(0, 1).join(', ')}{coach.specialties.length > 1 ? '...' : ''}</TableCell>
                 <TableCell>
                   <Badge variant={coach.status === 'approved' ? 'default' : coach.status === 'pending' ? 'secondary' : 'destructive'}>
-                    {coach.status.charAt(0).toUpperCase() + coach.status.slice(1)}
+                    {coach.status ? (coach.status.charAt(0).toUpperCase() + coach.status.slice(1)) : 'N/A'}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -151,4 +175,3 @@ export default function AdminManageCoachesPage() {
     </Card>
   );
 }
-
