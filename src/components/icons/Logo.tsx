@@ -1,13 +1,21 @@
+
 import type { SVGProps } from 'react';
 
 export function Logo(props: SVGProps<SVGSVGElement>) {
+  // Adjustments for the longer name "The Life Coaching Cafe"
+  const text = "The Life Coaching Cafe";
+  const fontSize = 18; // Reduced font size
+  const textLength = text.length * (fontSize * 0.5); // Approximate text length
+  const svgWidth = Math.max(280, textLength + 20); // Dynamic width
+  const svgHeight = 50;
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 200 50"
-      width="150"
-      height="37.5"
-      aria-label="CoachConnect Logo"
+      viewBox={`0 0 ${svgWidth} ${svgHeight}`} // Adjusted viewBox
+      width={svgWidth * 0.75} // Adjusted display width
+      height={svgHeight * 0.75} // Adjusted display height
+      aria-label="The Life Coaching Cafe Logo"
       {...props}
     >
       <defs>
@@ -22,8 +30,8 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
           .logo-text { font-family: 'Poppins', sans-serif; fill: url(#logoGradient); }
         `}
       </style>
-      <text x="10" y="35" className="logo-text" fontSize="30" fontWeight="600">
-        CoachConnect
+      <text x="10" y="35" className="logo-text" fontSize={fontSize} fontWeight="600">
+        {text}
       </text>
     </svg>
   );

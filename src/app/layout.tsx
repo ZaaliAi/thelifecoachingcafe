@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -17,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CoachConnect - Find Your Life Coach',
+  title: 'The Life Coaching Cafe - Find Your Life Coach',
   description: 'Connect with certified life coaches through our online directory. Utilize our AI-powered CoachMatch tool for personalized recommendations and discover resources for personal development and mental wellness.',
 };
 

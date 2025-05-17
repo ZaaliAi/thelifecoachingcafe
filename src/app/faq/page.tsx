@@ -10,9 +10,9 @@ import { HelpCircle } from "lucide-react";
 
 const faqs = [
   {
-    question: "What is CoachConnect?",
+    question: "What is The Life Coaching Cafe?",
     answer:
-      "CoachConnect is a platform designed to connect individuals seeking personal or professional growth with qualified life coaches. We use our innovative CoachMatch AI to help you find the perfect coach for your needs.",
+      "The Life Coaching Cafe is a platform designed to connect individuals seeking personal or professional growth with qualified life coaches. We use our innovative CoachMatch AI to help you find the perfect coach for your needs.",
   },
   {
     question: "How does the CoachMatch AI work?",
@@ -25,7 +25,7 @@ const faqs = [
       "Yes, searching for and browsing coach profiles is completely free for users. You can also message coaches through our platform to inquire about their services.",
   },
   {
-    question: "How do I become a coach on CoachConnect?",
+    question: "How do I become a coach on The Life Coaching Cafe?",
     answer:
       "You can register as a coach by signing up and completing our coach profile form. We offer different subscription tiers with various features to help you build your practice. Visit our 'Pricing' page for more details.",
   },
@@ -50,7 +50,7 @@ export default function FAQPage() {
           Frequently Asked Questions
         </h1>
         <p className="text-lg text-muted-foreground">
-          Find answers to common questions about CoachConnect.
+          Find answers to common questions about The Life Coaching Cafe.
         </p>
       </section>
 

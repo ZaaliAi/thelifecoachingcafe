@@ -94,8 +94,8 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" passHref legacyBehavior>
-          <a className="flex items-center" aria-label="CoachConnect Home">
-            <Image src={logoUrl} alt="CoachConnect Logo" width={144} height={36} priority className="object-contain"/>
+          <a className="flex items-center" aria-label="The Life Coaching Cafe Home">
+            <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={144} height={36} priority className="object-contain"/>
           </a>
         </Link>
         
@@ -117,8 +117,8 @@ export function Header() {
             <SheetContent side="right" className="w-full max-w-xs p-6">
               <div className="flex flex-col space-y-4">
                 <Link href="/" passHref legacyBehavior>
-                  <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="CoachConnect Home">
-                     <Image src={logoUrl} alt="CoachConnect Logo" width={144} height={36} priority className="object-contain"/>
+                  <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
+                     <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={144} height={36} priority className="object-contain"/>
                   </a>
                 </Link>
                 {navLinks.map(link => ( // Use all navLinks for mobile, including Home

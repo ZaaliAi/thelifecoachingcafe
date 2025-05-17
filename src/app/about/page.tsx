@@ -7,9 +7,9 @@ export default function AboutUsPage() {
   return (
     <div className="space-y-12 py-8">
       <section className="text-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-6 text-primary">About CoachConnect: Your Partner in Personal Development</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-6 text-primary">About The Life Coaching Cafe: Your Partner in Personal Development</h1>
         <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-          Welcome to CoachConnect, your premier online life coach directory for finding and connecting with certified life coaches who can help you unlock your potential and achieve your goals in personal development, career, and mental wellness.
+          Welcome to The Life Coaching Cafe, your premier online life coach directory for finding and connecting with certified life coaches who can help you unlock your potential and achieve your goals in personal development, career, and mental wellness.
         </p>
       </section>
 
@@ -22,7 +22,7 @@ export default function AboutUsPage() {
         </CardHeader>
         <CardContent className="text-foreground/90 space-y-4">
           <p>
-            At CoachConnect, our mission is to bridge the gap between individuals seeking guidance for personal growth and skilled life coaches ready to make a difference. We believe everyone deserves access to quality, transformational coaching that can inspire growth, foster resilience, and lead to a more fulfilling life.
+            At The Life Coaching Cafe, our mission is to bridge the gap between individuals seeking guidance for personal growth and skilled life coaches ready to make a difference. We believe everyone deserves access to quality, transformational coaching that can inspire growth, foster resilience, and lead to a more fulfilling life.
           </p>
           <p>
             We leverage technology, including our innovative CoachMatch AI, to provide personalized coach suggestions, making it easier than ever to find a mental wellness coach or personal development coach whose expertise aligns with your unique needs and aspirations.
@@ -57,7 +57,7 @@ export default function AboutUsPage() {
             </CardHeader>
             <CardContent className="text-foreground/80 space-y-3">
                 <p>
-                    CoachConnect is more than just a life coach directory; it's a vibrant community of seekers, learners, and expert coaches. We provide resources, life coaching blog articles, and a supportive platform for both coaches to grow their practice and users to embark on transformative journeys toward achieving clarity and purpose.
+                    The Life Coaching Cafe is more than just a life coach directory; it's a vibrant community of seekers, learners, and expert coaches. We provide resources, life coaching blog articles, and a supportive platform for both coaches to grow their practice and users to embark on transformative journeys toward achieving clarity and purpose.
                 </p>
                  <div className="relative aspect-video rounded-lg overflow-hidden mt-4">
                     <Image 
@@ -75,7 +75,7 @@ export default function AboutUsPage() {
       <section className="text-center py-8">
         <h2 className="text-2xl font-semibold mb-4">Join Us on This Journey to Find a Life Coach</h2>
         <p className="text-muted-foreground max-w-xl mx-auto">
-          Whether you're looking to find a life coach for personal development or you're a certified life coach wanting to expand your reach, CoachConnect is here to support you.
+          Whether you're looking to find a life coach for personal development or you're a certified life coach wanting to expand your reach, The Life Coaching Cafe is here to support you.
         </p>
       </section>
     </div>

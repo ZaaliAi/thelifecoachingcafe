@@ -45,11 +45,6 @@ export default function LoginPage() {
       await login(data.email, data.password);
       // Successful login, onAuthStateChanged in AuthProvider will set user.
       // The useEffect above will handle redirection once user context is updated.
-      // We might not need an immediate toast here if redirection is quick,
-      // but can add one if there's a noticeable delay.
-      // For now, let AuthProvider handle the user state update.
-      // toast({ title: "Login Successful!", description: "Redirecting..." });
-      // No explicit router.push here, handled by useEffect watching `user` state
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Login failed. Please check your credentials.";
@@ -83,7 +78,7 @@ export default function LoginPage() {
           <LogIn className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Welcome Back!</CardTitle>
           <CardDescription>
-            Log in to access your CoachConnect account. <br/>
+            Log in to access your The Life Coaching Cafe account. <br/>
             (Admin: hello@thelifecoachingcafe.com / Lifecoach2025!)
           </CardDescription>
         </CardHeader>

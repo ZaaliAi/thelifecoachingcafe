@@ -31,7 +31,7 @@ export default function AdminPlatformSettingsPage() {
 
   // Mock current platform settings
   const currentSettings = {
-    platformName: "CoachConnect",
+    platformName: "The Life Coaching Cafe",
     adminEmail: "hello@thelifecoachingcafe.com",
     maintenanceMode: false,
     newCoachApproval: "manual" as const,
@@ -62,7 +62,7 @@ export default function AdminPlatformSettingsPage() {
           <Settings className="mr-3 h-7 w-7 text-primary" />
           Platform Settings
         </CardTitle>
-        <CardDescription>Configure global settings for the CoachConnect platform.</CardDescription>
+        <CardDescription>Configure global settings for The Life Coaching Cafe platform.</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-8">

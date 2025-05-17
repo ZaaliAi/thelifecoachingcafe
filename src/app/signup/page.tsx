@@ -60,7 +60,6 @@ export default function SignupPage() {
       await signup(data.name, data.email, data.password, data.role);
       // Successful signup, onAuthStateChanged in AuthProvider will set user.
       // The useEffect above will handle redirection.
-      // We don't push router here, as useEffect handles it when `user` state updates.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
@@ -94,7 +93,7 @@ export default function SignupPage() {
           <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>
           <CardDescription>
-            Join CoachConnect today to find or become a life coach.
+            Join The Life Coaching Cafe today to find or become a life coach.
           </CardDescription>
         </CardHeader>
         <CardContent>
