@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, ChangeEvent } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,24 +12,22 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle, UploadCloud } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
 import Link from 'next/link';
-import Image from 'next/image';
+import NextImage from 'next/image'; // Renamed to avoid conflict with Lucide icon
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { setUserProfile, getUserProfile } from '@/lib/firestore'; // Assuming getUserProfile might be useful for pre-fill
+import { setUserProfile, getUserProfile } from '@/lib/firestore';
 import type { FirestoreUserProfile } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { uploadProfileImage } from '@/services/imageUpload';
-
-const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile'; // This might be less relevant now
+// Image upload service is no longer directly used here for file upload, but profileImageUrl will be a URL
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'), // For display, not direct update by user
+  email: z.string().email('Invalid email address.'),
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
@@ -58,11 +56,7 @@ export default function CoachRegistrationPage() {
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
-  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null);
-
-
+  
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -85,25 +79,26 @@ export default function CoachRegistrationPage() {
     }
   });
 
+  const profileImageUrlValue = watch('profileImageUrl'); // To show preview if URL is entered
+
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please sign up or log in first.", variant: "destructive" });
-      router.push('/signup?role=coach'); // Redirect to signup with coach role intent
+      router.push('/signup?role=coach');
       return;
     }
     if (user && user.role !== 'coach') {
       toast({ title: "Access Denied", description: "This page is for coach profile completion.", variant: "destructive" });
-      router.push('/dashboard/user'); // Or their actual dashboard
+      router.push('/dashboard/user');
       return;
     }
     if (user) {
-      // Fetch existing profile from Firestore to pre-fill the form
       const fetchProfile = async () => {
         const existingProfile = await getUserProfile(user.id);
         if (existingProfile) {
           reset({
             name: existingProfile.name || user.name || '',
-            email: existingProfile.email || user.email || '', // Email should be from auth, non-editable
+            email: existingProfile.email || user.email || '',
             bio: existingProfile.bio || '',
             selectedSpecialties: existingProfile.specialties || [],
             keywords: existingProfile.keywords?.join(', ') || '',
@@ -115,18 +110,12 @@ export default function CoachRegistrationPage() {
             socialLinkPlatform: existingProfile.socialLinks?.[0]?.platform || '',
             socialLinkUrl: existingProfile.socialLinks?.[0]?.url || '',
           });
-          if (existingProfile.profileImageUrl) {
-            setCurrentProfileImageUrl(existingProfile.profileImageUrl);
-            setImagePreviewUrl(existingProfile.profileImageUrl); // For initial preview
-          }
           const allSpecs = new Set([...allSpecialtiesList, ...(existingProfile.specialties || [])]);
           setAvailableSpecialties(Array.from(allSpecs));
         } else {
-          // If no Firestore profile, use auth details
            reset({
             name: user.name || '',
             email: user.email || '',
-            // other fields remain default empty
           });
         }
       };
@@ -134,23 +123,7 @@ export default function CoachRegistrationPage() {
     }
   }, [user, authLoading, router, toast, reset]);
 
-
   const bioValue = watch('bio');
-
-  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      setSelectedFileForUpload(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedFileForUpload(null);
-      setImagePreviewUrl(currentProfileImageUrl); // Revert to current stored image if selection is cleared
-    }
-  };
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -187,46 +160,31 @@ export default function CoachRegistrationPage() {
     }
     setIsSubmitting(true);
 
-    let finalProfileImageUrl = currentProfileImageUrl; // Start with existing image or null
-
-    if (selectedFileForUpload) {
-      try {
-        console.log(`[RegisterCoachPage] Uploading new profile image for user: ${user.id}`);
-        finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id, currentProfileImageUrl);
-        setCurrentProfileImageUrl(finalProfileImageUrl); // Update current image URL state
-        setValue('profileImageUrl', finalProfileImageUrl); // Update form value for Zod validation
-        console.log(`[RegisterCoachPage] New image URL: ${finalProfileImageUrl}`);
-      } catch (uploadError: any) {
-        console.error("[RegisterCoachPage] Profile image upload failed:", uploadError);
-        toast({ title: "Image Upload Failed", description: uploadError.message || "Could not upload your profile picture.", variant: "destructive" });
-        setIsSubmitting(false);
-        return;
-      }
-    } else if (data.profileImageUrl === '' && currentProfileImageUrl) {
-      // This case handles if user explicitly clears a URL field without uploading a new file,
-      // potentially to remove an existing image. We'll save null.
-      finalProfileImageUrl = null;
-    }
-
-
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
     
-    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'updatedAt' | 'subscriptionTier'>> = {
-        name: data.name,
+    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'updatedAt'>> = {
+        name: data.name, // Name is updated
         bio: data.bio,
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        profileImageUrl: finalProfileImageUrl || null, // Ensure null if empty/undefined
+        profileImageUrl: data.profileImageUrl || null, // Use URL directly or null
         certifications: certificationsArray,
         location: data.location || null,
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+        // subscriptionTier is managed by admin or set initially. Not updated here by coach.
     };
+    // Ensure role is not accidentally changed if it was part of form data
+    // delete (profileToSave as any).role; 
+    // delete (profileToSave as any).email;
 
     try {
         console.log("[RegisterCoachPage] Calling setUserProfile with data:", JSON.stringify(profileToSave, null, 2));
+        // setUserProfile will merge these details with existing document,
+        // and handle server timestamps for createdAt (if new) and updatedAt.
+        // It uses { merge: true } for updates.
         await setUserProfile(user.id, profileToSave); 
         toast({
           title: "Coach Profile Saved!",
@@ -271,7 +229,6 @@ export default function CoachRegistrationPage() {
     }
   };
 
-
   if (authLoading || !user) {
     return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading...</div>;
   }
@@ -307,15 +264,17 @@ export default function CoachRegistrationPage() {
               <h3 className="text-lg font-semibold border-b pb-2">Profile Details</h3>
               
               <div className="space-y-2">
-                <Label htmlFor="profileImage">Profile Image</Label>
-                <Input id="profileImage" type="file" accept="image/*" onChange={handleImageChange} className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
-                {imagePreviewUrl && (
+                <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
+                <div className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                    <Input id="profileImageUrl" type="url" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''}/>
+                </div>
+                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                {profileImageUrlValue && z.string().url().safeParse(profileImageUrlValue).success && (
                   <div className="mt-2 relative w-32 h-32">
-                    <Image src={imagePreviewUrl} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
+                    <NextImage src={profileImageUrlValue} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
                   </div>
                 )}
-                <Input type="hidden" {...register('profileImageUrl')} /> {/* For Zod validation, value set by upload logic */}
-                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
               </div>
 
               <div className="space-y-2">
@@ -439,7 +398,7 @@ export default function CoachRegistrationPage() {
                     <Label htmlFor="websiteUrl">Your Personal Website (Premium Feature)</Label>
                     <div className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-muted-foreground" />
-                        <Input id="websiteUrl" {...register('websiteUrl')} placeholder="https://yourwebsite.com" className={errors.websiteUrl ? 'border-destructive' : ''} />
+                        <Input id="websiteUrl" type="url" {...register('websiteUrl')} placeholder="https://yourwebsite.com" className={errors.websiteUrl ? 'border-destructive' : ''} />
                     </div>
                     {errors.websiteUrl && <p className="text-sm text-destructive">{errors.websiteUrl.message}</p>}
                 </div>
@@ -448,7 +407,7 @@ export default function CoachRegistrationPage() {
                     <Label htmlFor="introVideoUrl">Intro Video URL (e.g., YouTube - Premium Feature)</Label>
                     <div className="flex items-center gap-2">
                         <Video className="h-5 w-5 text-muted-foreground" />
-                        <Input id="introVideoUrl" {...register('introVideoUrl')} placeholder="https://youtube.com/watch?v=yourvideo" className={errors.introVideoUrl ? 'border-destructive' : ''} />
+                        <Input id="introVideoUrl" type="url" {...register('introVideoUrl')} placeholder="https://youtube.com/watch?v=yourvideo" className={errors.introVideoUrl ? 'border-destructive' : ''} />
                     </div>
                     {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
                 </div>
@@ -462,7 +421,7 @@ export default function CoachRegistrationPage() {
                         <div className="space-y-2">
                             <div className="flex items-center gap-2">
                             <LinkIcon className="h-5 w-5 text-muted-foreground" />
-                            <Input id="socialLinkUrl" {...register('socialLinkUrl')} placeholder="https://linkedin.com/in/yourprofile" className={errors.socialLinkUrl ? 'border-destructive' : ''}/>
+                            <Input id="socialLinkUrl" type="url" {...register('socialLinkUrl')} placeholder="https://linkedin.com/in/yourprofile" className={errors.socialLinkUrl ? 'border-destructive' : ''}/>
                             </div>
                             {errors.socialLinkUrl && <p className="text-sm text-destructive">{errors.socialLinkUrl.message}</p>}
                         </div>

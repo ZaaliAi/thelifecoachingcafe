@@ -12,18 +12,17 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2 } from 'lucide-react'; // Added MapPin, CheckCircle2
+import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import type { FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
-import Image from 'next/image';
+import NextImage from 'next/image'; // Renamed to avoid conflict
 import { useAuth } from '@/lib/auth';
-// import { uploadProfileImage } from '@/services/imageUpload'; // Temporarily removed
 import { getUserProfile, setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
-
+// Image upload service is no longer directly used here for file upload
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -32,7 +31,7 @@ const coachProfileSchema = z.object({
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
   keywords: z.string().optional(),
-  // profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')), // Temporarily removed
+  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   certifications: z.string().optional(),
   location: z.string().optional(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
@@ -58,8 +57,7 @@ export default function CoachProfilePage() {
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
-  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null); // For displaying existing image
-
+  
   const { toast } = useToast();
   const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachProfileFormData>({
     resolver: zodResolver(coachProfileSchema),
@@ -68,7 +66,7 @@ export default function CoachProfilePage() {
       email: '',
       bio: '',
       selectedSpecialties: [],
-      // profileImageUrl: '', // Temporarily removed
+      profileImageUrl: '',
       keywords: '',
       location: '',
       certifications: '',
@@ -80,6 +78,7 @@ export default function CoachProfilePage() {
   });
 
   const bioValue = watch('bio');
+  const profileImageUrlValue = watch('profileImageUrl'); // For preview
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -94,7 +93,7 @@ export default function CoachProfilePage() {
           bio: coachData.bio || '',
           selectedSpecialties: coachData.specialties || [],
           keywords: coachData.keywords?.join(', ') || '',
-          // profileImageUrl: coachData.profileImageUrl || '', // Temporarily removed
+          profileImageUrl: coachData.profileImageUrl || '',
           certifications: coachData.certifications?.join(', ') || '',
           location: coachData.location || '',
           websiteUrl: coachData.websiteUrl || '',
@@ -104,7 +103,6 @@ export default function CoachProfilePage() {
         });
         const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
         setAvailableSpecialties(Array.from(allSpecs));
-        if(coachData.profileImageUrl) setCurrentProfileImageUrl(coachData.profileImageUrl); // Set for display
       } else if(coachData && coachData.role !== 'coach'){
         toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
         // router.push('/dashboard/user');
@@ -153,31 +151,30 @@ export default function CoachProfilePage() {
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
-    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier'>> = { // Email, role, subTier, createdAt not updated here by user
+    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier'>> = { 
         name: data.name,
         bio: data.bio,
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        // profileImageUrl is not updated through this form anymore
+        profileImageUrl: data.profileImageUrl || null,
         certifications: certificationsArray,
         location: data.location || null,
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        updatedAt: new Date(), // This will be converted to serverTimestamp by setUserProfile
+        updatedAt: new Date(),
     };
 
-
     try {
-        await setUserProfile(user.id, profileToSave); // setUserProfile will merge, preserving existing role, email etc.
+        await setUserProfile(user.id, profileToSave);
         toast({
           title: "Profile Updated!",
           description: "Your profile changes have been saved successfully.",
           action: <Save className="text-green-500" />,
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating coach profile in Firestore:', error);
-        toast({ title: "Profile Save Error", description: "Could not save your profile to the database.", variant: "destructive" });
+        toast({ title: "Profile Save Error", description: `Could not save your profile. ${error.message || 'Please try again.'}`, variant: "destructive" });
     } finally {
         setIsSubmitting(false);
     }
@@ -245,21 +242,19 @@ export default function CoachProfilePage() {
                 <Label htmlFor="email">Email Address (Display Only)</Label>
                 <Input id="email" type="email" {...register('email')} readOnly className="bg-muted/50" />
               </div>
-              {currentProfileImageUrl && (
-                <div className="space-y-1">
-                    <Label>Current Profile Image</Label>
-                    <div className="mt-2 relative w-32 h-32">
-                        <Image
-                            src={currentProfileImageUrl}
-                            alt="Current profile picture"
-                            fill
-                            className="rounded-md object-cover border"
-                            data-ai-hint="profile picture"
-                        />
-                    </div>
-                    <p className="text-xs text-muted-foreground">To change your profile image, please re-register or contact support (feature temporarily simplified).</p>
+               <div className="space-y-2">
+                <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
+                 <div className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                    <Input id="profileImageUrl" type="url" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''}/>
                 </div>
-              )}
+                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                {profileImageUrlValue && z.string().url().safeParse(profileImageUrlValue).success && (
+                  <div className="mt-2 relative w-32 h-32">
+                    <NextImage src={profileImageUrlValue} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} className={errors.bio ? 'border-destructive' : ''} />
@@ -349,8 +344,6 @@ export default function CoachProfilePage() {
                      <p className="text-xs text-muted-foreground">Help clients find you with relevant keywords.</p>
                 </div>
                 
-                {/* Profile Image Upload Input Removed */}
-
                 <div className="space-y-1">
                     <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
                     <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
@@ -376,7 +369,7 @@ export default function CoachProfilePage() {
                     <Label htmlFor="websiteUrl" className={!isPremium ? "text-muted-foreground" : ""}>Website URL</Label>
                      <div className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-muted-foreground" />
-                        <Input id="websiteUrl" {...register('websiteUrl')} className={errors.websiteUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://yourwebsite.com" />
+                        <Input id="websiteUrl" type="url" {...register('websiteUrl')} className={errors.websiteUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://yourwebsite.com" />
                     </div>
                     {errors.websiteUrl && <p className="text-sm text-destructive">{errors.websiteUrl.message}</p>}
                      {!isPremium && <p className="text-xs text-muted-foreground">Available for Premium coaches.</p>}
@@ -385,7 +378,7 @@ export default function CoachProfilePage() {
                     <Label htmlFor="introVideoUrl" className={!isPremium ? "text-muted-foreground" : ""}>Intro Video URL (e.g., YouTube)</Label>
                     <div className="flex items-center gap-2">
                         <Video className="h-5 w-5 text-muted-foreground" />
-                        <Input id="introVideoUrl" {...register('introVideoUrl')} className={errors.introVideoUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://youtube.com/watch?v=yourvideo" />
+                        <Input id="introVideoUrl" type="url" {...register('introVideoUrl')} className={errors.introVideoUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://youtube.com/watch?v=yourvideo" />
                     </div>
                     {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
                     {!isPremium && <p className="text-xs text-muted-foreground">Available for Premium coaches.</p>}
@@ -399,7 +392,7 @@ export default function CoachProfilePage() {
                     <Label htmlFor="socialLinkUrl" className={!isPremium ? "text-muted-foreground" : ""}>Social Media URL</Label>
                     <div className="flex items-center gap-2">
                         <LinkIcon className="h-5 w-5 text-muted-foreground" />
-                        <Input id="socialLinkUrl" {...register('socialLinkUrl')} className={errors.socialLinkUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://linkedin.com/in/yourprofile" />
+                        <Input id="socialLinkUrl" type="url" {...register('socialLinkUrl')} className={errors.socialLinkUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://linkedin.com/in/yourprofile" />
                     </div>
                     {errors.socialLinkUrl && <p className="text-sm text-destructive">{errors.socialLinkUrl.message}</p>}
                     </div>
