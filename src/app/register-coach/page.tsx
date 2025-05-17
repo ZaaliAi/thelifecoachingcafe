@@ -12,33 +12,29 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
-import { uploadProfileImage } from '@/services/imageUpload';
 import { useRouter } from 'next/navigation';
-import { setUserProfile } from '@/lib/firestore'; 
+import { setUserProfile } from '@/lib/firestore';
 import type { FirestoreUserProfile } from '@/types';
 import { Badge } from '@/components/ui/badge';
 
-
-// Helper keys for localStorage
 const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'), 
+  email: z.string().email('Invalid email address.'),
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  keywords: z.string().optional(), 
-  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
+  keywords: z.string().optional(),
+  // profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')), // Temporarily removed
   certifications: z.string().optional(),
-  location: z.string().optional(), 
+  location: z.string().optional(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
@@ -48,22 +44,18 @@ const coachRegistrationSchema = z.object({
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 const allSpecialtiesList = [
-  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching', 
+  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching',
   'Leadership Coaching', 'Business Strategy Coaching', 'Wellness Coaching', 'Relationship Coaching',
-  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching', 
+  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching',
   'Financial Coaching', 'Parenting Coaching', 'Academic Coaching', 'Performance Coaching',
 ];
-
 
 export default function CoachRegistrationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
-  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList); 
-  
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
+  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
 
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -76,7 +68,7 @@ export default function CoachRegistrationPage() {
       email: '',
       bio: '',
       selectedSpecialties: [],
-      profileImageUrl: '',
+      // profileImageUrl: '', // Temporarily removed
       keywords: '',
       location: '',
       certifications: '',
@@ -90,7 +82,7 @@ export default function CoachRegistrationPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please sign up or log in as a coach first.", variant: "destructive" });
-      router.push('/signup?role=coach'); 
+      router.push('/signup?role=coach');
       return;
     }
     if (user) {
@@ -101,18 +93,17 @@ export default function CoachRegistrationPage() {
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
           pendingName = pendingProfile.name || pendingName;
-          // Email should always come from the authenticated user for security
-          pendingEmail = user.email || pendingProfile.email || pendingEmail; 
+          pendingEmail = user.email || pendingProfile.email || pendingEmail;
         }
       } catch (e) {
         console.error("Error reading pending coach profile from localStorage", e);
       }
       reset({
         name: pendingName,
-        email: pendingEmail, 
+        email: pendingEmail,
         bio: '',
         selectedSpecialties: [],
-        profileImageUrl: user.profileImageUrl || '',
+        // profileImageUrl: user.profileImageUrl || '', // Temporarily removed
         keywords: '',
         location: '',
         certifications: '',
@@ -121,10 +112,8 @@ export default function CoachRegistrationPage() {
         socialLinkPlatform: '',
         socialLinkUrl: '',
       });
-      if (user.profileImageUrl) setImagePreviewUrl(user.profileImageUrl);
     }
   }, [user, authLoading, router, toast, reset]);
-
 
   const bioValue = watch('bio');
 
@@ -136,7 +125,9 @@ export default function CoachRegistrationPage() {
         setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
+          console.log("Calling AI suggestCoachSpecialties with bio (first 100 chars):", bioText.substring(0,100));
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
+          console.log("AI suggestCoachSpecialties response:", response);
           setSuggestedSpecialtiesState(response.specialties || []);
           setSuggestedKeywordsState(response.keywords || []);
         } catch (error) {
@@ -146,7 +137,7 @@ export default function CoachRegistrationPage() {
           setIsAiLoading(false);
         }
       }
-    }, 1000), 
+    }, 1000),
     [toast]
   );
 
@@ -155,7 +146,7 @@ export default function CoachRegistrationPage() {
       fetchSuggestions(bioValue);
     }
   }, [bioValue, fetchSuggestions]);
-  
+
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
     if (!user) {
       toast({ title: "Authentication Error", description: "You must be logged in to register as a coach.", variant: "destructive"});
@@ -164,53 +155,39 @@ export default function CoachRegistrationPage() {
     }
     setIsSubmitting(true);
 
-    let finalProfileImageUrl = data.profileImageUrl;
-    if (selectedFileForUpload) {
-        try {
-            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id);
-            setValue('profileImageUrl', finalProfileImageUrl);
-            setImagePreviewUrl(finalProfileImageUrl); 
-            setSelectedFileForUpload(null);
-        } catch (uploadError: any) {
-            toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
-            setIsSubmitting(false);
-            return;
-        }
-    }
-    
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
-
     const isAttemptingPremium = !!(data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl));
-    const subscriptionTier = isAttemptingPremium ? 'premium' : 'free';
-
+    const subscriptionTier = isAttemptingPremium ? 'premium' : 'free'; // For now, this doesn't charge, just sets the tier
 
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
-        // email: data.email, // Email should come from auth user, not form, to prevent changes
         bio: data.bio,
-        role: 'coach', 
+        role: 'coach',
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        profileImageUrl: finalProfileImageUrl || undefined, 
+        // profileImageUrl field is not set here anymore
         certifications: certificationsArray,
-        location: data.location || undefined,
-        subscriptionTier: subscriptionTier, 
-        websiteUrl: data.websiteUrl || undefined,
-        introVideoUrl: data.introVideoUrl || undefined,
+        location: data.location || null,
+        subscriptionTier: subscriptionTier,
+        websiteUrl: data.websiteUrl || null,
+        introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        updatedAt: new Date(), // For Firestore serverTimestamp
+        updatedAt: new Date(), // This will be converted to serverTimestamp by setUserProfile if configured
     };
+    
+    // Email is not part of profileToSave here, as it's taken from the authenticated user by setUserProfile
+    // and is immutable in Firestore rules by user action after creation.
 
     try {
-        await setUserProfile(user.id, profileToSave); 
-        localStorage.removeItem(PENDING_COACH_PROFILE_KEY); 
+        await setUserProfile(user.id, profileToSave);
+        localStorage.removeItem(PENDING_COACH_PROFILE_KEY);
         toast({
           title: "Coach Profile Submitted!",
-          description: "Your coach profile has been created. It may be subject to admin review.",
+          description: "Your coach profile has been created/updated. It may be subject to admin review.",
           action: <CheckCircle2 className="text-green-500" />,
         });
-        router.push('/dashboard/coach'); 
+        router.push('/dashboard/coach');
     } catch (error) {
         console.error('Error saving coach profile to Firestore:', error);
         toast({ title: "Profile Save Error", description: "Could not save your profile to the database.", variant: "destructive" });
@@ -224,7 +201,7 @@ export default function CoachRegistrationPage() {
     if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
       setAvailableSpecialties(prev => [...prev, customSpecialtyValue].sort());
       setValue('selectedSpecialties', [...(getValues('selectedSpecialties') || []), customSpecialtyValue]);
-      setValue('customSpecialty', ''); 
+      setValue('customSpecialty', '');
     }
   };
 
@@ -246,24 +223,6 @@ export default function CoachRegistrationPage() {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFileForUpload(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedFileForUpload(null);
-      if (!user?.profileImageUrl) {
-        setImagePreviewUrl(null);
-      } else {
-         setImagePreviewUrl(user.profileImageUrl); 
-      }
-    }
-  };
 
   if (authLoading || !user) {
     return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading...</div>;
@@ -281,7 +240,6 @@ export default function CoachRegistrationPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-            {/* Personal Information */}
             <section className="space-y-6">
               <h3 className="text-lg font-semibold border-b pb-2">Your Details</h3>
               <div className="space-y-2">
@@ -296,8 +254,7 @@ export default function CoachRegistrationPage() {
                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
               </div>
             </section>
-            
-            {/* Profile Details */}
+
             <section className="space-y-6">
               <h3 className="text-lg font-semibold border-b pb-2">Profile Details</h3>
               <div className="space-y-2">
@@ -383,36 +340,9 @@ export default function CoachRegistrationPage() {
                 {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
                  <p className="text-xs text-muted-foreground">Help clients find you by adding relevant keywords.</p>
               </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="profileImageFile">Profile Image</Label>
-                 <div className="flex items-center gap-2">
-                    <UploadCloud className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    <Input 
-                        id="profileImageFile" 
-                        type="file" 
-                        accept="image/png, image/jpeg, image/gif, image/webp"
-                        onChange={handleImageUpload}
-                        className="flex-grow"
-                    />
-                </div>
-                {imagePreviewUrl && (
-                  <div className="mt-2 relative w-32 h-32">
-                    <Image
-                        src={imagePreviewUrl}
-                        alt="Profile preview"
-                        fill
-                        className="rounded-md object-cover border"
-                        data-ai-hint="profile image preview"
-                    />
-                  </div>
-                )}
-                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
-                <p className="text-xs text-muted-foreground">
-                  Upload a professional image. Square images work best. Max 1MB.
-                </p>
-              </div>
               
+              {/* Profile Image Upload Removed */}
+
               <div className="space-y-2">
                 <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
                 <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
@@ -428,17 +358,17 @@ export default function CoachRegistrationPage() {
             <section className="space-y-6 p-6 bg-primary/5 rounded-lg border border-primary/20">
                 <Alert variant="default" className="bg-transparent border-0 p-0">
                     <AlertTitle className="text-xl font-semibold text-primary flex items-center">
-                        <Crown className="mr-2 h-6 w-6 text-yellow-500" /> 
+                        <Crown className="mr-2 h-6 w-6 text-yellow-500" />
                         Supercharge Your Profile with Premium!
                     </AlertTitle>
                     <AlertDescription className="text-muted-foreground mt-2">
-                        Unlock powerful features like a Premium Badge, link your personal website, embed an engaging intro video, 
-                        and connect your social media for <strong className="font-semibold text-foreground/90">only £9.99/month</strong>. 
+                        Unlock powerful features like a Premium Badge, link your personal website, embed an engaging intro video,
+                        and connect your social media for <strong className="font-semibold text-foreground/90">only £9.99/month</strong>.
                         Attract more clients and stand out from the crowd.
                     </AlertDescription>
                     <div className="mt-4 flex flex-col sm:flex-row gap-2">
                         <Button asChild variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                            <Link href="/pricing">Get Premium</Link> 
+                            <Link href="/pricing">Get Premium</Link>
                         </Button>
                         <Button asChild variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/10">
                             <Link href="/pricing">Explore premium benefits</Link>
@@ -463,7 +393,7 @@ export default function CoachRegistrationPage() {
                     </div>
                     {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
                 </div>
-                
+
                 <div>
                     <Label className="block mb-2">Social Media Link (Premium Feature)</Label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -480,7 +410,7 @@ export default function CoachRegistrationPage() {
                     </div>
                 </div>
             </section>
-            
+
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>Admin Review</AlertTitle>

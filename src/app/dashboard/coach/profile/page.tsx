@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserCircle, Lightbulb, Save, UploadCloud, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag } from 'lucide-react';
+import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2 } from 'lucide-react'; // Added MapPin, CheckCircle2
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import type { FirestoreUserProfile } from '@/types';
@@ -20,8 +20,8 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
-import { uploadProfileImage } from '@/services/imageUpload';
-import { getUserProfile, setUserProfile } from '@/lib/firestore'; 
+// import { uploadProfileImage } from '@/services/imageUpload'; // Temporarily removed
+import { getUserProfile, setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -31,11 +31,10 @@ const coachProfileSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters to trigger AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  keywords: z.string().optional(), 
-  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
+  keywords: z.string().optional(),
+  // profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')), // Temporarily removed
   certifications: z.string().optional(),
   location: z.string().optional(),
-  // Premium fields
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
@@ -44,11 +43,10 @@ const coachProfileSchema = z.object({
 
 type CoachProfileFormData = z.infer<typeof coachProfileSchema>;
 
-// Define specialties locally
 const allSpecialtiesList = [
-  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching', 
+  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching',
   'Leadership Coaching', 'Business Strategy Coaching', 'Wellness Coaching', 'Relationship Coaching',
-  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching', 
+  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching',
   'Financial Coaching', 'Parenting Coaching', 'Academic Coaching', 'Performance Coaching',
 ];
 
@@ -60,10 +58,7 @@ export default function CoachProfilePage() {
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
-
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
-
+  const [currentProfileImageUrl, setCurrentProfileImageUrl] = useState<string | null>(null); // For displaying existing image
 
   const { toast } = useToast();
   const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachProfileFormData>({
@@ -73,7 +68,7 @@ export default function CoachProfilePage() {
       email: '',
       bio: '',
       selectedSpecialties: [],
-      profileImageUrl: '',
+      // profileImageUrl: '', // Temporarily removed
       keywords: '',
       location: '',
       certifications: '',
@@ -85,11 +80,10 @@ export default function CoachProfilePage() {
   });
 
   const bioValue = watch('bio');
-  const currentProfileImageUrlValue = watch('profileImageUrl'); 
 
   useEffect(() => {
     if (authLoading || !user) return;
-    
+
     const fetchCoachData = async () => {
       const coachData = await getUserProfile(user.id);
       if (coachData && coachData.role === 'coach') {
@@ -100,7 +94,7 @@ export default function CoachProfilePage() {
           bio: coachData.bio || '',
           selectedSpecialties: coachData.specialties || [],
           keywords: coachData.keywords?.join(', ') || '',
-          profileImageUrl: coachData.profileImageUrl || '',
+          // profileImageUrl: coachData.profileImageUrl || '', // Temporarily removed
           certifications: coachData.certifications?.join(', ') || '',
           location: coachData.location || '',
           websiteUrl: coachData.websiteUrl || '',
@@ -110,10 +104,10 @@ export default function CoachProfilePage() {
         });
         const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
         setAvailableSpecialties(Array.from(allSpecs));
-        if(coachData.profileImageUrl) setImagePreviewUrl(coachData.profileImageUrl);
+        if(coachData.profileImageUrl) setCurrentProfileImageUrl(coachData.profileImageUrl); // Set for display
       } else if(coachData && coachData.role !== 'coach'){
         toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
-        // router.push('/dashboard/user'); // Or appropriate redirect
+        // router.push('/dashboard/user');
       }
     };
     fetchCoachData();
@@ -127,13 +121,11 @@ export default function CoachProfilePage() {
         setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
+          console.log("Calling AI suggestCoachSpecialties with bio (first 100 chars):", bioText.substring(0,100));
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
+          console.log("AI suggestCoachSpecialties response:", response);
           setSuggestedSpecialtiesState(response.specialties || []);
           setSuggestedKeywordsState(response.keywords || []);
-          // Optionally auto-fill keywords if field is empty, or let user click
-          // if (response.keywords && response.keywords.length > 0 && !getValues('keywords')) {
-          //    setValue('keywords', response.keywords.join(', '));
-          // }
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
           toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
@@ -142,7 +134,7 @@ export default function CoachProfilePage() {
         }
       }
     }, 1000),
-    [toast, setValue, getValues] 
+    [toast]
   );
 
   useEffect(() => {
@@ -150,48 +142,34 @@ export default function CoachProfilePage() {
       fetchSuggestions(bioValue);
     }
   }, [bioValue, fetchSuggestions]);
-  
+
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
     if (!user || !currentCoach) {
         toast({ title: "Error", description: "User not authenticated or coach data missing.", variant: "destructive" });
         return;
     }
     setIsSubmitting(true);
-    let finalProfileImageUrl = data.profileImageUrl;
 
-    if (selectedFileForUpload) {
-        try {
-            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id, currentCoach.profileImageUrl);
-            setValue('profileImageUrl', finalProfileImageUrl); 
-            setImagePreviewUrl(finalProfileImageUrl); 
-            setSelectedFileForUpload(null); 
-        } catch (uploadError: any) {
-            toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
-            setIsSubmitting(false);
-            return;
-        }
-    }
-    
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
-    const profileToSave: Partial<FirestoreUserProfile> = {
+    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier'>> = { // Email, role, subTier, createdAt not updated here by user
         name: data.name,
         bio: data.bio,
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        profileImageUrl: finalProfileImageUrl || undefined, 
+        // profileImageUrl is not updated through this form anymore
         certifications: certificationsArray,
-        location: data.location || undefined,
-        websiteUrl: data.websiteUrl || undefined,
-        introVideoUrl: data.introVideoUrl || undefined,
+        location: data.location || null,
+        websiteUrl: data.websiteUrl || null,
+        introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        updatedAt: new Date(), // For Firestore serverTimestamp
+        updatedAt: new Date(), // This will be converted to serverTimestamp by setUserProfile
     };
 
 
     try {
-        await setUserProfile(user.id, profileToSave);
+        await setUserProfile(user.id, profileToSave); // setUserProfile will merge, preserving existing role, email etc.
         toast({
           title: "Profile Updated!",
           description: "Your profile changes have been saved successfully.",
@@ -208,9 +186,9 @@ export default function CoachProfilePage() {
   const handleAddCustomSpecialty = () => {
     const customSpecialtyValue = getValues('customSpecialty')?.trim();
     if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
-      setAvailableSpecialties(prev => [...prev, customSpecialtyValue]);
+      setAvailableSpecialties(prev => [...prev, customSpecialtyValue].sort());
       setValue('selectedSpecialties', [...(getValues('selectedSpecialties') || []), customSpecialtyValue]);
-      setValue('customSpecialty', ''); 
+      setValue('customSpecialty', '');
     }
   };
 
@@ -224,7 +202,7 @@ export default function CoachProfilePage() {
 
   const handleSelectSuggestedSpecialty = (specialty: string) => {
     if (!availableSpecialties.includes(specialty)) {
-      setAvailableSpecialties(prev => [...prev, specialty]);
+      setAvailableSpecialties(prev => [...prev, specialty].sort());
     }
     const currentSelected = getValues('selectedSpecialties') || [];
     if (!currentSelected.includes(specialty)) {
@@ -232,25 +210,10 @@ export default function CoachProfilePage() {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFileForUpload(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedFileForUpload(null);
-      setImagePreviewUrl(currentCoach?.profileImageUrl || null); 
-    }
-  };
-
-  if (authLoading || (!user && !currentCoach)) { 
+  if (authLoading || (!user && !currentCoach)) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading profile...</div>;
   }
-  
+
   const isPremium = currentCoach?.subscriptionTier === 'premium';
 
   return (
@@ -270,7 +233,6 @@ export default function CoachProfilePage() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          {/* Basic Info */}
           <section>
             <h3 className="text-lg font-semibold mb-4 border-b pb-2">Basic Information</h3>
             <div className="space-y-4">
@@ -283,6 +245,21 @@ export default function CoachProfilePage() {
                 <Label htmlFor="email">Email Address (Display Only)</Label>
                 <Input id="email" type="email" {...register('email')} readOnly className="bg-muted/50" />
               </div>
+              {currentProfileImageUrl && (
+                <div className="space-y-1">
+                    <Label>Current Profile Image</Label>
+                    <div className="mt-2 relative w-32 h-32">
+                        <Image
+                            src={currentProfileImageUrl}
+                            alt="Current profile picture"
+                            fill
+                            className="rounded-md object-cover border"
+                            data-ai-hint="profile picture"
+                        />
+                    </div>
+                    <p className="text-xs text-muted-foreground">To change your profile image, please re-register or contact support (feature temporarily simplified).</p>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} className={errors.bio ? 'border-destructive' : ''} />
@@ -326,7 +303,7 @@ export default function CoachProfilePage() {
               </AlertDescription>
             </Alert>
           )}
-          {/* Specialties and Location */}
+          
           <section>
             <h3 className="text-lg font-semibold mb-4 border-b pb-2">Professional Details</h3>
             <div className="space-y-4">
@@ -340,7 +317,7 @@ export default function CoachProfilePage() {
                         {availableSpecialties.sort().map((specialty) => (
                             <div key={specialty} className="flex items-center space-x-2">
                             <Checkbox
-                                id={`specialty-${specialty.replace(/\s+/g, '-')}`} 
+                                id={`specialty-${specialty.replace(/\s+/g, '-')}`}
                                 checked={field.value?.includes(specialty)}
                                 onCheckedChange={(checked) => {
                                 return checked
@@ -372,47 +349,19 @@ export default function CoachProfilePage() {
                      <p className="text-xs text-muted-foreground">Help clients find you with relevant keywords.</p>
                 </div>
                 
-                <div className="space-y-1">
-                    <Label htmlFor="profileImageFile">Profile Image</Label>
-                    <div className="flex items-center gap-2">
-                        <UploadCloud className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                        <Input 
-                            id="profileImageFile" 
-                            type="file" 
-                            accept="image/png, image/jpeg, image/gif, image/webp"
-                            onChange={handleImageUpload}
-                            className="flex-grow"
-                        />
-                    </div>
-                     {(imagePreviewUrl || currentProfileImageUrlValue) && (
-                        <div className="mt-2 relative w-32 h-32">
-                            <Image
-                                src={imagePreviewUrl || currentProfileImageUrlValue || "https://placehold.co/128x128.png"}
-                                alt="Profile preview"
-                                fill
-                                className="rounded-md object-cover border"
-                                data-ai-hint="profile preview"
-                            />
-                        </div>
-                    )}
-                    {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
-                     <p className="text-xs text-muted-foreground">
-                        Upload a professional image. Square images work best. Max 1MB.
-                    </p>
-                </div>
+                {/* Profile Image Upload Input Removed */}
 
                 <div className="space-y-1">
-                    <Label htmlFor="certifications">Certifications (Optional, comma-separated)</Label>
+                    <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
                     <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
                 </div>
                  <div className="space-y-1">
-                    <Label htmlFor="location">Location (Optional)</Label>
+                    <Label htmlFor="location" className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Location (Optional)</Label>
                     <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
                 </div>
             </div>
           </section>
 
-          {/* Premium Features Section */}
           <section>
             <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="text-lg font-semibold">Premium Features</h3>
