@@ -8,7 +8,7 @@ import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, Layo
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 
 const navLinks = [
@@ -83,7 +83,7 @@ export function Header() {
       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
-        <Link href="/signup?role=coach"> {/* Updated Link */}
+        <Link href="/signup?role=coach">
           Register as a Coach
         </Link>
       </Button>
@@ -115,7 +115,10 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-xs p-6">
-              <div className="flex flex-col space-y-4">
+              <SheetHeader>
+                <SheetTitle className="sr-only">Main Menu</SheetTitle>
+              </SheetHeader>
+              <div className="flex flex-col space-y-4 mt-4"> {/* Added mt-4 to space from hidden header */}
                 <Link href="/" passHref legacyBehavior>
                   <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
                      <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
@@ -138,7 +141,7 @@ export function Header() {
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
                       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        <Link href="/signup?role=coach"> {/* Updated Link */}
+                        <Link href="/signup?role=coach">
                            Register as a Coach
                         </Link>
                       </Button>
