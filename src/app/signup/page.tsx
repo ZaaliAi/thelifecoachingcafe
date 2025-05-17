@@ -53,7 +53,7 @@ function SignupFormContent() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      toast({ title: "Account Created!", description: `Welcome, ${user.name}! You are now logged in.` });
+      toast({ title: "Account Created!", description: `Welcome, ${user.name || user.email}! You are now logged in.` });
       if (user.role === 'coach') {
         router.push('/register-coach'); 
       } else {
@@ -65,13 +65,16 @@ function SignupFormContent() {
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      await signup(data.name, data.email, data.password, data.role);
+      await signup(data.name, data.email, data.password, data.role as UserRole);
+      // Successful signup, onAuthStateChanged in AuthProvider will set user.
+      // The useEffect above will handle redirection.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
       if ((error as FirebaseError).code === 'auth/email-already-in-use') {
-        errorMessage = "This email is already registered. Try logging in.";
+        errorMessage = "This email is already registered. Please try logging in or use a different email.";
       } else if ((error as FirebaseError).code) {
+        // More specific Firebase error messages can be helpful
         errorMessage = `Signup error: ${(error as FirebaseError).message}`;
       }
       toast({
@@ -80,6 +83,7 @@ function SignupFormContent() {
         variant: "destructive",
       });
     }
+    // setIsLoading(false) is handled in the catch or if signup leads to redirect via useEffect
   };
   
   if (authLoading || (!authLoading && user)) {
