@@ -32,7 +32,10 @@ export type SuggestCoachSpecialtiesOutput = z.infer<
 export async function suggestCoachSpecialties(
   input: SuggestCoachSpecialtiesInput
 ): Promise<SuggestCoachSpecialtiesOutput> {
-  return suggestCoachSpecialtiesFlow(input);
+  console.log("AI Flow: suggestCoachSpecialties called with bio:", input.bio.substring(0, 100) + "...");
+  const result = await suggestCoachSpecialtiesFlow(input);
+  console.log("AI Flow: suggestCoachSpecialties result:", result);
+  return result;
 }
 
 const prompt = ai.definePrompt({
@@ -44,17 +47,17 @@ const prompt = ai.definePrompt({
 Coach's Biography:
 "{{{bio}}}"
 
-Based *only* on the provided Coach's Biography:
-1. Suggest a list of 3-5 concise and relevant "keywords" that accurately reflect the main themes, skills, or target audience mentioned in the bio. These keywords should be suitable for search and tagging.
-2. Suggest a list of 2-4 "specialties" that the coach seems to focus on, derived directly from the services, problems solved, or approaches described in the bio. Do not invent specialties not supported by the text.
+Based *solely and exclusively* on the provided Coach's Biography above:
+1. Identify and suggest a list of 3-5 concise and relevant "keywords" that accurately reflect the main themes, skills, or target audience mentioned *in the bio*. These keywords should be suitable for search and tagging. Do not invent keywords not supported by the text.
+2. Identify and suggest a list of 2-4 "specialties" that the coach seems to focus on, derived *directly* from the services, problems solved, or approaches described *in the bio*. Do not invent specialties not supported by the text.
 
-Your entire response must be a single JSON object matching the output schema, containing a 'keywords' array of strings and a 'specialties' array of strings.
-Example of expected JSON output format:
+Your entire response MUST be a single, valid JSON object matching the output schema, containing a 'keywords' array of strings and a 'specialties' array of strings.
+Example of expected JSON output format if the bio discussed career changes and leadership:
 {
   "keywords": ["career transition", "leadership development", "executive presence", "public speaking"],
   "specialties": ["Career Coaching", "Executive Coaching", "Communication Skills"]
 }
-Ensure your response is only the JSON object.`,
+If the bio is too short or uninformative to derive meaningful keywords or specialties, return empty arrays for both. Ensure your response is only the JSON object and nothing else.`,
 });
 
 const suggestCoachSpecialtiesFlow = ai.defineFlow(
@@ -64,12 +67,20 @@ const suggestCoachSpecialtiesFlow = ai.defineFlow(
     outputSchema: SuggestCoachSpecialtiesOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output) {
-        // Handle cases where the AI might return an empty or malformed response
-        console.warn("AI suggestion flow returned no output for bio:", input.bio);
+    console.log("suggestCoachSpecialtiesFlow: Input bio:", input.bio.substring(0, 100) + "...");
+    const {output, usage} = await prompt(input);
+    console.log("suggestCoachSpecialtiesFlow: Raw LLM output:", output);
+    console.log("suggestCoachSpecialtiesFlow: LLM usage:", usage);
+
+    if (!output || !output.keywords || !output.specialties) {
+        console.warn("AI suggestion flow returned malformed or incomplete output for bio:", input.bio.substring(0,50) + "...");
         return { keywords: [], specialties: [] };
     }
-    return output;
+    // Ensure results are arrays, even if empty
+    const keywords = Array.isArray(output.keywords) ? output.keywords.filter(k => typeof k === 'string' && k.trim() !== "") : [];
+    const specialties = Array.isArray(output.specialties) ? output.specialties.filter(s => typeof s === 'string' && s.trim() !== "") : [];
+
+    return { keywords, specialties };
   }
 );
+

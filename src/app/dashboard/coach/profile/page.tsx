@@ -12,22 +12,23 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserCircle, Lightbulb, Save, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
+import { Loader2, UserCircle, Lightbulb, Save, UploadCloud, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import type { Coach, FirestoreUserProfile } from '@/types';
+import type { FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
 import { getUserProfile, setUserProfile } from '@/lib/firestore'; 
+import { Badge } from '@/components/ui/badge';
 
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.').optional(),
-  bio: z.string().min(50, 'Bio must be at least 50 characters.'),
+  bio: z.string().min(50, 'Bio must be at least 50 characters to trigger AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
   keywords: z.string().optional(), 
@@ -45,28 +46,17 @@ type CoachProfileFormData = z.infer<typeof coachProfileSchema>;
 
 // Define specialties locally
 const allSpecialtiesList = [
-  'Career Coaching',
-  'Personal Development',
-  'Mindfulness Coaching',
-  'Executive Coaching',
-  'Leadership Coaching',
-  'Business Strategy Coaching',
-  'Wellness Coaching',
-  'Relationship Coaching',
-  'Stress Management Coaching',
-  'Health and Fitness Coaching',
-  'Spiritual Coaching',
-  'Financial Coaching',
-  'Parenting Coaching',
-  'Academic Coaching',
-  'Performance Coaching',
+  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching', 
+  'Leadership Coaching', 'Business Strategy Coaching', 'Wellness Coaching', 'Relationship Coaching',
+  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching', 
+  'Financial Coaching', 'Parenting Coaching', 'Academic Coaching', 'Performance Coaching',
 ];
 
 export default function CoachProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
-  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
+  const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
@@ -76,7 +66,7 @@ export default function CoachProfilePage() {
 
 
   const { toast } = useToast();
-  const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<CoachProfileFormData>({
+  const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachProfileFormData>({
     resolver: zodResolver(coachProfileSchema),
     defaultValues: {
       name: '',
@@ -106,7 +96,7 @@ export default function CoachProfilePage() {
         setCurrentCoach(coachData);
         reset({
           name: coachData.name,
-          email: coachData.email || `${user?.email}`,
+          email: coachData.email || user?.email || '',
           bio: coachData.bio || '',
           selectedSpecialties: coachData.specialties || [],
           keywords: coachData.keywords?.join(', ') || '',
@@ -133,14 +123,17 @@ export default function CoachProfilePage() {
     debounce(async (bioText: string) => {
       if (bioText && bioText.length >= 50) {
         setIsAiLoading(true);
+        setSuggestedKeywordsState([]);
+        setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
           setSuggestedSpecialtiesState(response.specialties || []);
-          setSuggestedKeywords(response.keywords || []);
-          if (response.keywords && response.keywords.length > 0 && !watch('keywords')) {
-             setValue('keywords', response.keywords.join(', '));
-          }
+          setSuggestedKeywordsState(response.keywords || []);
+          // Optionally auto-fill keywords if field is empty, or let user click
+          // if (response.keywords && response.keywords.length > 0 && !getValues('keywords')) {
+          //    setValue('keywords', response.keywords.join(', '));
+          // }
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
           toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
@@ -149,7 +142,7 @@ export default function CoachProfilePage() {
         }
       }
     }, 1000),
-    [toast, setValue, watch] 
+    [toast, setValue, getValues] 
   );
 
   useEffect(() => {
@@ -185,16 +178,15 @@ export default function CoachProfilePage() {
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
         bio: data.bio,
-        // role: 'coach', // Role should not be changed here
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
         profileImageUrl: finalProfileImageUrl || undefined, 
         certifications: certificationsArray,
         location: data.location || undefined,
-        // subscriptionTier is managed by admin, not here
         websiteUrl: data.websiteUrl || undefined,
         introVideoUrl: data.introVideoUrl || undefined,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+        updatedAt: new Date(), // For Firestore serverTimestamp
     };
 
 
@@ -214,11 +206,29 @@ export default function CoachProfilePage() {
   };
 
   const handleAddCustomSpecialty = () => {
-    const customSpecialtyValue = watch('customSpecialty')?.trim();
+    const customSpecialtyValue = getValues('customSpecialty')?.trim();
     if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
       setAvailableSpecialties(prev => [...prev, customSpecialtyValue]);
-      setValue('selectedSpecialties', [...(watch('selectedSpecialties') || []), customSpecialtyValue]);
+      setValue('selectedSpecialties', [...(getValues('selectedSpecialties') || []), customSpecialtyValue]);
       setValue('customSpecialty', ''); 
+    }
+  };
+
+  const handleSelectSuggestedKeyword = (keyword: string) => {
+    const currentKeywords = getValues('keywords') || "";
+    const keywordsSet = new Set(currentKeywords.split(',').map(k => k.trim()).filter(Boolean));
+    if (!keywordsSet.has(keyword)) {
+      setValue('keywords', [...keywordsSet, keyword].join(', '));
+    }
+  };
+
+  const handleSelectSuggestedSpecialty = (specialty: string) => {
+    if (!availableSpecialties.includes(specialty)) {
+      setAvailableSpecialties(prev => [...prev, specialty]);
+    }
+    const currentSelected = getValues('selectedSpecialties') || [];
+    if (!currentSelected.includes(specialty)) {
+      setValue('selectedSpecialties', [...currentSelected, specialty]);
     }
   };
 
@@ -274,21 +284,45 @@ export default function CoachProfilePage() {
                 <Input id="email" type="email" {...register('email')} readOnly className="bg-muted/50" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="bio">Your Bio (min. 50 characters)</Label>
+                <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} className={errors.bio ? 'border-destructive' : ''} />
                 {errors.bio && <p className="text-sm text-destructive">{errors.bio.message}</p>}
               </div>
             </div>
           </section>
 
-          { (isAiLoading || suggestedKeywords.length > 0 || suggestedSpecialtiesState.length > 0) && (
-            <Alert variant="default" className="bg-accent/20 border-accent/50">
+          { (bioValue && bioValue.length >= 50) && (
+            <Alert variant="default" className="bg-accent/10 border-accent/30">
               <Lightbulb className="h-5 w-5 text-primary" />
               <AlertTitle className="font-semibold text-primary">AI Suggestions Based on Your Bio</AlertTitle>
-              <AlertDescription className="space-y-1 text-foreground/80">
+              <AlertDescription className="space-y-3 text-foreground/80 mt-2">
                 {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                {suggestedKeywords.length > 0 && <p className="text-sm">Suggested Keywords: <span className="font-medium">{suggestedKeywords.join(', ')}</span></p>}
-                {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Consider adding these specialties: <span className="font-medium">{suggestedSpecialtiesState.join(', ')}</span></p>}
+                {!isAiLoading && suggestedKeywordsState.length === 0 && suggestedSpecialtiesState.length === 0 && <p className="text-sm">No new suggestions based on current bio, or AI is processing.</p>}
+                
+                {suggestedKeywordsState.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-1">Suggested Keywords (click to add):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedKeywordsState.map(keyword => (
+                        <Badge key={keyword} variant="outline" onClick={() => handleSelectSuggestedKeyword(keyword)} className="cursor-pointer hover:bg-primary/20">
+                          <PlusCircle className="mr-1 h-3 w-3" /> {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {suggestedSpecialtiesState.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium mb-1">Suggested Specialties (click to select):</p>
+                     <div className="flex flex-wrap gap-2">
+                      {suggestedSpecialtiesState.map(specialty => (
+                        <Badge key={specialty} variant="outline" onClick={() => handleSelectSuggestedSpecialty(specialty)} className="cursor-pointer hover:bg-primary/20">
+                           <PlusCircle className="mr-1 h-3 w-3" /> {specialty}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -303,7 +337,7 @@ export default function CoachProfilePage() {
                     control={control}
                     render={({ field }) => (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-60 overflow-y-auto p-2 border rounded-md">
-                        {availableSpecialties.map((specialty) => (
+                        {availableSpecialties.sort().map((specialty) => (
                             <div key={specialty} className="flex items-center space-x-2">
                             <Checkbox
                                 id={`specialty-${specialty.replace(/\s+/g, '-')}`} 
@@ -327,12 +361,12 @@ export default function CoachProfilePage() {
                     {errors.selectedSpecialties && <p className="text-sm text-destructive">{errors.selectedSpecialties.message}</p>}
                     <div className="flex items-center gap-2 mt-2">
                     <Input {...register('customSpecialty')} placeholder="Add custom specialty" className="flex-grow"/>
-                    <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}>Add</Button>
+                    <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}><PlusCircle className="mr-2 h-4 w-4" />Add</Button>
                     </div>
                 </div>
 
                 <div className="space-y-1">
-                    <Label htmlFor="keywords">Keywords (Comma-separated)</Label>
+                    <Label htmlFor="keywords" className="flex items-center"><Tag className="mr-2 h-4 w-4 text-muted-foreground"/>Keywords (Comma-separated)</Label>
                     <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, executive coaching" />
                     {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
                      <p className="text-xs text-muted-foreground">Help clients find you with relevant keywords.</p>
@@ -363,7 +397,7 @@ export default function CoachProfilePage() {
                     )}
                     {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                      <p className="text-xs text-muted-foreground">
-                        Upload a professional image. Square images work best.
+                        Upload a professional image. Square images work best. Max 1MB.
                     </p>
                 </div>
 
@@ -425,14 +459,14 @@ export default function CoachProfilePage() {
             </div>
           </section>
           
-          <Button type="submit" disabled={isSubmitting || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isSubmitting ? (
+          <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isSubmitting || authLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Saving Changes...
               </>
             ) : (
-              <><Save className="mr-2 h-5 w-5" /> Save Changes</>
+              <><Save className="mr-2 h-5 w-5" /> Save Profile Changes</>
             )}
           </Button>
         </form>
@@ -440,5 +474,3 @@ export default function CoachProfilePage() {
     </Card>
   );
 }
-
-    

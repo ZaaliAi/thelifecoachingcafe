@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
@@ -23,6 +23,7 @@ import { uploadProfileImage } from '@/services/imageUpload';
 import { useRouter } from 'next/navigation';
 import { setUserProfile } from '@/lib/firestore'; 
 import type { FirestoreUserProfile } from '@/types';
+import { Badge } from '@/components/ui/badge';
 
 
 // Helper keys for localStorage
@@ -30,15 +31,14 @@ const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'), // Display only, pre-filled
-  bio: z.string().min(50, 'Bio must be at least 50 characters.'),
+  email: z.string().email('Invalid email address.'), 
+  bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  keywords: z.string().optional(), // Comma-separated keywords
+  keywords: z.string().optional(), 
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(),
   location: z.string().optional(), 
-  // Premium Features
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
@@ -47,23 +47,11 @@ const coachRegistrationSchema = z.object({
 
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
-// Define specialties locally
 const allSpecialtiesList = [
-  'Career Coaching',
-  'Personal Development',
-  'Mindfulness Coaching',
-  'Executive Coaching',
-  'Leadership Coaching',
-  'Business Strategy Coaching',
-  'Wellness Coaching',
-  'Relationship Coaching',
-  'Stress Management Coaching',
-  'Health and Fitness Coaching',
-  'Spiritual Coaching',
-  'Financial Coaching',
-  'Parenting Coaching',
-  'Academic Coaching',
-  'Performance Coaching',
+  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching', 
+  'Leadership Coaching', 'Business Strategy Coaching', 'Wellness Coaching', 'Relationship Coaching',
+  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching', 
+  'Financial Coaching', 'Parenting Coaching', 'Academic Coaching', 'Performance Coaching',
 ];
 
 
@@ -81,7 +69,7 @@ export default function CoachRegistrationPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<CoachRegistrationFormData>({
+  const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
       name: '',
@@ -113,6 +101,7 @@ export default function CoachRegistrationPage() {
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
           pendingName = pendingProfile.name || pendingName;
+          // Email should always come from the authenticated user for security
           pendingEmail = user.email || pendingProfile.email || pendingEmail; 
         }
       } catch (e) {
@@ -123,7 +112,7 @@ export default function CoachRegistrationPage() {
         email: pendingEmail, 
         bio: '',
         selectedSpecialties: [],
-        profileImageUrl: '',
+        profileImageUrl: user.profileImageUrl || '',
         keywords: '',
         location: '',
         certifications: '',
@@ -132,6 +121,7 @@ export default function CoachRegistrationPage() {
         socialLinkPlatform: '',
         socialLinkUrl: '',
       });
+      if (user.profileImageUrl) setImagePreviewUrl(user.profileImageUrl);
     }
   }, [user, authLoading, router, toast, reset]);
 
@@ -142,14 +132,13 @@ export default function CoachRegistrationPage() {
     debounce(async (bioText: string) => {
       if (bioText && bioText.length >= 50) {
         setIsAiLoading(true);
+        setSuggestedKeywordsState([]);
+        setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
           setSuggestedSpecialtiesState(response.specialties || []);
           setSuggestedKeywordsState(response.keywords || []);
-           if (response.keywords && response.keywords.length > 0 && !watch('keywords')) {
-             setValue('keywords', response.keywords.join(', '));
-          }
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
           toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
@@ -158,7 +147,7 @@ export default function CoachRegistrationPage() {
         }
       }
     }, 1000), 
-    [toast, setValue, watch]
+    [toast]
   );
 
   useEffect(() => {
@@ -198,7 +187,7 @@ export default function CoachRegistrationPage() {
 
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
-        email: data.email, 
+        // email: data.email, // Email should come from auth user, not form, to prevent changes
         bio: data.bio,
         role: 'coach', 
         specialties: data.selectedSpecialties,
@@ -210,6 +199,7 @@ export default function CoachRegistrationPage() {
         websiteUrl: data.websiteUrl || undefined,
         introVideoUrl: data.introVideoUrl || undefined,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+        updatedAt: new Date(), // For Firestore serverTimestamp
     };
 
     try {
@@ -230,11 +220,29 @@ export default function CoachRegistrationPage() {
   };
 
   const handleAddCustomSpecialty = () => {
-    const customSpecialtyValue = watch('customSpecialty')?.trim();
+    const customSpecialtyValue = getValues('customSpecialty')?.trim();
     if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
-      setAvailableSpecialties(prev => [...prev, customSpecialtyValue]);
-      setValue('selectedSpecialties', [...(watch('selectedSpecialties') || []), customSpecialtyValue]);
+      setAvailableSpecialties(prev => [...prev, customSpecialtyValue].sort());
+      setValue('selectedSpecialties', [...(getValues('selectedSpecialties') || []), customSpecialtyValue]);
       setValue('customSpecialty', ''); 
+    }
+  };
+
+  const handleSelectSuggestedKeyword = (keyword: string) => {
+    const currentKeywords = getValues('keywords') || "";
+    const keywordsSet = new Set(currentKeywords.split(',').map(k => k.trim()).filter(Boolean));
+    if (!keywordsSet.has(keyword)) {
+      setValue('keywords', [...keywordsSet, keyword].join(', '));
+    }
+  };
+
+  const handleSelectSuggestedSpecialty = (specialty: string) => {
+    if (!availableSpecialties.includes(specialty)) {
+      setAvailableSpecialties(prev => [...prev, specialty].sort());
+    }
+    const currentSelected = getValues('selectedSpecialties') || [];
+    if (!currentSelected.includes(specialty)) {
+      setValue('selectedSpecialties', [...currentSelected, specialty]);
     }
   };
 
@@ -293,19 +301,43 @@ export default function CoachRegistrationPage() {
             <section className="space-y-6">
               <h3 className="text-lg font-semibold border-b pb-2">Profile Details</h3>
               <div className="space-y-2">
-                <Label htmlFor="bio">Your Bio (min. 50 characters)</Label>
+                <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} placeholder="Tell us about your coaching philosophy, experience, and what makes you unique..." className={errors.bio ? 'border-destructive' : ''} />
                 {errors.bio && <p className="text-sm text-destructive">{errors.bio.message}</p>}
               </div>
 
-              { (isAiLoading || suggestedKeywordsState.length > 0 || suggestedSpecialtiesState.length > 0) && (
-                <Alert variant="default" className="bg-accent/20 border-accent/50">
+              { (bioValue && bioValue.length >= 50) && (
+                <Alert variant="default" className="bg-accent/10 border-accent/30">
                   <Lightbulb className="h-5 w-5 text-primary" />
                   <AlertTitle className="font-semibold text-primary">AI Suggestions Based on Your Bio</AlertTitle>
-                  <AlertDescription className="space-y-1 text-foreground/80">
+                  <AlertDescription className="space-y-3 text-foreground/80 mt-2">
                     {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                    {suggestedKeywordsState.length > 0 && <p className="text-sm">Suggested Keywords: <span className="font-medium">{suggestedKeywordsState.join(', ')}</span></p>}
-                    {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Suggested specialties: <span className="font-medium">{suggestedSpecialtiesState.join(', ')}</span></p>}
+                    {!isAiLoading && suggestedKeywordsState.length === 0 && suggestedSpecialtiesState.length === 0 && <p className="text-sm">No new suggestions based on current bio, or AI is processing.</p>}
+                    
+                    {suggestedKeywordsState.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium mb-1">Suggested Keywords (click to add):</p>
+                        <div className="flex flex-wrap gap-2">
+                          {suggestedKeywordsState.map(keyword => (
+                            <Badge key={keyword} variant="outline" onClick={() => handleSelectSuggestedKeyword(keyword)} className="cursor-pointer hover:bg-primary/20">
+                              <PlusCircle className="mr-1 h-3 w-3" /> {keyword}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {suggestedSpecialtiesState.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium mb-1">Suggested Specialties (click to select):</p>
+                         <div className="flex flex-wrap gap-2">
+                          {suggestedSpecialtiesState.map(specialty => (
+                            <Badge key={specialty} variant="outline" onClick={() => handleSelectSuggestedSpecialty(specialty)} className="cursor-pointer hover:bg-primary/20">
+                               <PlusCircle className="mr-1 h-3 w-3" /> {specialty}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
@@ -317,10 +349,10 @@ export default function CoachRegistrationPage() {
                   control={control}
                   render={({ field }) => (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-60 overflow-y-auto p-2 border rounded-md">
-                      {availableSpecialties.map((specialty) => (
+                      {availableSpecialties.sort().map((specialty) => (
                         <div key={specialty} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`specialty-${specialty.replace(/\s+/g, '-')}`}
+                            id={`specialty-reg-${specialty.replace(/\s+/g, '-')}`}
                             checked={field.value?.includes(specialty)}
                             onCheckedChange={(checked) => {
                               return checked
@@ -332,7 +364,7 @@ export default function CoachRegistrationPage() {
                                   );
                             }}
                           />
-                          <Label htmlFor={`specialty-${specialty.replace(/\s+/g, '-')}`} className="font-normal">{specialty}</Label>
+                          <Label htmlFor={`specialty-reg-${specialty.replace(/\s+/g, '-')}`} className="font-normal">{specialty}</Label>
                         </div>
                       ))}
                     </div>
@@ -341,7 +373,7 @@ export default function CoachRegistrationPage() {
                 {errors.selectedSpecialties && <p className="text-sm text-destructive">{errors.selectedSpecialties.message}</p>}
                 <div className="flex items-center gap-2 mt-2">
                   <Input {...register('customSpecialty')} placeholder="Add custom specialty" className="flex-grow"/>
-                  <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}>Add</Button>
+                  <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}><PlusCircle className="mr-2 h-4 w-4" />Add</Button>
                 </div>
               </div>
 
@@ -377,7 +409,7 @@ export default function CoachRegistrationPage() {
                 )}
                 {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                 <p className="text-xs text-muted-foreground">
-                  Upload a professional image. Square images work best.
+                  Upload a professional image. Square images work best. Max 1MB.
                 </p>
               </div>
               
@@ -473,6 +505,3 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
-    
-
-    
