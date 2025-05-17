@@ -95,7 +95,7 @@ export function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" passHref legacyBehavior>
           <a className="flex items-center" aria-label="The Life Coaching Cafe Home">
-            <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={144} height={36} priority className="object-contain"/>
+            <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
           </a>
         </Link>
         
@@ -118,7 +118,7 @@ export function Header() {
               <div className="flex flex-col space-y-4">
                 <Link href="/" passHref legacyBehavior>
                   <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
-                     <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={144} height={36} priority className="object-contain"/>
+                     <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
                   </a>
                 </Link>
                 {navLinks.map(link => ( // Use all navLinks for mobile, including Home
@@ -153,3 +153,4 @@ export function Header() {
     </header>
   );
 }
+
