@@ -77,7 +77,7 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
               </a>
             </Button>
           )}
-          <Button asChild size="lg" className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto block mx-auto md:mx-0">
+          <Button asChild size="lg" className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground sm:w-auto">
             <Link href={`/messages/new?coachId=${coach.id}`}>
               <MessageSquare className="mr-2 h-5 w-5" /> Message {coach.name.split(' ')[0]}
             </Link>
