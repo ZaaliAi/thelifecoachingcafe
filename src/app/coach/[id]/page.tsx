@@ -71,7 +71,7 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
             </Button>
           )}
           {coach.subscriptionTier === 'premium' && coach.introVideoUrl && (
-             <Button variant="outline" asChild size="sm" className="mt-3">
+             <Button variant="outline" asChild size="sm" className="mt-3 mr-2">
               <a href={coach.introVideoUrl} target="_blank" rel="noopener noreferrer">
                 <Video className="mr-2 h-4 w-4"/> Watch Intro
               </a>
