@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons/Logo';
 import { useAuth } from '@/lib/auth';
@@ -13,7 +13,8 @@ import { useState } from 'react';
 
 const navLinks = [
   { href: '/', label: 'Home', icon: Home },
-  { href: '/find-a-coach', label: 'Find a Coach', icon: Search },
+  { href: '/find-a-coach', label: 'CoachMatch AI', icon: Search },
+  { href: '/browse-coaches', label: 'Browse Coaches', icon: Users },
   { href: '/blog', label: 'Blog', icon: BookOpen },
 ];
 
@@ -74,7 +75,7 @@ export function Header() {
         </Link>
         
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-2 lg:space-x-4">
+        <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
           {commonNavLinks}
           {!loading && authNavLinks}
         </nav>
