@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Rocket, Globe, Video } from 'lucide-react';
+import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react'; // Added Crown
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { allSpecialties as predefinedSpecialties } from '@/data/mock'; // Predefined list
@@ -235,8 +235,8 @@ export default function CoachRegistrationPage() {
             {/* Premium Features Encouragement */}
             <section className="space-y-6 p-6 bg-primary/5 rounded-lg border border-primary/20">
                 <Alert variant="default" className="bg-transparent border-0 p-0">
-                    <Rocket className="h-6 w-6 text-primary" />
-                    <AlertTitle className="text-xl font-semibold text-primary">🚀 Supercharge Your Profile with Premium!</AlertTitle>
+                    <Crown className="h-6 w-6 text-primary" /> 
+                    <AlertTitle className="text-xl font-semibold text-primary">Supercharge Your Profile with Premium!</AlertTitle>
                     <AlertDescription className="text-muted-foreground mt-2">
                         Unlock powerful features like a Premium Badge on your profile, link your personal website, embed an engaging intro video, and connect your social media. Attract more clients and stand out from the crowd.
                     </AlertDescription>
