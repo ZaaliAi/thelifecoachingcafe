@@ -2,9 +2,9 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image'; // Import next/image
 import { usePathname } from 'next/navigation';
 import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase, Tag } from 'lucide-react';
-// Removed Logo import: import { Logo } from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -62,12 +62,12 @@ export function Header() {
   const dashboardLabel = user ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard` : '';
   const DashboardIcon = user?.role === 'admin' ? ShieldAlert : user?.role === 'coach' ? LayoutDashboard : UserCircle;
 
+  const logoUrl = "https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/aaadb032-0d6f-4c06-a8a5-6a6064b4fb06_removalai_preview.png?alt=media&token=0c82d001-1e15-440d-bded-37de001e2d31";
+
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
-  const commonNavLinks = navLinks.map(link => (
-    // For the main 'Home' link in the nav items, ensure it uses the Home icon as well if it's separate.
-    // However, navLinks already defines Home with Home icon.
+  const commonNavLinks = navLinks.filter(link => link.href !== '/').map(link => (
     <NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />
   ));
 
@@ -93,8 +93,10 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center" aria-label="CoachConnect Home">
-          <Home className="h-7 w-7 text-primary" />
+        <Link href="/" passHref legacyBehavior>
+          <a className="flex items-center" aria-label="CoachConnect Home">
+            <Image src={logoUrl} alt="CoachConnect Logo" width={144} height={36} priority className="object-contain"/>
+          </a>
         </Link>
         
         {/* Desktop Navigation */}
@@ -114,10 +116,14 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-xs p-6">
               <div className="flex flex-col space-y-4">
-                <Link href="/" className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="CoachConnect Home">
-                  <Home className="h-7 w-7 text-primary" />
+                <Link href="/" passHref legacyBehavior>
+                  <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="CoachConnect Home">
+                     <Image src={logoUrl} alt="CoachConnect Logo" width={144} height={36} priority className="object-contain"/>
+                  </a>
                 </Link>
-                {commonNavLinks}
+                {navLinks.map(link => ( // Use all navLinks for mobile, including Home
+                    <NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />
+                ))}
                 <hr className="my-2 border-border" />
                 {!loading && (
                   user ? (
