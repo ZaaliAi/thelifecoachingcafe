@@ -1,3 +1,4 @@
+
 import type { Coach, BlogPost, Testimonial } from '@/types';
 
 export const mockCoaches: Coach[] = [
@@ -10,8 +11,11 @@ export const mockCoaches: Coach[] = [
     profileImageUrl: 'https://placehold.co/300x300.png',
     dataAiHint: 'professional woman',
     certifications: ['Certified Professional Coach (CPC)', 'ICF Accredited'],
-    socialLinks: [{ platform: 'linkedin', url: '#' }],
+    socialLinks: [{ platform: 'linkedin', url: 'https://linkedin.com/in/eleanorvance' }],
     location: 'New York, NY',
+    subscriptionTier: 'premium',
+    websiteUrl: 'https://eleanorvancecoaching.com',
+    introVideoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Example video
   },
   {
     id: '2',
@@ -23,6 +27,8 @@ export const mockCoaches: Coach[] = [
     dataAiHint: 'confident man',
     certifications: ['Maxwell Leadership Certified Coach'],
     location: 'San Francisco, CA',
+    subscriptionTier: 'free',
+    // No socialLinks, websiteUrl, or introVideoUrl for free tier
   },
   {
     id: '3',
@@ -32,8 +38,11 @@ export const mockCoaches: Coach[] = [
     keywords: ['well-being', 'healthy relationships', 'anxiety relief'],
     profileImageUrl: 'https://placehold.co/300x300.png',
     dataAiHint: 'smiling woman',
-    socialLinks: [{ platform: 'instagram', url: '#' }],
+    socialLinks: [{ platform: 'instagram', url: 'https://instagram.com/aishakhancoach' }],
     location: 'London, UK',
+    subscriptionTier: 'premium',
+    websiteUrl: 'https://aishakhancoaching.com',
+    // No introVideoUrl for this premium coach, to show it's optional
   },
 ];
 

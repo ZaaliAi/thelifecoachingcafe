@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, DollarSign, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons/Logo';
 import { useAuth } from '@/lib/auth';
@@ -16,6 +16,7 @@ const navLinks = [
   { href: '/find-a-coach', label: 'CoachMatch AI', icon: Search },
   { href: '/browse-coaches', label: 'Browse Coaches', icon: Users },
   { href: '/blog', label: 'Blog', icon: BookOpen },
+  { href: '/pricing', label: 'Pricing', icon: DollarSign },
 ];
 
 const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" }) => {
@@ -27,10 +28,10 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
   let inactiveClasses = "";
 
   if (variant === "primary") {
-    activeClasses = "bg-primary text-primary-foreground"; // Use primary for active primary variant
+    activeClasses = "bg-primary text-primary-foreground"; 
     inactiveClasses = "bg-primary text-primary-foreground hover:bg-primary/90";
   } else {
-    activeClasses = "bg-primary/20 text-primary-foreground";
+    activeClasses = "bg-primary/20 text-primary"; // Updated active class for better visibility
     inactiveClasses = "text-foreground/70 hover:text-foreground hover:bg-muted";
   }
 
@@ -41,8 +42,8 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
         onClick={onClick}
         className={cn(
           baseClasses,
-          isActive && variant !== "primary" ? activeClasses : inactiveClasses, // Only apply active style differently if not primary
-          variant === "primary" && inactiveClasses // Always apply primary style if variant is primary
+          isActive ? activeClasses : inactiveClasses,
+          variant === "primary" && inactiveClasses 
         )}
       >
         <Icon className="h-5 w-5" />
@@ -59,7 +60,7 @@ export function Header() {
 
   const dashboardLink = user ? `/dashboard/${user.role}` : '/login';
   const dashboardLabel = user ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard` : '';
-  const DashboardIcon = user?.role === 'admin' ? ShieldAlert : LayoutDashboard;
+  const DashboardIcon = user?.role === 'admin' ? ShieldAlert : user?.role === 'coach' ? LayoutDashboard : UserCircle;
 
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -130,7 +131,7 @@ export function Header() {
                       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
                         <Link href="/register-coach">
-                          Register as a Coach
+                           Register as a Coach
                         </Link>
                       </Button>
                     </>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, MapPin, MessageSquare } from 'lucide-react';
+import { Briefcase, MapPin, MessageSquare, Crown } from 'lucide-react';
 
 interface CoachCardProps {
   coach: Coach;
@@ -28,7 +28,21 @@ export function CoachCard({ coach }: CoachCardProps) {
           <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
         </Avatar>
         <div className="flex-1 text-center sm:text-left">
-          <CardTitle className="text-xl font-semibold">{coach.name}</CardTitle>
+          <div className="flex items-center justify-center sm:justify-start gap-2">
+            <CardTitle className="text-xl font-semibold">{coach.name}</CardTitle>
+            {coach.subscriptionTier === 'premium' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Crown className="h-5 w-5 text-yellow-500" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Premium Coach</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           {coach.location && (
             <p className="text-sm text-muted-foreground flex items-center justify-center sm:justify-start mt-1">
               <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
@@ -76,3 +90,5 @@ export function CoachCard({ coach }: CoachCardProps) {
   );
 }
 
+// Add imports for Tooltip components if not already present globally
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

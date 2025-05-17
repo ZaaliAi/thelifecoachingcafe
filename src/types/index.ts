@@ -8,9 +8,12 @@ export interface Coach {
   profileImageUrl?: string;
   certifications?: string[];
   socialLinks?: { platform: string; url: string }[];
-  location?: string; // Added for CoachMatch AI
-  availability?: string; // Added for CoachMatch AI
-  email?: string; // For registration
+  location?: string; 
+  availability?: string; 
+  email?: string;
+  subscriptionTier: 'free' | 'premium';
+  websiteUrl?: string;
+  introVideoUrl?: string;
 }
 
 export interface BlogPost {
