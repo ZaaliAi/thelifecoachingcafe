@@ -15,7 +15,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties } from '@/lib/firestore'; 
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -48,12 +47,32 @@ const coachRegistrationSchema = z.object({
 
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
+// Define specialties locally
+const allSpecialtiesList = [
+  'Career Coaching',
+  'Personal Development',
+  'Mindfulness Coaching',
+  'Executive Coaching',
+  'Leadership Coaching',
+  'Business Strategy Coaching',
+  'Wellness Coaching',
+  'Relationship Coaching',
+  'Stress Management Coaching',
+  'Health and Fitness Coaching',
+  'Spiritual Coaching',
+  'Financial Coaching',
+  'Parenting Coaching',
+  'Academic Coaching',
+  'Performance Coaching',
+];
+
+
 export default function CoachRegistrationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
-  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
+  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList); 
   
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
@@ -94,7 +113,6 @@ export default function CoachRegistrationPage() {
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
           pendingName = pendingProfile.name || pendingName;
-          // Email should come from the authenticated user object primarily
           pendingEmail = user.email || pendingProfile.email || pendingEmail; 
         }
       } catch (e) {
@@ -102,7 +120,7 @@ export default function CoachRegistrationPage() {
       }
       reset({
         name: pendingName,
-        email: pendingEmail, // Use confirmed email from auth or pending
+        email: pendingEmail, 
         bio: '',
         selectedSpecialties: [],
         profileImageUrl: '',
@@ -160,11 +178,9 @@ export default function CoachRegistrationPage() {
     let finalProfileImageUrl = data.profileImageUrl;
     if (selectedFileForUpload) {
         try {
-            // For registration, we use user.id as it's now available after signup.
-            // The third argument (existingImageUrl) is omitted as it's a new profile.
             finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id);
             setValue('profileImageUrl', finalProfileImageUrl);
-            setImagePreviewUrl(finalProfileImageUrl); // Update preview to the stored URL
+            setImagePreviewUrl(finalProfileImageUrl); 
             setSelectedFileForUpload(null);
         } catch (uploadError: any) {
             toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
@@ -176,14 +192,13 @@ export default function CoachRegistrationPage() {
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
-    // Determine subscription tier based on whether any premium fields are filled
     const isAttemptingPremium = !!(data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl));
     const subscriptionTier = isAttemptingPremium ? 'premium' : 'free';
 
 
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
-        email: data.email, // email from form, should match auth user's email
+        email: data.email, 
         bio: data.bio,
         role: 'coach', 
         specialties: data.selectedSpecialties,
@@ -195,7 +210,6 @@ export default function CoachRegistrationPage() {
         websiteUrl: data.websiteUrl || undefined,
         introVideoUrl: data.introVideoUrl || undefined,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        // createdAt and updatedAt will be handled by setUserProfile (merge:true and serverTimestamp logic)
     };
 
     try {
@@ -235,12 +249,10 @@ export default function CoachRegistrationPage() {
       reader.readAsDataURL(file);
     } else {
       setSelectedFileForUpload(null);
-      // If a file was previously selected for upload & then cleared, 
-      // and there's no existing image from DB (which there wouldn't be on registration), clear preview.
       if (!user?.profileImageUrl) {
         setImagePreviewUrl(null);
       } else {
-         setImagePreviewUrl(user.profileImageUrl); // Fallback to existing if available
+         setImagePreviewUrl(user.profileImageUrl); 
       }
     }
   };
@@ -461,3 +473,6 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
+    
+
+    

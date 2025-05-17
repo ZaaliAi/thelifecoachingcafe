@@ -15,14 +15,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserCircle, Lightbulb, Save, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties } from '@/lib/firestore'; // Using allSpecialties from firestore.ts now
 import type { Coach, FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
-import { getUserProfile, setUserProfile } from '@/lib/firestore'; // Import Firestore functions
+import { getUserProfile, setUserProfile } from '@/lib/firestore'; 
 
 
 const coachProfileSchema = z.object({
@@ -31,7 +30,7 @@ const coachProfileSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  keywords: z.string().optional(), // Added keywords
+  keywords: z.string().optional(), 
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(),
   location: z.string().optional(),
@@ -44,12 +43,31 @@ const coachProfileSchema = z.object({
 
 type CoachProfileFormData = z.infer<typeof coachProfileSchema>;
 
+// Define specialties locally
+const allSpecialtiesList = [
+  'Career Coaching',
+  'Personal Development',
+  'Mindfulness Coaching',
+  'Executive Coaching',
+  'Leadership Coaching',
+  'Business Strategy Coaching',
+  'Wellness Coaching',
+  'Relationship Coaching',
+  'Stress Management Coaching',
+  'Health and Fitness Coaching',
+  'Spiritual Coaching',
+  'Financial Coaching',
+  'Parenting Coaching',
+  'Academic Coaching',
+  'Performance Coaching',
+];
+
 export default function CoachProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
-  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
+  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
 
@@ -100,7 +118,7 @@ export default function CoachProfilePage() {
           socialLinkPlatform: coachData.socialLinks?.[0]?.platform || '',
           socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
         });
-        const allSpecs = new Set([...predefinedSpecialties, ...(coachData.specialties || [])]);
+        const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
         setAvailableSpecialties(Array.from(allSpecs));
         if(coachData.profileImageUrl) setImagePreviewUrl(coachData.profileImageUrl);
       } else if(coachData && coachData.role !== 'coach'){
@@ -166,9 +184,8 @@ export default function CoachProfilePage() {
 
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
-        // email is not updated here, assumed to be fixed from auth
         bio: data.bio,
-        role: 'coach', 
+        // role: 'coach', // Role should not be changed here
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
         profileImageUrl: finalProfileImageUrl || undefined, 
@@ -216,7 +233,7 @@ export default function CoachProfilePage() {
       reader.readAsDataURL(file);
     } else {
       setSelectedFileForUpload(null);
-      setImagePreviewUrl(currentCoach?.profileImageUrl || null); // Revert to original if selection cleared
+      setImagePreviewUrl(currentCoach?.profileImageUrl || null); 
     }
   };
 
@@ -289,7 +306,7 @@ export default function CoachProfilePage() {
                         {availableSpecialties.map((specialty) => (
                             <div key={specialty} className="flex items-center space-x-2">
                             <Checkbox
-                                id={`specialty-${specialty.replace(/\s+/g, '-')}`} // Ensure ID is valid
+                                id={`specialty-${specialty.replace(/\s+/g, '-')}`} 
                                 checked={field.value?.includes(specialty)}
                                 onCheckedChange={(checked) => {
                                 return checked
@@ -423,3 +440,5 @@ export default function CoachProfilePage() {
     </Card>
   );
 }
+
+    
