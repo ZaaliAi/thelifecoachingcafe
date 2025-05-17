@@ -3,60 +3,64 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BlogPostCard } from '@/components/BlogPostCard';
-import { mockBlogPosts } from '@/data/mock';
 import { Search, Filter } from 'lucide-react';
 import type { BlogPost } from '@/types';
+import { getPublishedBlogPosts } from '@/lib/firestore'; // Assuming this fetches all published posts
 
 const ALL_CATEGORIES_VALUE = "_all_";
 
-// This would be a server component fetching posts in a real app
-async function getBlogPosts(filters?: { category?: string, searchTerm?: string }): Promise<BlogPost[]> {
-  // Simulate fetching and filtering
-  await new Promise(resolve => setTimeout(resolve, 200)); // Simulate delay
-  let posts = mockBlogPosts.filter(p => p.status === 'published');
-  if (filters?.category && filters.category !== ALL_CATEGORIES_VALUE) { // Ensure not to filter by the special value
+async function getBlogPostsWithFilter(filters?: { category?: string, searchTerm?: string }): Promise<BlogPost[]> {
+  let posts = await getPublishedBlogPosts(); // Fetch all published posts first
+
+  if (filters?.category && filters.category !== ALL_CATEGORIES_VALUE) {
     posts = posts.filter(post => post.tags?.includes(filters.category!));
   }
   if (filters?.searchTerm) {
+    const lowerSearchTerm = filters.searchTerm.toLowerCase();
     posts = posts.filter(post => 
-      post.title.toLowerCase().includes(filters.searchTerm!.toLowerCase()) ||
-      post.content.toLowerCase().includes(filters.searchTerm!.toLowerCase())
+      post.title.toLowerCase().includes(lowerSearchTerm) ||
+      post.content.toLowerCase().includes(lowerSearchTerm) ||
+      post.authorName.toLowerCase().includes(lowerSearchTerm) ||
+      post.tags?.some(tag => tag.toLowerCase().includes(lowerSearchTerm))
     );
   }
   return posts;
 }
 
-const categories = Array.from(new Set(mockBlogPosts.flatMap(post => post.tags || [])));
+async function getAllCategories(): Promise<string[]> {
+    const posts = await getPublishedBlogPosts(); // Consider fetching only tags for efficiency if possible
+    const categories = Array.from(new Set(posts.flatMap(post => post.tags || []).filter(Boolean)));
+    return categories;
+}
+
 
 export default async function BlogPage({ searchParams }: { searchParams?: { category?: string, search?: string } }) {
   const rawCategory = searchParams?.category;
   const searchTerm = searchParams?.search;
-
-  // If category is "_all_" or undefined/empty, then treat as no category filter for getBlogPosts
   const effectiveCategory = (rawCategory === ALL_CATEGORIES_VALUE || !rawCategory) ? undefined : rawCategory;
 
-  const posts = await getBlogPosts({ category: effectiveCategory, searchTerm });
+  const posts = await getBlogPostsWithFilter({ category: effectiveCategory, searchTerm });
+  const categories = await getAllCategories();
 
   return (
     <div className="space-y-12">
       <section className="text-center py-8">
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coaching Cafe Blog</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Insights, tips, and stories from our community of expert life coaches.
+          Explore life coaching blog articles, tips from professional life coaches, and stories on personal development, mindset, and achieving your goals.
         </p>
       </section>
 
-      {/* Filters and Search - Would be a client component form in a real app for interactivity */}
       <section className="mb-8 p-6 bg-muted/50 rounded-lg shadow-sm">
         <form method="GET" action="/blog" className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
-            <label htmlFor="search" className="block text-sm font-medium text-foreground mb-1">Search Posts</label>
+            <label htmlFor="search" className="block text-sm font-medium text-foreground mb-1">Search Blog Articles</label>
             <div className="relative">
               <Input 
                 type="search" 
                 name="search"
                 id="search" 
-                placeholder="Keywords..." 
+                placeholder="Keywords (e.g., mindset, confidence)..." 
                 defaultValue={searchTerm}
                 className="pl-10"
               />
@@ -64,13 +68,13 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
             </div>
           </div>
           <div>
-            <label htmlFor="category" className="block text-sm font-medium text-foreground mb-1">Filter by Category</label>
+            <label htmlFor="category" className="block text-sm font-medium text-foreground mb-1">Filter by Coaching Specialty</label>
             <Select name="category" defaultValue={rawCategory || ALL_CATEGORIES_VALUE}>
               <SelectTrigger id="category" className="w-full">
-                <SelectValue placeholder="All Categories" />
+                <SelectValue placeholder="All Coaching Specialties" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+                <SelectItem value={ALL_CATEGORIES_VALUE}>All Coaching Specialties</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
@@ -91,11 +95,11 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
         </section>
       ) : (
         <section className="text-center py-12">
-          <p className="text-xl text-muted-foreground">No blog posts found matching your criteria.</p>
+          <p className="text-xl text-muted-foreground">No life coaching blog articles found matching your criteria.</p>
+           <p className="text-muted-foreground mt-2">Try different keywords or browse all categories.</p>
         </section>
       )}
 
-      {/* Pagination Placeholder - Would require more logic */}
       {posts.length > 0 && (
         <section className="mt-12 flex justify-center">
           <div className="flex gap-2">
@@ -108,4 +112,4 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
   );
 }
 
-export const dynamic = 'force-dynamic'; // Ensure searchParams are re-evaluated
+export const dynamic = 'force-dynamic';

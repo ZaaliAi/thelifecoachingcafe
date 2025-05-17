@@ -12,29 +12,35 @@ import { CoachCard } from '@/components/CoachCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Lightbulb, Search } from 'lucide-react';
 import type { CoachMatchAiSearchInput, CoachMatchAiSearchOutput } from '@/ai/flows/coach-match-ai';
-import { coachMatchAiSearch } from '@/ai/flows/coach-match-ai'; // This needs to be callable client-side
-import { mockCoaches } from '@/data/mock'; // Fallback mock data
+import { coachMatchAiSearch } from '@/ai/flows/coach-match-ai';
 import type { Coach } from '@/types';
+import { getCoachById } from '@/lib/firestore';
+
 
 const searchSchema = z.object({
-  userInput: z.string().min(10, 'Please describe your needs in at least 10 characters.'),
+  userInput: z.string().min(10, 'Please describe your needs in at least 10 characters (e.g., "life coach for career change").'),
 });
 type SearchFormData = z.infer<typeof searchSchema>;
 
-// Helper to adapt AI output to Coach type if needed, or use mock data structure
-const adaptAiCoachToAppCoach = (aiCoach: CoachMatchAiSearchOutput['rankedCoachList'][0]): Coach => {
-  // Find a mock coach by name or ID to get more details, or use defaults
-  const mockCoachDetail = mockCoaches.find(mc => mc.id === aiCoach.coachId || mc.name === aiCoach.coachName);
+// Helper to adapt AI output to Coach type by fetching more details from Firestore
+const adaptAiCoachToAppCoach = async (aiCoach: CoachMatchAiSearchOutput['rankedCoachList'][0]): Promise<Coach> => {
+  const firestoreCoach = await getCoachById(aiCoach.coachId);
+  if (firestoreCoach) {
+    return {
+      ...firestoreCoach, // All details from Firestore
+      specialties: aiCoach.specialties.length > 0 ? aiCoach.specialties : firestoreCoach.specialties, // Prefer AI specialties if available, else Firestore's
+      // matchScore: aiCoach.matchScore, // Can be added to Coach type if needed for display
+    };
+  }
+  // Fallback if coach not found in Firestore (should be rare if AI is synced)
   return {
     id: aiCoach.coachId,
     name: aiCoach.coachName,
-    bio: mockCoachDetail?.bio || 'Bio not available.',
+    bio: 'Detailed bio available on profile.',
     specialties: aiCoach.specialties,
-    keywords: mockCoachDetail?.keywords || [],
-    profileImageUrl: mockCoachDetail?.profileImageUrl,
-    dataAiHint: mockCoachDetail?.dataAiHint as string,
-    location: mockCoachDetail?.location,
-    // matchScore: aiCoach.matchScore, // Can be added to Coach type if needed for display
+    keywords: [],
+    subscriptionTier: 'free', // Default, as we can't confirm without Firestore record
+    // matchScore: aiCoach.matchScore,
   };
 };
 
@@ -55,29 +61,34 @@ export default function FindACoachPage() {
 
     try {
       const input: CoachMatchAiSearchInput = { userInput: data.userInput };
-      // In a real app, ensure coachMatchAiSearch is a server action or API endpoint
-      // For now, we simulate the AI call
-      // const response = await coachMatchAiSearch(input);
-
       // Simulate AI call and response structure
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      // const response = await coachMatchAiSearch(input); 
+      
+      // --- Simulated AI Response (for environments where Genkit might not be running) ---
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      // Attempt to get a few coaches from Firestore to simulate AI finding them
+      const allCoaches = await getCoachById("1").then(c => c ? [c] : []); // Example using one coach
+      if (allCoaches.length === 0) { // Simple fallback if DB is empty or coach "1" not found
+          allCoaches.push({ id: 'sim1', name: "Simulated Coach A", specialties: ["Career Coaching"], bio: "A simulated coach.", subscriptionTier: "premium" });
+          allCoaches.push({ id: 'sim2', name: "Simulated Coach B", specialties: ["Mindfulness"], bio: "Another simulated coach.", subscriptionTier: "free"});
+      }
       const simulatedResponse: CoachMatchAiSearchOutput = {
-        rankedCoachList: mockCoaches.slice(0,2).map(coach => ({
+        rankedCoachList: allCoaches.slice(0,2).map(coach => ({
             coachId: coach.id,
             coachName: coach.name,
             matchScore: Math.random() * 100,
             specialties: coach.specialties.slice(0,2)
-        })).sort((a,b) => b.matchScore - a.matchScore) // Sort by mock score
+        })).sort((a,b) => b.matchScore - a.matchScore)
       };
+      // --- End Simulated AI Response ---
       
-      const adaptedCoaches = simulatedResponse.rankedCoachList.map(adaptAiCoachToAppCoach);
+      const adaptedCoachesPromises = simulatedResponse.rankedCoachList.map(adaptAiCoachToAppCoach);
+      const adaptedCoaches = await Promise.all(adaptedCoachesPromises);
       setSearchResults(adaptedCoaches);
 
     } catch (e) {
       console.error('Error fetching coach recommendations:', e);
-      setError('Failed to fetch coach recommendations. Please try again.');
-      // Fallback to mock coaches on error
-      setSearchResults(mockCoaches.slice(0, 2));
+      setError('Failed to fetch coach recommendations. Please try again or browse our directory.');
     } finally {
       setIsLoading(false);
     }
@@ -87,9 +98,9 @@ export default function FindACoachPage() {
     <div className="space-y-8">
       <section className="text-center py-8">
         <Lightbulb className="mx-auto h-12 w-12 text-primary mb-4" />
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">CoachMatch AI Assistant</h1>
+        <h1 className="text-3xl md:text-4xl font-bold mb-4">CoachMatch AI: Your Intelligent Coach Finder</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Tell us what you&apos;re looking for in a life coach, and our AI will help you find the best matches.
+          Describe your goals for personal development or mental wellness, and our AI will provide personalized coach suggestions to help you find the best-fit coach.
         </p>
       </section>
 
@@ -97,7 +108,7 @@ export default function FindACoachPage() {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center">
             <Search className="mr-2 h-6 w-6 text-primary" />
-            Describe Your Coaching Needs
+            What are you looking for in a life coach?
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -105,10 +116,10 @@ export default function FindACoachPage() {
             <div>
               <Textarea
                 {...register('userInput')}
-                placeholder="e.g., 'I need help with career transition and building confidence.' or 'I'm looking for a coach who specializes in mindfulness and stress reduction.'"
+                placeholder="e.g., 'I need a life coach for career change and confidence building.' or 'Help me find an online life coach specializing in mindset and stress reduction.'"
                 rows={5}
                 className={`text-base ${errors.userInput ? 'border-destructive' : ''}`}
-                aria-label="Describe your coaching needs"
+                aria-label="Describe your coaching needs to find a life coach"
               />
               {errors.userInput && (
                 <p className="text-sm text-destructive mt-1">{errors.userInput.message}</p>
@@ -118,10 +129,10 @@ export default function FindACoachPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Finding Coaches...
+                  Finding Your Best-Fit Coach...
                 </>
               ) : (
-                'Find My Coach'
+                'Get Personalized Coach Suggestions'
               )}
             </Button>
           </form>
@@ -137,7 +148,7 @@ export default function FindACoachPage() {
 
       {searchResults && searchResults.length > 0 && (
         <section>
-          <h2 className="text-2xl font-semibold mb-6">Recommended Coaches</h2>
+          <h2 className="text-2xl font-semibold mb-6">Your AI-Suggested Life Coach Matches</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {searchResults.map((coach) => (
               <CoachCard key={coach.id} coach={coach} />
@@ -148,9 +159,9 @@ export default function FindACoachPage() {
 
       {searchResults && searchResults.length === 0 && !isLoading && (
         <Alert>
-          <AlertTitle>No Coaches Found</AlertTitle>
+          <AlertTitle>No Coaches Found Matching Your Needs</AlertTitle>
           <AlertDescription>
-            We couldn&apos;t find any coaches matching your current criteria. Try refining your search.
+            We couldn't find specific AI-powered matches for your current criteria. Try refining your search, or <Link href="/browse-coaches" className="underline text-primary">browse our full life coach directory</Link>.
           </AlertDescription>
         </Alert>
       )}

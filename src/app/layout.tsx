@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'CoachConnect - Find Your Life Coach',
-  description: 'A modern directory and content platform for life coaches with integrated AI tools for personalized coach matching.',
+  description: 'Connect with certified life coaches through our online directory. Utilize our AI-powered CoachMatch tool for personalized recommendations and discover resources for personal development and mental wellness.',
 };
 
 export default function RootLayout({

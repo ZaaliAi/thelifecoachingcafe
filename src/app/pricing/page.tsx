@@ -6,7 +6,7 @@ import Link from "next/link";
 
 const freeFeatures = [
   "Basic Profile (Name, Bio, Specialties, Keywords)",
-  "List in Coach Directory",
+  "List in Online Life Coach Directory",
   "Receive Messages from Users",
   "Submit Blog Posts (Admin Approval)",
 ];
@@ -26,9 +26,9 @@ export default function PricingPage() {
     <div className="space-y-12">
       <section className="text-center py-8">
         <Crown className="mx-auto h-12 w-12 text-primary mb-4" />
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">Coach Subscription Plans</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Subscription Plans</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Choose the plan that best fits your coaching practice and reach more clients.
+          Choose the best plan for certified life coaches to grow your practice and connect with clients seeking personal development and coaching for confidence.
         </p>
       </section>
 
@@ -40,7 +40,7 @@ export default function PricingPage() {
               <Users className="mr-3 h-7 w-7 text-muted-foreground" />
               Free Tier
             </CardTitle>
-            <CardDescription>Get started and build your presence on CoachConnect.</CardDescription>
+            <CardDescription>Get started and build your presence on CoachConnect's life coach directory.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow space-y-4">
             <p className="text-3xl font-bold">£0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
@@ -70,7 +70,7 @@ export default function PricingPage() {
               <Crown className="mr-3 h-7 w-7 text-yellow-500" />
               Premium Tier
             </CardTitle>
-            <CardDescription>Unlock all features to maximize your visibility and client engagement.</CardDescription>
+            <CardDescription>Unlock all features for your executive life coach profile, maximize visibility, and client engagement.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow space-y-4">
             <p className="text-3xl font-bold">£9.99 <span className="text-sm font-normal text-muted-foreground">billed monthly</span></p>
@@ -93,9 +93,9 @@ export default function PricingPage() {
       </section>
 
       <section className="text-center py-8 max-w-2xl mx-auto">
-        <h3 className="text-xl font-semibold mb-3">Need Help Choosing?</h3>
+        <h3 className="text-xl font-semibold mb-3">Need Help Choosing Your Coaching Plan?</h3>
         <p className="text-muted-foreground mb-4">
-          If you're unsure which plan is right for you, start with the Free tier. You can always upgrade later from your coach dashboard.
+          If you're unsure which plan is right for your life coaching services, start with the Free tier. You can always upgrade later from your coach dashboard to access premium features for coaching for mindset and confidence.
         </p>
         <Button variant="link">Contact Support</Button>
       </section>

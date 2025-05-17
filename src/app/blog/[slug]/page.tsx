@@ -33,7 +33,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
     <article className="max-w-3xl mx-auto py-8 space-y-8">
       <header className="space-y-4">
         <Button variant="outline" asChild className="mb-4">
-          <Link href="/blog"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Blog</Link>
+          <Link href="/blog"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Life Coaching Blog Articles</Link>
         </Button>
         
         {post.featuredImageUrl && (
@@ -60,7 +60,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         <div className="flex items-center space-x-4 text-muted-foreground">
           {author && author.profileImageUrl && (
             <Avatar className="h-8 w-8 mr-2">
-              <AvatarImage src={author.profileImageUrl} alt={author.name} data-ai-hint={author.dataAiHint as string || "person face"} />
+              <AvatarImage src={author.profileImageUrl} alt={author.name || "Author profile picture"} data-ai-hint={author.dataAiHint as string || "person face"} />
               <AvatarFallback>{author.name?.charAt(0) || 'A'}</AvatarFallback>
             </Avatar>
           )}
@@ -80,19 +80,19 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         <h2>A Subheading for More Detail</h2>
         <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
         <figure>
-            <Image src="https://placehold.co/700x400.png" alt="Illustrative image" width={700} height={400} className="rounded-md shadow-md" data-ai-hint="concept illustration" />
-            <figcaption className="text-center text-sm text-muted-foreground mt-2">An illustrative image related to the topic.</figcaption>
+            <Image src="https://placehold.co/700x400.png" alt="Illustrative image for blog post" width={700} height={400} className="rounded-md shadow-md" data-ai-hint="concept illustration" />
+            <figcaption className="text-center text-sm text-muted-foreground mt-2">An illustrative image related to the topic on personal development.</figcaption>
         </figure>
         <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
       </div>
 
       <footer className="pt-8 border-t">
-        <h3 className="text-xl font-semibold mb-4">About the Author</h3>
+        <h3 className="text-xl font-semibold mb-4">About the Author: {author?.name || post.authorName}</h3>
         {author ? (
           <div className="flex items-start space-x-4 p-4 bg-muted/50 rounded-lg">
             {author.profileImageUrl && (
               <Avatar className="h-16 w-16">
-                <AvatarImage src={author.profileImageUrl} alt={author.name} data-ai-hint={author.dataAiHint as string || "author portrait"} />
+                <AvatarImage src={author.profileImageUrl} alt={`${author.name} - professional life coach`} data-ai-hint={author.dataAiHint as string || "author portrait"} />
                 <AvatarFallback>{author.name.charAt(0)}</AvatarFallback>
               </Avatar>
             )}
@@ -100,7 +100,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
               <h4 className="text-lg font-medium">{author.name}</h4>
               <p className="text-sm text-muted-foreground line-clamp-3">{author.bio}</p>
               <Button variant="link" asChild className="p-0 h-auto mt-1">
-                <Link href={`/coach/${author.id}`}>View Profile</Link>
+                <Link href={`/coach/${author.id}`}>View Profile of this Life Coach</Link>
               </Button>
             </div>
           </div>

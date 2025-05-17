@@ -20,31 +20,31 @@ export default async function BrowseCoachesPage({ searchParams }: { searchParams
     <div className="space-y-12">
       <section className="text-center py-8">
         <Users className="mx-auto h-12 w-12 text-primary mb-4" />
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">Browse Our Coaches</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Directory: Find Certified Coaches Online</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Explore our directory of talented life coaches. Use the search below to find a coach based on your specific needs.
+          Explore our online life coach directory of talented and certified life coaches. Use the search below to find a coach based on your specific needs for personal development, career change, or mental wellness.
         </p>
       </section>
 
       <section className="mb-8 p-6 bg-muted/50 rounded-lg shadow-sm">
         <form method="GET" action="/browse-coaches" className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-grow w-full sm:w-auto">
-            <label htmlFor="search" className="block text-sm font-medium text-foreground mb-1">Search Coaches</label>
+            <label htmlFor="search" className="block text-sm font-medium text-foreground mb-1">Search Life Coaches</label>
             <div className="relative">
               <Input 
                 type="search" 
                 name="search"
                 id="search" 
-                placeholder="Search by name, specialty, keyword..." 
+                placeholder="Search life coaches by specialty (e.g., confidence, executive), name, or keyword..." 
                 defaultValue={searchTerm}
                 className="pl-10 h-11 text-base"
-                aria-label="Search coaches"
+                aria-label="Search life coaches by name, specialty, or keyword"
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             </div>
           </div>
           <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground h-11 text-base">
-            <Search className="mr-2 h-4 w-4" /> Search
+            <Search className="mr-2 h-4 w-4" /> Search Directory
           </Button>
         </form>
       </section>
@@ -57,8 +57,8 @@ export default async function BrowseCoachesPage({ searchParams }: { searchParams
         </section>
       ) : (
         <section className="text-center py-12">
-          <p className="text-xl text-muted-foreground">No coaches found matching your search criteria.</p>
-          <p className="text-muted-foreground mt-2">Try broadening your search terms or explore all coaches.</p>
+          <p className="text-xl text-muted-foreground">No life coaches found matching your search criteria.</p>
+          <p className="text-muted-foreground mt-2">Try broadening your search terms or explore all certified life coaches.</p>
         </section>
       )}
 
