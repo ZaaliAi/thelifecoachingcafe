@@ -43,7 +43,7 @@ export default function PricingPage() {
             <CardDescription>Get started and build your presence on CoachConnect.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow space-y-4">
-            <p className="text-3xl font-bold">$0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
+            <p className="text-3xl font-bold">£0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
             <ul className="space-y-2">
               {freeFeatures.map((feature, index) => (
                 <li key={index} className="flex items-center">
