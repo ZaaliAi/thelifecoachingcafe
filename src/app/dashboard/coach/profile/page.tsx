@@ -20,6 +20,8 @@ import type { Coach } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '@/lib/auth';
+import { uploadProfileImage } from '@/services/imageUpload';
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -27,7 +29,7 @@ const coachProfileSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  profileImageUrl: z.string().optional().or(z.literal('')), // Accepts Data URL or empty string
+  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(),
   location: z.string().optional(),
   // Premium fields
@@ -40,12 +42,17 @@ const coachProfileSchema = z.object({
 type CoachProfileFormData = z.infer<typeof coachProfileSchema>;
 
 export default function CoachProfilePage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
   const [currentCoach, setCurrentCoach] = useState<Coach | null>(null);
+  const { user, loading: authLoading } = useAuth();
+
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
+
 
   const { toast } = useToast();
   const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<CoachProfileFormData>({
@@ -57,15 +64,17 @@ export default function CoachProfilePage() {
   });
 
   const bioValue = watch('bio');
-  const profileImageUrlValue = watch('profileImageUrl');
+  const currentProfileImageUrl = watch('profileImageUrl'); // This will hold the URL from DB or the newly uploaded one
 
   useEffect(() => {
-    const coachData = mockCoaches.find(c => c.id === '1');
+    if (authLoading) return;
+    // Simulating fetching current coach data. In a real app, fetch by user.id
+    const coachData = mockCoaches.find(c => c.id === (user?.id || '1')); // Fallback to '1' for mock if no user
     if (coachData) {
       setCurrentCoach(coachData);
       reset({
         name: coachData.name,
-        email: coachData.email || 'coach@example.com',
+        email: coachData.email || `${user?.email}`,
         bio: coachData.bio,
         selectedSpecialties: coachData.specialties,
         profileImageUrl: coachData.profileImageUrl || '',
@@ -76,13 +85,28 @@ export default function CoachProfilePage() {
         socialLinkPlatform: coachData.socialLinks?.[0]?.platform,
         socialLinkUrl: coachData.socialLinks?.[0]?.url,
       });
-      if (coachData.profileImageUrl) {
-        // If initial data has a URL, watch will pick it up for preview
-      }
       const allSpecs = new Set([...predefinedSpecialties, ...coachData.specialties]);
       setAvailableSpecialties(Array.from(allSpecs));
+    } else if (user) {
+      // Initialize with some basic data if coach not found in mock for current user
+      setCurrentCoach({
+        id: user.id,
+        name: user.name || '',
+        email: user.email,
+        bio: '',
+        specialties: [],
+        keywords: [],
+        subscriptionTier: 'free', // default
+      });
+       reset({
+        name: user.name || '',
+        email: user.email,
+        bio: '',
+        selectedSpecialties: [],
+        profileImageUrl: '',
+      });
     }
-  }, [reset]);
+  }, [reset, user, authLoading]);
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -115,10 +139,45 @@ export default function CoachProfilePage() {
   }, [bioValue, fetchSuggestions]);
   
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
-    setIsLoading(true);
-    console.log('Updating coach profile data (profileImageUrl might be a Data URL):', data);
+    if (!user || !currentCoach) {
+        toast({ title: "Error", description: "User not authenticated or coach data missing.", variant: "destructive" });
+        return;
+    }
+    setIsSubmitting(true);
+    let finalProfileImageUrl = data.profileImageUrl;
+
+    if (selectedFileForUpload) {
+        try {
+            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id, currentCoach.profileImageUrl);
+            setValue('profileImageUrl', finalProfileImageUrl); // Update form value with new URL
+            setImagePreviewUrl(null); // Clear preview as it's now uploaded
+            setSelectedFileForUpload(null); // Clear selected file
+        } catch (uploadError: any) {
+            toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
+            setIsSubmitting(false);
+            return;
+        }
+    }
+    
+    const updatedProfileData = { ...data, profileImageUrl: finalProfileImageUrl };
+    console.log('Updating coach profile data:', updatedProfileData);
+    // Simulate API call to save profile data
     await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
+    
+    // Update mockCoaches (or would save to DB)
+    const coachIndex = mockCoaches.findIndex(c => c.id === currentCoach.id);
+    if (coachIndex !== -1) {
+      mockCoaches[coachIndex] = {
+        ...mockCoaches[coachIndex],
+        ...updatedProfileData,
+        specialties: updatedProfileData.selectedSpecialties,
+        certifications: updatedProfileData.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [],
+        socialLinks: updatedProfileData.socialLinkPlatform && updatedProfileData.socialLinkUrl ? [{platform: updatedProfileData.socialLinkPlatform, url: updatedProfileData.socialLinkUrl}] : [],
+      };
+    }
+
+
+    setIsSubmitting(false);
     toast({
       title: "Profile Updated!",
       description: "Your profile changes have been saved successfully.",
@@ -138,21 +197,27 @@ export default function CoachProfilePage() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setSelectedFileForUpload(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setValue('profileImageUrl', reader.result as string);
+        setImagePreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     } else {
-      setValue('profileImageUrl', ''); // Clear if no file selected or selection cancelled
+      setSelectedFileForUpload(null);
+      setImagePreviewUrl(null);
     }
   };
 
-  if (!currentCoach) {
+  if (authLoading || !currentCoach && !user) { // Show loading if auth is pending or if no user and no coach data yet
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading profile...</div>;
   }
+  if (!user && !authLoading) { // If auth is done and still no user, prompt login
+      router.push('/login'); // Or show a message
+      return <div className="flex justify-center items-center h-full">Please log in to view your profile.</div>;
+  }
   
-  const isPremium = currentCoach.subscriptionTier === 'premium';
+  const isPremium = currentCoach?.subscriptionTier === 'premium';
 
   return (
     <Card className="shadow-lg">
@@ -162,9 +227,11 @@ export default function CoachProfilePage() {
                 <CardTitle className="text-2xl flex items-center"><UserCircle className="mr-3 h-7 w-7 text-primary"/>Edit Your Profile</CardTitle>
                 <CardDescription>Keep your information current to attract the right clients.</CardDescription>
             </div>
-            <Badge variant={isPremium ? "default" : "secondary"} className={isPremium ? "bg-yellow-500 text-white" : ""}>
-                <Crown className="mr-2 h-4 w-4" /> {currentCoach.subscriptionTier.toUpperCase()} Tier
-            </Badge>
+            {currentCoach && (
+              <Badge variant={isPremium ? "default" : "secondary"} className={isPremium ? "bg-yellow-500 text-white" : ""}>
+                  <Crown className="mr-2 h-4 w-4" /> {currentCoach.subscriptionTier.toUpperCase()} Tier
+              </Badge>
+            )}
         </div>
       </CardHeader>
       <CardContent>
@@ -256,10 +323,10 @@ export default function CoachProfilePage() {
                             className="flex-grow"
                         />
                     </div>
-                    {profileImageUrlValue && (
+                     {(imagePreviewUrl || currentProfileImageUrl) && (
                         <div className="mt-2 relative w-32 h-32">
                             <Image
-                                src={profileImageUrlValue}
+                                src={imagePreviewUrl || currentProfileImageUrl || "https://placehold.co/128x128.png"}
                                 alt="Profile preview"
                                 fill
                                 className="rounded-md object-cover border"
@@ -270,8 +337,6 @@ export default function CoachProfilePage() {
                     {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                      <p className="text-xs text-muted-foreground">
                         Upload an image. For best results, use a square image.
-                        <br />
-                        <strong className="text-primary/80">Note:</strong> Image is locally previewed and won&apos;t be permanently stored in this prototype.
                     </p>
                 </div>
 
@@ -329,8 +394,8 @@ export default function CoachProfilePage() {
             </div>
           </section>
           
-          <Button type="submit" disabled={isLoading || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isLoading ? (
+          <Button type="submit" disabled={isSubmitting || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Saving Changes...

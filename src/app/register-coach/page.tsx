@@ -19,6 +19,10 @@ import { allSpecialties as predefinedSpecialties } from '@/data/mock';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '@/lib/auth'; // Assuming new coach will be logged in
+import { uploadProfileImage } from '@/services/imageUpload';
+import { useRouter } from 'next/navigation';
+
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -28,7 +32,7 @@ const coachRegistrationSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  profileImageUrl: z.string().optional().or(z.literal('')), // Accepts Data URL or empty string
+  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(), 
   // Premium Features
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
@@ -43,13 +47,19 @@ const coachRegistrationSchema = z.object({
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function CoachRegistrationPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [suggestedSpecialties, setSuggestedSpecialties] = useState<string[]>([]);
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
   
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
+
   const { toast } = useToast();
+  const { user, login } = useAuth(); // For getting user ID after simulated signup/login
+  const router = useRouter();
+
   const { control, register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
@@ -59,8 +69,7 @@ export default function CoachRegistrationPage() {
   });
 
   const bioValue = watch('bio');
-  const profileImageUrlValue = watch('profileImageUrl');
-
+  // const currentProfileImageUrl = watch('profileImageUrl'); // For future use if editing existing draft
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -98,15 +107,67 @@ export default function CoachRegistrationPage() {
   }, [bioValue, fetchSuggestions]);
   
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
-    setIsLoading(true);
-    console.log('Coach registration data (profileImageUrl might be Data URL):', data);
+    setIsSubmitting(true);
+
+    // Simulate user creation / login to get a user ID for storage path
+    // In a real app, this would happen before this form or as part of a multi-step process.
+    let coachUserId = user?.id;
+    if (!coachUserId) {
+        // Simulate creating/logging in the user if not already logged in as coach
+        login(data.email, 'coach'); // This will set the user in AuthContext
+        // We need to wait for the user state to update to get the ID. This is tricky.
+        // For now, let's assume login updates user context synchronously or we use a temp ID.
+        // A robust solution would involve a proper auth flow.
+        // For this simulation, we'll use a placeholder or re-fetch user after login.
+        // To simplify, we'll assume `login` makes `user.id` available or we use email as part of path.
+        // THIS IS A SIMPLIFICATION.
+        coachUserId = data.email.replace(/[@.]/g, '-'); // Temporary ID based on email
+         toast({ title: "Account Simulated", description: "Proceeding with registration.", variant: "default"});
+    }
+
+
+    let finalProfileImageUrl = data.profileImageUrl;
+    if (selectedFileForUpload) {
+        try {
+            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, coachUserId); // Pass coachUserId
+            setValue('profileImageUrl', finalProfileImageUrl);
+            setImagePreviewUrl(null); 
+            setSelectedFileForUpload(null);
+        } catch (uploadError: any) {
+            toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
+            setIsSubmitting(false);
+            return;
+        }
+    }
+    
+    const registrationData = { ...data, profileImageUrl: finalProfileImageUrl, id: coachUserId };
+    console.log('Coach registration data:', registrationData);
+    // In a real app: Save registrationData to Firestore, including the Firebase Storage URL
+    // For mock: Add to mockCoaches or similar
+    mockCoaches.push({
+        id: coachUserId, // Use the generated/retrieved ID
+        name: data.name,
+        email: data.email,
+        bio: data.bio,
+        specialties: data.selectedSpecialties,
+        keywords: suggestedKeywords, // Or derive from form
+        profileImageUrl: finalProfileImageUrl,
+        certifications: data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [],
+        subscriptionTier: data.websiteUrl ? 'premium' : 'free', // Simple logic for tier based on website
+        websiteUrl: data.websiteUrl,
+        introVideoUrl: data.introVideoUrl,
+        socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+        location: "Remote" // Default location
+    });
+
     await new Promise(resolve => setTimeout(resolve, 2000)); 
-    setIsLoading(false);
+    setIsSubmitting(false);
     toast({
       title: "Registration Submitted!",
       description: "Your application has been submitted for review. We'll be in touch soon.",
       action: <CheckCircle2 className="text-green-500" />,
     });
+    router.push('/dashboard/coach'); // Redirect to coach dashboard
   };
 
   const handleAddCustomSpecialty = () => {
@@ -121,13 +182,15 @@ export default function CoachRegistrationPage() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setSelectedFileForUpload(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setValue('profileImageUrl', reader.result as string);
+        setImagePreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     } else {
-      setValue('profileImageUrl', '');
+      setSelectedFileForUpload(null);
+      setImagePreviewUrl(null);
     }
   };
 
@@ -240,10 +303,10 @@ export default function CoachRegistrationPage() {
                         className="flex-grow"
                     />
                 </div>
-                {profileImageUrlValue && (
+                {imagePreviewUrl && (
                   <div className="mt-2 relative w-32 h-32">
                     <Image
-                        src={profileImageUrlValue}
+                        src={imagePreviewUrl}
                         alt="Profile preview"
                         fill
                         className="rounded-md object-cover border"
@@ -254,8 +317,6 @@ export default function CoachRegistrationPage() {
                 {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                 <p className="text-xs text-muted-foreground">
                   Upload an image. For best results, use a square image.
-                  <br />
-                  <strong className="text-primary/80">Note:</strong> Image is locally previewed and won&apos;t be permanently stored in this prototype.
                 </p>
               </div>
               
@@ -330,8 +391,8 @@ export default function CoachRegistrationPage() {
               </AlertDescription>
             </Alert>
 
-            <Button type="submit" disabled={isLoading || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isLoading ? (
+            <Button type="submit" disabled={isSubmitting || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Submitting...
