@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 import type { Testimonial } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -22,9 +23,12 @@ export function TestimonialCard({ testimonial }: TestimonialCardProps) {
           />
           <div>
             <h3 className="font-semibold text-lg">{testimonial.name}</h3>
+            {/* The following line rendering designation has been removed */}
+            {/*
             {testimonial.designation && (
               <p className="text-sm text-muted-foreground">{testimonial.designation}</p>
             )}
+            */}
           </div>
         </div>
         <div className="flex mb-2">
