@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons/Logo';
 import { useAuth } from '@/lib/auth';
@@ -80,8 +80,8 @@ export function Header() {
       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
-        <Link href="/register-coach" className="flex items-center gap-2">
-          <Briefcase className="h-5 w-5" /> Register as a Coach
+        <Link href="/register-coach">
+          Register as a Coach
         </Link>
       </Button>
     </>
@@ -129,8 +129,8 @@ export function Header() {
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
                       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        <Link href="/register-coach" className="flex items-center gap-2">
-                          <Briefcase className="h-5 w-5" /> Register as a Coach
+                        <Link href="/register-coach">
+                          Register as a Coach
                         </Link>
                       </Button>
                     </>
