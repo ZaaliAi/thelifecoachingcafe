@@ -47,17 +47,20 @@ function SignupFormContent() {
   });
 
   useEffect(() => {
-    // If role query param changes, update form's default value
     setValue('role', initialRole);
   }, [initialRole, setValue]);
 
   useEffect(() => {
+    // This useEffect is a fallback or handles cases where a logged-in user lands here.
+    // Primary post-signup redirection is now handled in onSubmit.
     if (!authLoading && user) {
-      toast({ title: "Account Created!", description: `Welcome, ${user.name || user.email}! You are now logged in.` });
-      if (user.role === 'coach') {
-        router.push('/register-coach'); 
-      } else {
-        router.push('/dashboard/user'); 
+      if (router.pathname === '/signup') { // Only redirect if still on signup page
+        toast({ title: "Already Logged In", description: `Redirecting to your dashboard, ${user.name || user.email}.` });
+        if (user.role === 'coach' && !user.profileImageUrl) { // A heuristic for incomplete coach profile
+             router.push('/register-coach');
+        } else {
+            router.push(`/dashboard/${user.role}`);
+        }
       }
     }
   }, [user, authLoading, router, toast]);
@@ -65,17 +68,31 @@ function SignupFormContent() {
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      await signup(data.name, data.email, data.password, data.role as UserRole);
-      // Successful signup, onAuthStateChanged in AuthProvider will set user.
-      // The useEffect above will handle redirection.
+      const signedUpRole = await signup(data.name, data.email, data.password, data.role as UserRole);
+      
+      // `onAuthStateChanged` in AuthProvider will set the user context.
+      // We perform immediate redirection based on the role returned from signup.
+      if (signedUpRole) {
+        toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
+        if (signedUpRole === 'coach') {
+          router.push('/register-coach'); 
+        } else {
+          router.push('/dashboard/user'); 
+        }
+      } else {
+        // This case should ideally not be reached if signup didn't throw but didn't return a role.
+        // It's a fallback. The useEffect might catch the context update later.
+        toast({ title: "Signup processing...", description: "Please wait.", variant: "default" });
+      }
+      // setLoading(false) might not be needed if redirect happens.
+      // If signup throws, catch block handles setLoading.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
-      if ((error as FirebaseError).code === 'auth/email-already-in-use') {
+      if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email is already registered. Please try logging in or use a different email.";
-      } else if ((error as FirebaseError).code) {
-        // More specific Firebase error messages can be helpful
-        errorMessage = `Signup error: ${(error as FirebaseError).message}`;
+      } else if (error.code) {
+        errorMessage = `Signup error: ${error.message}`;
       }
       toast({
         title: "Signup Failed",
@@ -83,10 +100,10 @@ function SignupFormContent() {
         variant: "destructive",
       });
     }
-    // setIsLoading(false) is handled in the catch or if signup leads to redirect via useEffect
   };
   
-  if (authLoading || (!authLoading && user)) {
+  // Show loader if auth is in progress or if already logged in and about to redirect from useEffect.
+  if (authLoading || (!authLoading && user && router.pathname === '/signup')) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -138,7 +155,7 @@ function SignupFormContent() {
               render={({ field }) => (
                 <RadioGroup
                   onValueChange={field.onChange}
-                  value={field.value} // Use value here to ensure it's controlled
+                  value={field.value} 
                   className="flex space-x-4"
                 >
                   <div className="flex items-center space-x-2">
@@ -182,7 +199,6 @@ function SignupFormContent() {
 
 export default function SignupPage() {
   return (
-    // Suspense is required by Next.js when using useSearchParams in a Server Component tree
     <Suspense fallback={<div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading...</div>}>
       <div className="flex items-center justify-center py-12">
         <SignupFormContent />
