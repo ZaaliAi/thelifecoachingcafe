@@ -61,7 +61,7 @@ export default function AboutUsPage() {
                 </p>
                  <div className="relative aspect-video rounded-lg overflow-hidden mt-4">
                     <Image 
-                        src="https://placehold.co/600x338.png" 
+                        src="https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/Untitled%20design%20(10).png?alt=media&token=7f03d20f-784d-410b-a632-2607ef9f93ae" 
                         alt="Diverse group of people collaborating" 
                         fill
                         className="object-cover"
