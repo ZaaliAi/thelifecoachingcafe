@@ -5,8 +5,8 @@ import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
   serverTimestamp, limit as firestoreLimit, updateDoc, where, writeBatch, collectionGroup
 } from "firebase/firestore";
-import { db, firebaseConfig } from "./firebase";
-import type { Coach, BlogPost, FirestoreUserProfile, FirestoreBlogPost, User } from '@/types';
+import { db } from "./firebase"; // firebaseConfig removed from here as it's directly in firebase.ts
+import type { Coach, BlogPost, FirestoreUserProfile, FirestoreBlogPost } from '@/types';
 
 // Helper to convert Firestore Timestamps to ISO strings for a coach object
 const mapCoachFromFirestore = (docData: any, id: string): Coach => {
@@ -14,32 +14,26 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
   const coachData: Coach = {
     id,
     name: data.name || 'Unnamed Coach',
-    email: data.email,
+    email: data.email, // email should exist
     bio: data.bio || 'No bio available.',
-    role: data.role || 'coach',
+    role: data.role || 'coach', // Default to coach if role somehow missing on a coach doc
     specialties: data.specialties || [],
     keywords: data.keywords || [],
-    profileImageUrl: data.profileImageUrl || undefined,
+    profileImageUrl: data.profileImageUrl === undefined ? undefined : (data.profileImageUrl || undefined), // Ensure undefined if null/empty
     dataAiHint: data.dataAiHint,
-    certifications: data.certifications,
-    socialLinks: data.socialLinks,
-    location: data.location,
+    certifications: data.certifications || [],
+    socialLinks: data.socialLinks || [],
+    location: data.location || undefined,
     availability: data.availability,
     subscriptionTier: data.subscriptionTier || 'free',
-    websiteUrl: data.websiteUrl,
-    introVideoUrl: data.introVideoUrl,
+    websiteUrl: data.websiteUrl || undefined,
+    introVideoUrl: data.introVideoUrl || undefined,
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
-    status: data.status, // Include status if it's part of FirestoreUserProfile
+    status: data.status,
     dataSource: 'Firestore',
   };
-  // Ensure fields that should be null if not present are handled
-  if (coachData.profileImageUrl === undefined) coachData.profileImageUrl = undefined; // Or null if preferred by components
-  if (coachData.websiteUrl === undefined) coachData.websiteUrl = undefined;
-  if (coachData.introVideoUrl === undefined) coachData.introVideoUrl = undefined;
-
-
-  console.log(`[mapCoachFromFirestore] Mapped coach ${id}:`, JSON.stringify(coachData, (key, value) => value === undefined ? null : value, 2));
+  // console.log(`[mapCoachFromFirestore] Mapped coach ${id}:`, JSON.stringify(coachData, (key, value) => value === undefined ? null : value, 2));
   return coachData;
 };
 
@@ -57,73 +51,74 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
 
 
 export async function setUserProfile(userId: string, profileData: Partial<Omit<FirestoreUserProfile, 'id'>>) {
-  console.log("[setUserProfile] Called for user:", userId, "with data:", JSON.stringify(profileData, null, 2));
+  console.log("[setUserProfile] Called for user:", userId, "with incoming profileData:", JSON.stringify(profileData, null, 2));
   if (!userId) {
     console.error("[setUserProfile] CRITICAL: userId is undefined or null. Profile cannot be saved.");
     throw new Error("User ID is required to set user profile.");
   }
-  if (profileData.email === undefined && !('email' in profileData)) {
-    console.warn(`[setUserProfile] WARNING: Attempting to set user profile for ${userId} WITHOUT an email field in profileData.`);
-  }
-
-
+  
   const userDocRef = doc(db, "users", userId);
-  let dataToSet: { [key: string]: any } = {};
-
-  // Conditionally add fields from profileData only if they are defined to avoid sending `undefined`
-  if (profileData.name !== undefined) dataToSet.name = profileData.name;
-  if (profileData.email !== undefined) dataToSet.email = profileData.email; // Should be present on create
-  if (profileData.role !== undefined) dataToSet.role = profileData.role;     // Should be present on create
-  if (profileData.bio !== undefined) dataToSet.bio = profileData.bio;
-  if (profileData.specialties !== undefined) dataToSet.specialties = profileData.specialties;
-  if (profileData.keywords !== undefined) dataToSet.keywords = profileData.keywords;
   
-  // Handle profileImageUrl: explicitly set to null if not provided or falsy, but allow valid string
-  dataToSet.profileImageUrl = profileData.profileImageUrl || null;
-  
-  if (profileData.certifications !== undefined) dataToSet.certifications = profileData.certifications;
-  dataToSet.location = profileData.location || null;
-  dataToSet.websiteUrl = profileData.websiteUrl || null;
-  dataToSet.introVideoUrl = profileData.introVideoUrl || null;
-  if (profileData.socialLinks !== undefined) dataToSet.socialLinks = profileData.socialLinks;
-  
-  dataToSet.updatedAt = serverTimestamp();
-
-  const userSnap = await getDoc(userDocRef);
-  if (!userSnap.exists()) { // This is a CREATE operation
-    console.log(`[setUserProfile] Document for user ${userId} does not exist. Preparing for CREATE.`);
-    dataToSet.createdAt = serverTimestamp();
-    if (profileData.role === 'coach') {
-      dataToSet.subscriptionTier = profileData.subscriptionTier || 'free'; // Default to 'free' for new coaches
-    } else {
-      // For 'user' or 'admin', subscriptionTier might not be relevant or should be explicitly null if schema expects it
-       dataToSet.subscriptionTier = profileData.subscriptionTier === undefined ? null : profileData.subscriptionTier;
-       if (dataToSet.subscriptionTier === null && profileData.role !== 'coach') {
-          // If we truly want to omit it for non-coaches, ensure it's not in dataToSet
-          // However, Firestore rules with hasOnly might expect it if listed.
-          // For now, setting to null is safer if the rule allows it.
-          // Or, ensure it's not in the hasOnly list in rules for user/admin.
-       }
-    }
-    // Critical check for create: email and role must be present
-    if (dataToSet.email === undefined || dataToSet.role === undefined) {
-      console.error(`[setUserProfile] CRITICAL for CREATE: Email or Role is missing for user ${userId}. Data:`, dataToSet);
-      throw new Error(`Cannot create user ${userId} due to missing email or role.`);
-    }
-  } else { // This is an UPDATE operation
-    console.log(`[setUserProfile] Document for user ${userId} exists. Preparing for UPDATE.`);
-    if (profileData.subscriptionTier !== undefined) {
-      dataToSet.subscriptionTier = profileData.subscriptionTier;
-    }
-  }
-
-  console.log("[setUserProfile] FINAL data object for setDoc/updateDoc on /users/", userId, ":", JSON.stringify(dataToSet, null, 2));
-
   try {
-    await setDoc(userDocRef, dataToSet, { merge: true }); // Use merge:true for both create and update flexibility
-    console.log(`[setUserProfile] User profile data written successfully for user: ${userId}`);
+    const userSnap = await getDoc(userDocRef);
+    const isCreating = !userSnap.exists();
+    
+    let dataToSet: { [key: string]: any } = {};
+
+    if (isCreating) {
+      console.log(`[setUserProfile] Document for user ${userId} does not exist. Preparing for CREATE.`);
+      // For CREATE, strictly use fields from profileData that are expected for initial setup
+      if (profileData.name === undefined || profileData.email === undefined || profileData.role === undefined) {
+        console.error(`[setUserProfile] CRITICAL for CREATE: Name, Email, or Role is missing for user ${userId}. ProfileData:`, profileData);
+        throw new Error(`Cannot create user ${userId} due to missing essential fields (name, email, or role).`);
+      }
+      dataToSet.name = profileData.name;
+      dataToSet.email = profileData.email;
+      dataToSet.role = profileData.role;
+      dataToSet.profileImageUrl = profileData.profileImageUrl !== undefined ? profileData.profileImageUrl : null; // Explicitly null if not provided
+      
+      if (profileData.role === 'coach') {
+        dataToSet.subscriptionTier = profileData.subscriptionTier !== undefined ? profileData.subscriptionTier : 'free'; // Default to free for new coaches
+      } else if (profileData.subscriptionTier !== undefined) {
+        // If not a coach but subscriptionTier was passed, log a warning and don't set it (unless rule allows it)
+        console.warn(`[setUserProfile] subscriptionTier was passed for non-coach role '${profileData.role}' for user ${userId}. It will not be set unless rules specifically allow.`);
+        // If rules expect it to be null for user/admin, then:
+        // dataToSet.subscriptionTier = null;
+      }
+
+      dataToSet.createdAt = serverTimestamp();
+      dataToSet.updatedAt = serverTimestamp();
+    } else {
+      console.log(`[setUserProfile] Document for user ${userId} exists. Preparing for UPDATE.`);
+      // For UPDATE, spread all provided profileData and add updatedAt
+      // Ensure that fields not meant to be updated by users (like role, email from profile form) are not in profileData
+      dataToSet = { ...profileData }; // Start with all updateable fields passed in
+      // Ensure server timestamp for updatedAt
+      dataToSet.updatedAt = serverTimestamp();
+      // Remove createdAt from update payload if it was accidentally included
+      if ('createdAt' in dataToSet) {
+        delete dataToSet.createdAt;
+      }
+      // Ensure email and role are not part of typical profileData updates from user-facing forms
+      if (profileData.email !== undefined && profileData.email !== userSnap.data()?.email) {
+          console.warn(`[setUserProfile] Attempt to change email for user ${userId} during profile update. This is typically disallowed by rules for owners.`);
+          // Retain original email if rule prevents change by owner
+          dataToSet.email = userSnap.data()?.email;
+      }
+      if (profileData.role !== undefined && profileData.role !== userSnap.data()?.role) {
+          console.warn(`[setUserProfile] Attempt to change role for user ${userId} during profile update. This is typically disallowed by rules for owners.`);
+          // Retain original role if rule prevents change by owner
+          dataToSet.role = userSnap.data()?.role;
+      }
+    }
+
+    console.log("[setUserProfile] FINAL data object for setDoc on /users/", userId, ":", JSON.stringify(dataToSet, null, 2));
+    await setDoc(userDocRef, dataToSet, { merge: !isCreating }); // Use merge:true for updates, merge:false (default) for strict create
+    console.log(`[setUserProfile] User profile data written successfully for user: ${userId}. Operation: ${isCreating ? 'CREATE' : 'UPDATE'}`);
+
   } catch (error) {
     console.error(`[setUserProfile] Error creating/updating user profile for ${userId}:`, error);
+    console.error("[setUserProfile] Data that was attempted:", JSON.stringify(profileData, null, 2)); // Log the original profileData for context
     throw error;
   }
 }
@@ -131,13 +126,17 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
 
 export async function getUserProfile(userId: string): Promise<(FirestoreUserProfile & { id: string }) | null> {
   console.log(`[getUserProfile] Fetching profile for user: ${userId}`);
+  if (!userId) {
+    console.warn("[getUserProfile] Called with undefined or null userId.");
+    return null;
+  }
   try {
     const userDocRef = doc(db, "users", userId);
     const userDoc = await getDoc(userDocRef);
 
     if (userDoc.exists()) {
-      const data = userDoc.data() as FirestoreUserProfile;
-      console.log(`[getUserProfile] Profile found for user ${userId}. Data:`, JSON.stringify(data, null, 2));
+      const data = userDoc.data() as FirestoreUserProfile; // Assuming data conforms to FirestoreUserProfile
+      // console.log(`[getUserProfile] Profile found for user ${userId}. Data:`, JSON.stringify(data, null, 2));
       return { id: userDoc.id, ...data };
     } else {
       console.log(`[getUserProfile] No profile found for user ${userId}`);
@@ -152,10 +151,10 @@ export async function getUserProfile(userId: string): Promise<(FirestoreUserProf
 export async function createFirestoreBlogPost(postData: Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'updatedAt' | 'slug'> & { slug?: string }): Promise<string> {
   try {
     const blogsCollection = collection(db, "blogs");
-    const slug = postData.slug || postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+    const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
     const dataWithTimestampsAndSlug = {
       ...postData,
-      slug: slug, // Ensure slug is included
+      slug: slug,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -193,7 +192,7 @@ export async function getFirestoreBlogPost(postId: string): Promise<BlogPost | n
     const postDoc = await getDoc(postDocRef);
 
     if (postDoc.exists()) {
-      console.log(`[getFirestoreBlogPost] Post found: ${postId}`);
+      // console.log(`[getFirestoreBlogPost] Post found: ${postId}`);
       return mapBlogPostFromFirestore(postDoc.data(), postDoc.id);
     } else {
       console.warn(`[getFirestoreBlogPost] No post found with ID: ${postId}`);
@@ -214,7 +213,7 @@ export async function getFirestoreBlogPostBySlug(slug: string): Promise<BlogPost
 
     if (!querySnapshot.empty) {
       const postDoc = querySnapshot.docs[0];
-      console.log(`[getFirestoreBlogPostBySlug] Post found for slug ${slug}: ID ${postDoc.id}`);
+      // console.log(`[getFirestoreBlogPostBySlug] Post found for slug ${slug}: ID ${postDoc.id}`);
       return mapBlogPostFromFirestore(postDoc.data(), postDoc.id);
     } else {
       console.warn(`[getFirestoreBlogPostBySlug] No post found with slug: ${slug}`);
@@ -237,11 +236,11 @@ export async function getPublishedBlogPosts(count = 10): Promise<BlogPost[]> {
       firestoreLimit(count)
     );
     const querySnapshot = await getDocs(q);
-    console.log(`[getPublishedBlogPosts] Fetched ${querySnapshot.docs.length} published posts.`);
+    // console.log(`[getPublishedBlogPosts] Fetched ${querySnapshot.docs.length} published posts.`);
     return querySnapshot.docs.map(doc => mapBlogPostFromFirestore(doc.data(), doc.id));
   } catch (error) {
     console.error("[getPublishedBlogPosts] Error getting published blog posts:", error);
-    return []; // Return empty array on error to prevent page crash
+    return [];
   }
 }
 
@@ -249,20 +248,21 @@ export async function getBlogPostsByAuthor(authorId: string, count = 10): Promis
   console.log(`[getBlogPostsByAuthor] Fetching ${count} published posts for author: ${authorId}`);
   try {
     const blogsCollection = collection(db, "blogs");
-    // IMPORTANT: This query now filters by status: "published" to align with security rules for public viewing.
-    // This will require a composite index on (authorId, status, createdAt).
     const q = query(
       blogsCollection,
       where("authorId", "==", authorId),
-      where("status", "==", "published"), // Only fetch published posts for public display
+      where("status", "==", "published"),
       orderBy("createdAt", "desc"),
       firestoreLimit(count)
     );
     const querySnapshot = await getDocs(q);
     console.log(`[getBlogPostsByAuthor] Fetched ${querySnapshot.docs.length} published posts for author ${authorId}.`);
     return querySnapshot.docs.map(doc => mapBlogPostFromFirestore(doc.data(), doc.id));
-  } catch (error) {
-    console.error(`[getBlogPostsByAuthor] Error getting blog posts by author ${authorId}:`, error);
+  } catch (error: any) {
+     console.error(`[getBlogPostsByAuthor] Error getting blog posts by author ${authorId}:`, error.code, error.message, error);
+     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+        console.error("[getBlogPostsByAuthor] This is likely a Firestore Security Rule issue or a missing/incorrect index for query: (authorId == ${authorId} AND status == 'published' ORDER BY createdAt DESC).");
+    }
     return [];
   }
 }
@@ -273,37 +273,35 @@ export async function getAllCoaches(filters?: { searchTerm?: string }): Promise<
     const coachesQuery = query(
       collection(db, "users"),
       where("role", "==", "coach"),
-      orderBy("name", "asc"), // Restored orderBy
+      orderBy("name", "asc"), 
       firestoreLimit(50)
     );
 
-    console.log("[getAllCoaches] Executing query to Firestore:", JSON.stringify(coachesQuery));
+    // console.log("[getAllCoaches] Executing query to Firestore for all coaches.");
     const querySnapshot = await getDocs(coachesQuery);
     console.log(`[getAllCoaches] Firestore query returned ${querySnapshot.docs.length} documents with role 'coach'.`);
 
     let allCoaches = querySnapshot.docs.map(docSnapshot => {
-      // console.log(`[getAllCoaches] Raw coach data for ${docSnapshot.id}:`, docSnapshot.data());
       return mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id);
     });
 
     if (filters?.searchTerm) {
       const lowerSearchTerm = filters.searchTerm.toLowerCase();
-      const filteredCoaches = allCoaches.filter(coach =>
+      allCoaches = allCoaches.filter(coach =>
         coach.name.toLowerCase().includes(lowerSearchTerm) ||
         (coach.bio && coach.bio.toLowerCase().includes(lowerSearchTerm)) ||
         coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm)) ||
         coach.keywords.some(k => k.toLowerCase().includes(lowerSearchTerm))
       );
-      console.log(`[getAllCoaches] Filtered to ${filteredCoaches.length} coaches with searchTerm: "${filters.searchTerm}"`);
-      return filteredCoaches;
+      console.log(`[getAllCoaches] Filtered to ${allCoaches.length} coaches with searchTerm: "${filters.searchTerm}"`);
     }
 
     console.log(`[getAllCoaches] Returning ${allCoaches.length} coaches.`);
     return allCoaches;
   } catch (error: any) {
     console.error("[getAllCoaches] Error getting all coaches:", error.code, error.message, error);
-    if ((error as any).code === 'permission-denied' || (error as any).code === 'failed-precondition') {
-      console.error("[getAllCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index. Ensure data has role: 'coach' and required indexes are built.");
+    if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+      console.error("[getAllCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index for query: (role == 'coach' ORDER BY name ASC).");
     }
     return [];
   }
@@ -316,7 +314,7 @@ export async function getCoachById(coachId: string): Promise<Coach | null> {
     const coachDoc = await getDoc(coachDocRef);
 
     if (coachDoc.exists() && coachDoc.data().role === 'coach') {
-      console.log(`[getCoachById] Coach found: ${coachId}`);
+      // console.log(`[getCoachById] Coach found: ${coachId}`);
       return mapCoachFromFirestore(coachDoc.data(), coachDoc.id);
     } else {
       if (coachDoc.exists()) {
@@ -326,20 +324,23 @@ export async function getCoachById(coachId: string): Promise<Coach | null> {
       }
       return null;
     }
-  } catch (error) {
-    console.error(`[getCoachById] Error getting coach by ID ${coachId}:`, error);
-    throw error;
+  } catch (error: any) {
+    console.error(`[getCoachById] Error getting coach by ID ${coachId}:`, error.code, error.message, error);
+     if (error.code === 'permission-denied') {
+        console.error(`[getCoachById] Firestore Security Rule issue trying to read /users/${coachId}.`);
+    }
+    throw error; // Re-throw to be caught by page if needed
   }
 }
 
 
 export async function getAllCoachIds(): Promise<string[]> {
-  console.log("[getAllCoachIds] Fetching all coach IDs.");
+  // console.log("[getAllCoachIds] Fetching all coach IDs.");
   try {
     const q = query(collection(db, "users"), where("role", "==", "coach"));
     const querySnapshot = await getDocs(q);
     const ids = querySnapshot.docs.map(docSnapshot => docSnapshot.id);
-    console.log(`[getAllCoachIds] Found ${ids.length} coach IDs.`);
+    // console.log(`[getAllCoachIds] Found ${ids.length} coach IDs.`);
     return ids;
   } catch (error) {
     console.error("[getAllCoachIds] Error getting all coach IDs:", error);
@@ -348,12 +349,12 @@ export async function getAllCoachIds(): Promise<string[]> {
 }
 
 export async function getAllPublishedBlogPostSlugs(): Promise<string[]> {
-  console.log("[getAllPublishedBlogPostSlugs] Fetching all published blog post slugs.");
+  // console.log("[getAllPublishedBlogPostSlugs] Fetching all published blog post slugs.");
   try {
     const q = query(collection(db, "blogs"), where("status", "==", "published"));
     const querySnapshot = await getDocs(q);
-    const slugs = querySnapshot.docs.map(docSnapshot => (docSnapshot.data() as FirestoreBlogPost).slug).filter(Boolean); // Filter out any undefined/null slugs
-    console.log(`[getAllPublishedBlogPostSlugs] Found ${slugs.length} published blog post slugs.`);
+    const slugs = querySnapshot.docs.map(docSnapshot => (docSnapshot.data() as FirestoreBlogPost).slug).filter(Boolean);
+    // console.log(`[getAllPublishedBlogPostSlugs] Found ${slugs.length} published blog post slugs.`);
     return slugs;
   } catch (error) {
     console.error("[getAllPublishedBlogPostSlugs] Error getting all published blog post slugs:", error);
@@ -367,15 +368,14 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
     const q = query(
       collection(db, "users"),
       where("role", "==", "coach"),
-      orderBy("name"), // Assuming you want them ordered by name
+      orderBy("name", "asc"), // Ensure index (role ASC, name ASC) exists
       firestoreLimit(count)
     );
-    console.log("[getFeaturedCoaches] Executing query:", JSON.stringify(q)); // Less useful for actual query details
     const querySnapshot = await getDocs(q);
     console.log(`[getFeaturedCoaches] Firestore query returned ${querySnapshot.docs.length} documents.`);
 
     const coaches = querySnapshot.docs.map(docSnapshot => {
-      console.log(`[getFeaturedCoaches] Raw document data for ${docSnapshot.id}:`, JSON.stringify(docSnapshot.data(), null, 2));
+      // console.log(`[getFeaturedCoaches] Raw document data for ${docSnapshot.id}:`, JSON.stringify(docSnapshot.data(), null, 2));
       return mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id);
     });
 
@@ -384,7 +384,7 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   } catch (error: any) {
     console.error("[getFeaturedCoaches] Error getting featured coaches:", error.code, error.message, error);
     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
-        console.error("[getFeaturedCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index.");
+        console.error("[getFeaturedCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index for query (role == 'coach' ORDER BY name).");
     }
     return []; 
   }
@@ -420,5 +420,3 @@ export async function updateBlogPostStatus(postId: string, status: FirestoreBlog
     throw error;
   }
 }
-
-    
