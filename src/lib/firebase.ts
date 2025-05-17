@@ -28,9 +28,9 @@ if (!getApps().length) {
     app = initializeApp(firebaseConfig);
     console.log("Firebase App initialized successfully with embedded config.");
   } catch (error) {
-    console.error("Firebase initializeApp FAILED even with embedded config. This could indicate an issue with the Firebase SDKs or the provided config values themselves are invalid for your project.", error);
+    console.error("Firebase initializeApp FAILED even with embedded config.", error);
     console.error("Firebase config that was attempted:", firebaseConfig);
-    throw error; // Re-throw the original Firebase error
+    throw error; 
   }
 } else {
   app = getApps()[0];
@@ -41,4 +41,4 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-export { db, storage, auth, app };
+export { db, storage, auth, app, firebaseConfig }; // Added firebaseConfig to exports
