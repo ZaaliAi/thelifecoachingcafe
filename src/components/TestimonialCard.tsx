@@ -1,8 +1,7 @@
 
-import Image from 'next/image';
 import type { Testimonial } from '@/types';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Star } from 'lucide-react'; // Assuming 5-star rating for all testimonials
+import { Card, CardContent } from '@/components/ui/card';
+import { Star } from 'lucide-react'; 
 
 interface TestimonialCardProps {
   testimonial: Testimonial;
@@ -10,30 +9,18 @@ interface TestimonialCardProps {
 
 export function TestimonialCard({ testimonial }: TestimonialCardProps) {
   return (
-    <Card className="overflow-hidden shadow-lg">
-      <CardContent className="p-6">
-        <div className="flex items-center mb-4">
-          {testimonial.imageUrl && (
-            <Image
-              src={testimonial.imageUrl}
-              alt={testimonial.name}
-              width={60}
-              height={60}
-              className="rounded-full mr-4 object-cover"
-              data-ai-hint={testimonial.dataAiHint as string || "person face"}
-            />
-          )}
-          <div>
-            <h3 className="font-semibold text-lg">{testimonial.name}</h3>
-            {/* Designation removed as per request */}
-          </div>
+    <Card className="overflow-hidden shadow-lg h-full flex flex-col">
+      <CardContent className="p-6 flex flex-col flex-grow">
+        <div className="mb-4">
+          <h3 className="font-semibold text-lg">{testimonial.name}</h3>
+          {/* Designation was previously removed */}
         </div>
         <div className="flex mb-2">
           {[...Array(5)].map((_, i) => (
             <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
           ))}
         </div>
-        <p className="text-foreground/80 italic">&ldquo;{testimonial.text}&rdquo;</p>
+        <p className="text-foreground/80 italic flex-grow">&ldquo;{testimonial.text}&rdquo;</p>
       </CardContent>
     </Card>
   );
