@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    --background: 246 100% 98%; /* #F4F2FF */
-    --foreground: 240 10% 10%; /* Darker for better contrast on #F4F2FF */
+    --background: 220 60% 97%; /* Very light, cool blueish-gray */
+    --foreground: 220 20% 15%; /* Dark slate blue */
 
-    --muted: 240 20% 94%;
-    --muted-foreground: 240 5% 45%;
+    --muted: 220 30% 94%; /* Lighter cool gray */
+    --muted-foreground: 220 15% 45%; /* Slightly darker muted text */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover: 0 0% 100%; /* White popovers */
+    --popover-foreground: 220 20% 15%; /* Dark slate blue on popovers */
 
     --card: 0 0% 100%; /* White cards */
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 220 20% 15%; /* Dark slate blue on cards */
 
-    --border: 240 20% 88%;
-    --input: 240 20% 92%;
+    --border: 220 20% 88%; /* Subtle border */
+    --input: 220 20% 92%; /* Slightly lighter input background */
 
-    --primary: 259 100% 87%; /* #D0BFFF */
-    --primary-foreground: 259 40% 25%; /* Dark purple for text on primary */
+    --primary: 210 100% 56%; /* Vibrant blue */
+    --primary-foreground: 210 40% 98%; /* Light text for primary */
 
-    --secondary: 203 75% 90%; /* Lighter variant of accent or a complementary color */
-    --secondary-foreground: 203 50% 30%;
+    --secondary: 260 80% 65%; /* Softer, complementary purple */
+    --secondary-foreground: 260 20% 98%; /* Light text for secondary */
 
-    --accent: 203 69% 84%; /* #A0CFEC */
-    --accent-foreground: 203 40% 20%; /* Dark blue for text on accent */
+    --accent: 170 70% 45%; /* Teal/cyan accent */
+    --accent-foreground: 170 20% 98%; /* Light text for accent */
 
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 203 69% 75%; /* Ring based on accent */
+    --ring: 210 100% 56%; /* Primary color for rings */
 
     --radius: 0.5rem;
 
@@ -42,45 +42,45 @@
     --chart-5: 27 87% 67%;
 
     /* Sidebar specific colors, can be adjusted or removed if sidebar isn't themed differently */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 220 60% 97%; /* Align with main background */
+    --sidebar-foreground: 220 20% 25%; /* Darker for sidebar text */
+    --sidebar-primary: 210 100% 50%; /* Slightly darker primary for sidebar accents if needed */
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 220 30% 92%; /* Lighter muted for sidebar item hover */
+    --sidebar-accent-foreground: 210 100% 56%; /* Primary for active/hover sidebar text */
+    --sidebar-border: 220 20% 85%;
+    --sidebar-ring: 210 100% 56%;
   }
 
   .dark {
-    --background: 240 10% 10%;
-    --foreground: 246 100% 98%;
+    --background: 220 25% 10%; /* Deep dark blue */
+    --foreground: 220 40% 95%; /* Very light cool gray for text */
 
-    --muted: 240 5% 15%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 220 15% 20%; /* Darker muted background */
+    --muted-foreground: 220 20% 65%; /* Lighter muted text */
 
-    --popover: 240 8% 12%;
-    --popover-foreground: 246 100% 98%;
+    --popover: 220 20% 12%; /* Darker popovers */
+    --popover-foreground: 220 40% 95%; /* Light text on popovers */
 
-    --card: 240 8% 12%;
-    --card-foreground: 246 100% 98%;
+    --card: 220 20% 15%; /* Dark slate blue cards */
+    --card-foreground: 220 40% 95%; /* Light text on cards */
 
-    --border: 240 5% 20%;
-    --input: 240 5% 20%;
+    --border: 220 15% 25%; /* Subtle border for dark mode */
+    --input: 220 15% 22%; /* Darker input background */
 
-    --primary: 259 90% 75%;
-    --primary-foreground: 259 30% 95%;
+    --primary: 210 100% 65%; /* Slightly lighter vibrant blue for dark mode */
+    --primary-foreground: 210 20% 10%; /* Dark text for primary in dark mode */
 
-    --secondary: 203 60% 70%;
-    --secondary-foreground: 203 30% 95%;
+    --secondary: 260 70% 70%; /* Lighter purple for dark mode */
+    --secondary-foreground: 260 20% 10%; /* Dark text for secondary in dark mode */
 
-    --accent: 203 60% 70%;
-    --accent-foreground: 203 30% 95%;
-
+    --accent: 170 60% 55%; /* Slightly lighter teal/cyan for dark mode */
+    --accent-foreground: 170 20% 10%; /* Dark text for accent in dark mode */
+    
     --destructive: 0 60% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 203 60% 65%;
+    --ring: 210 100% 65%; /* Primary color for rings in dark mode */
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -88,14 +88,15 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar specific colors for dark mode */
+    --sidebar-background: 220 25% 10%; /* Align with main dark background */
+    --sidebar-foreground: 220 40% 90%; /* Lighter text for dark sidebar */
+    --sidebar-primary: 210 100% 60%; /* Brighter primary for dark sidebar accents */
+    --sidebar-primary-foreground: 210 20% 5%;
+    --sidebar-accent: 220 15% 18%; /* Darker hover for sidebar items */
+    --sidebar-accent-foreground: 210 100% 65%; /* Brighter primary for active/hover dark sidebar text */
+    --sidebar-border: 220 15% 22%;
+    --sidebar-ring: 210 100% 65%;
   }
 }
 
