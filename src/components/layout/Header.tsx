@@ -3,9 +3,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase, Tag } from 'lucide-react'; // Added Tag
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase, Tag } from 'lucide-react';
+// Removed Logo import: import { Logo } from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
-import { Logo } from '@/components/icons/Logo';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -16,7 +16,7 @@ const navLinks = [
   { href: '/find-a-coach', label: 'CoachMatch AI', icon: Search },
   { href: '/browse-coaches', label: 'Browse Coaches', icon: Users },
   { href: '/blog', label: 'Blog', icon: BookOpen },
-  { href: '/pricing', label: 'Pricing', icon: Tag }, // Changed DollarSign to Tag
+  { href: '/pricing', label: 'Pricing', icon: Tag },
 ];
 
 const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" }) => {
@@ -31,7 +31,7 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
     activeClasses = "bg-primary text-primary-foreground"; 
     inactiveClasses = "bg-primary text-primary-foreground hover:bg-primary/90";
   } else {
-    activeClasses = "bg-primary/20 text-primary"; // Updated active class for better visibility
+    activeClasses = "bg-primary/20 text-primary";
     inactiveClasses = "text-foreground/70 hover:text-foreground hover:bg-muted";
   }
 
@@ -66,6 +66,8 @@ export function Header() {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   const commonNavLinks = navLinks.map(link => (
+    // For the main 'Home' link in the nav items, ensure it uses the Home icon as well if it's separate.
+    // However, navLinks already defines Home with Home icon.
     <NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />
   ));
 
@@ -91,8 +93,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2" aria-label="CoachConnect Home">
-          <Logo className="h-8 w-auto" />
+        <Link href="/" className="flex items-center" aria-label="CoachConnect Home">
+          <Home className="h-7 w-7 text-primary" />
         </Link>
         
         {/* Desktop Navigation */}
@@ -112,8 +114,8 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-xs p-6">
               <div className="flex flex-col space-y-4">
-                <Link href="/" className="flex items-center gap-2 mb-4" onClick={closeMobileMenu}>
-                  <Logo className="h-8 w-auto" />
+                <Link href="/" className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="CoachConnect Home">
+                  <Home className="h-7 w-7 text-primary" />
                 </Link>
                 {commonNavLinks}
                 <hr className="my-2 border-border" />
