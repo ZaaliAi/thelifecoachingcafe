@@ -19,6 +19,7 @@ import { allSpecialties as predefinedSpecialties, mockCoaches } from '@/data/moc
 import type { Coach } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -26,13 +27,13 @@ const coachProfileSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  profileImageUrl: z.string().url('Invalid URL for profile image.').optional().or(z.literal('')),
+  profileImageUrl: z.string().optional().or(z.literal('')), // Accepts Data URL or empty string
   certifications: z.string().optional(),
   location: z.string().optional(),
   // Premium fields
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
-  socialLinkPlatform: z.string().optional(), // Keep as one for simplicity in this form
+  socialLinkPlatform: z.string().optional(),
   socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
 });
 
@@ -51,12 +52,15 @@ export default function CoachProfilePage() {
     resolver: zodResolver(coachProfileSchema),
     defaultValues: {
       selectedSpecialties: [],
+      profileImageUrl: '',
     }
   });
 
+  const bioValue = watch('bio');
+  const profileImageUrlValue = watch('profileImageUrl');
+
   useEffect(() => {
-    // Simulate fetching current coach data (assuming user ID '1' is a coach)
-    const coachData = mockCoaches.find(c => c.id === '1'); // In real app, fetch based on logged in user
+    const coachData = mockCoaches.find(c => c.id === '1');
     if (coachData) {
       setCurrentCoach(coachData);
       reset({
@@ -64,20 +68,21 @@ export default function CoachProfilePage() {
         email: coachData.email || 'coach@example.com',
         bio: coachData.bio,
         selectedSpecialties: coachData.specialties,
-        profileImageUrl: coachData.profileImageUrl,
+        profileImageUrl: coachData.profileImageUrl || '',
         certifications: coachData.certifications?.join(', '),
         location: coachData.location,
         websiteUrl: coachData.websiteUrl,
         introVideoUrl: coachData.introVideoUrl,
-        socialLinkPlatform: coachData.socialLinks?.[0]?.platform, // Example for one link
+        socialLinkPlatform: coachData.socialLinks?.[0]?.platform,
         socialLinkUrl: coachData.socialLinks?.[0]?.url,
       });
+      if (coachData.profileImageUrl) {
+        // If initial data has a URL, watch will pick it up for preview
+      }
       const allSpecs = new Set([...predefinedSpecialties, ...coachData.specialties]);
       setAvailableSpecialties(Array.from(allSpecs));
     }
   }, [reset]);
-
-  const bioValue = watch('bio');
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -111,8 +116,7 @@ export default function CoachProfilePage() {
   
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
     setIsLoading(true);
-    console.log('Updating coach profile data:', data);
-    // Add logic to update socialLinks array from platform/url fields
+    console.log('Updating coach profile data (profileImageUrl might be a Data URL):', data);
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsLoading(false);
     toast({
@@ -128,6 +132,19 @@ export default function CoachProfilePage() {
       setAvailableSpecialties(prev => [...prev, customSpecialty]);
       setValue('selectedSpecialties', [...(control._formValues.selectedSpecialties || []), customSpecialty]);
       setValue('customSpecialty', '');
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setValue('profileImageUrl', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setValue('profileImageUrl', ''); // Clear if no file selected or selection cancelled
     }
   };
 
@@ -226,14 +243,38 @@ export default function CoachProfilePage() {
                     <Label htmlFor="location">Location (Optional)</Label>
                     <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
                 </div>
+                
                 <div className="space-y-1">
-                    <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
+                    <Label htmlFor="profileImageFile">Profile Image</Label>
                     <div className="flex items-center gap-2">
-                    <UploadCloud className="h-5 w-5 text-muted-foreground" />
-                    <Input id="profileImageUrl" {...register('profileImageUrl')} className={errors.profileImageUrl ? 'border-destructive' : ''} />
+                        <UploadCloud className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        <Input 
+                            id="profileImageFile" 
+                            type="file" 
+                            accept="image/png, image/jpeg, image/gif, image/webp"
+                            onChange={handleImageUpload}
+                            className="flex-grow"
+                        />
                     </div>
+                    {profileImageUrlValue && (
+                        <div className="mt-2 relative w-32 h-32">
+                            <Image
+                                src={profileImageUrlValue}
+                                alt="Profile preview"
+                                fill
+                                className="rounded-md object-cover border"
+                                data-ai-hint="profile preview"
+                            />
+                        </div>
+                    )}
                     {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                     <p className="text-xs text-muted-foreground">
+                        Upload an image. For best results, use a square image.
+                        <br />
+                        <strong className="text-primary/80">Note:</strong> Image is locally previewed and won&apos;t be permanently stored in this prototype.
+                    </p>
                 </div>
+
                 <div className="space-y-1">
                     <Label htmlFor="certifications">Certifications (Optional, comma-separated)</Label>
                     <Input id="certifications" {...register('certifications')} />

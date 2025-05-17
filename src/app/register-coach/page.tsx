@@ -15,9 +15,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties } from '@/data/mock'; // Predefined list
+import { allSpecialties as predefinedSpecialties } from '@/data/mock'; 
 import { debounce } from 'lodash';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -27,8 +28,8 @@ const coachRegistrationSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
-  profileImageUrl: z.string().url('Invalid URL for profile image.').optional().or(z.literal('')),
-  certifications: z.string().optional(), // Comma-separated string
+  profileImageUrl: z.string().optional().or(z.literal('')), // Accepts Data URL or empty string
+  certifications: z.string().optional(), 
   // Premium Features
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
@@ -53,10 +54,13 @@ export default function CoachRegistrationPage() {
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
       selectedSpecialties: [],
+      profileImageUrl: '',
     }
   });
 
   const bioValue = watch('bio');
+  const profileImageUrlValue = watch('profileImageUrl');
+
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -64,18 +68,14 @@ export default function CoachRegistrationPage() {
         setIsAiLoading(true);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          // This should be a server action or API call
-          // const response = await suggestCoachSpecialties(input);
-          // Simulate AI call
           await new Promise(resolve => setTimeout(resolve, 1000));
           const simulatedResponse: SuggestCoachSpecialtiesOutput = {
-             specialties: predefinedSpecialties.filter(s => bioText.toLowerCase().includes(s.split(" ")[0].toLowerCase())).slice(0,3), // Mock suggestion
-             keywords: ['keyword1', 'keyword2', 'keyword3'] // Mock keywords
+             specialties: predefinedSpecialties.filter(s => bioText.toLowerCase().includes(s.split(" ")[0].toLowerCase())).slice(0,3), 
+             keywords: ['keyword1', 'keyword2', 'keyword3']
           };
 
           setSuggestedSpecialties(simulatedResponse.specialties);
           setSuggestedKeywords(simulatedResponse.keywords);
-          // Update form with suggested specialties if not already selected
           const currentSelected = control._formValues.selectedSpecialties || [];
           const newSelected = Array.from(new Set([...currentSelected, ...simulatedResponse.specialties.filter(s => predefinedSpecialties.includes(s))]));
           setValue('selectedSpecialties', newSelected);
@@ -87,7 +87,7 @@ export default function CoachRegistrationPage() {
           setIsAiLoading(false);
         }
       }
-    }, 1000), // Debounce time: 1 second
+    }, 1000), 
     [setValue, toast, control]
   );
 
@@ -99,16 +99,14 @@ export default function CoachRegistrationPage() {
   
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
     setIsLoading(true);
-    // In a real app, this would send data to a backend for registration and admin approval.
-    console.log('Coach registration data:', data);
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+    console.log('Coach registration data (profileImageUrl might be Data URL):', data);
+    await new Promise(resolve => setTimeout(resolve, 2000)); 
     setIsLoading(false);
     toast({
       title: "Registration Submitted!",
       description: "Your application has been submitted for review. We'll be in touch soon.",
       action: <CheckCircle2 className="text-green-500" />,
     });
-    // Reset form or redirect
   };
 
   const handleAddCustomSpecialty = () => {
@@ -116,7 +114,20 @@ export default function CoachRegistrationPage() {
     if (customSpecialty && !availableSpecialties.includes(customSpecialty)) {
       setAvailableSpecialties(prev => [...prev, customSpecialty]);
       setValue('selectedSpecialties', [...(control._formValues.selectedSpecialties || []), customSpecialty]);
-      setValue('customSpecialty', ''); // Clear input
+      setValue('customSpecialty', ''); 
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setValue('profileImageUrl', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setValue('profileImageUrl', '');
     }
   };
 
@@ -217,13 +228,35 @@ export default function CoachRegistrationPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
-                <div className="flex items-center gap-2">
-                  <UploadCloud className="h-5 w-5 text-muted-foreground" />
-                  <Input id="profileImageUrl" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''} />
+              <div className="space-y-1">
+                <Label htmlFor="profileImageFile">Profile Image</Label>
+                 <div className="flex items-center gap-2">
+                    <UploadCloud className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <Input 
+                        id="profileImageFile" 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/gif, image/webp"
+                        onChange={handleImageUpload}
+                        className="flex-grow"
+                    />
                 </div>
+                {profileImageUrlValue && (
+                  <div className="mt-2 relative w-32 h-32">
+                    <Image
+                        src={profileImageUrlValue}
+                        alt="Profile preview"
+                        fill
+                        className="rounded-md object-cover border"
+                        data-ai-hint="profile image preview"
+                    />
+                  </div>
+                )}
                 {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                <p className="text-xs text-muted-foreground">
+                  Upload an image. For best results, use a square image.
+                  <br />
+                  <strong className="text-primary/80">Note:</strong> Image is locally previewed and won&apos;t be permanently stored in this prototype.
+                </p>
               </div>
               
               <div className="space-y-2">
@@ -313,4 +346,3 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
-
