@@ -54,7 +54,21 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
           )}
         </div>
         <div className="flex-1 text-center md:text-left">
-          <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
+          <div className="flex items-center justify-center md:justify-start space-x-2">
+            <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
+            {coach.subscriptionTier === 'premium' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Crown className="h-7 w-7 text-yellow-500 fill-yellow-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Premium Coach</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           {coach.location && (
             <p className="text-lg text-muted-foreground flex items-center justify-center md:justify-start mt-1">
               <MapPin className="h-5 w-5 mr-2 text-primary" /> {coach.location}
