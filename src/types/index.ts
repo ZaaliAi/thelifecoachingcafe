@@ -32,6 +32,7 @@ export interface Coach {
   // createdAt and updatedAt would be Timestamps in Firestore, converted to string for frontend
   createdAt?: string; // ISO date string
   updatedAt?: string; // ISO date string
+  dataSource?: string; // For debugging data source
 }
 
 // This type is primarily for frontend display and components.

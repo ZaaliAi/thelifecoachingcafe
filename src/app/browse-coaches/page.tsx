@@ -2,24 +2,13 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { CoachCard } from '@/components/CoachCard';
-import { mockCoaches } from '@/data/mock';
+import { getAllCoaches } from '@/lib/firestore';
 import { Search, Users } from 'lucide-react';
 import type { Coach } from '@/types';
 
 async function getCoaches(searchTerm?: string): Promise<Coach[]> {
-  // Simulate fetching and filtering
-  await new Promise(resolve => setTimeout(resolve, 100)); 
-  let coaches = mockCoaches;
-
-  if (searchTerm) {
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    coaches = coaches.filter(coach =>
-      coach.name.toLowerCase().includes(lowerSearchTerm) ||
-      coach.bio.toLowerCase().includes(lowerSearchTerm) ||
-      coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm)) ||
-      coach.keywords.some(k => k.toLowerCase().includes(lowerSearchTerm))
-    );
-  }
+  const coaches = await getAllCoaches({ searchTerm });
+  console.log('Fetched Coaches Data (BrowseCoachesPage):', JSON.stringify(coaches, null, 2));
   return coaches;
 }
 

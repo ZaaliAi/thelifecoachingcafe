@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Briefcase, MapPin, MessageSquare, Crown } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CoachCardProps {
   coach: Coach;
@@ -49,6 +50,9 @@ export function CoachCard({ coach }: CoachCardProps) {
               {coach.location}
             </p>
           )}
+          {coach.dataSource && (
+            <Badge variant="outline" className="text-xs mt-1">Source: {coach.dataSource}</Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="p-6 pt-0 flex-grow">
@@ -89,6 +93,3 @@ export function CoachCard({ coach }: CoachCardProps) {
     </Card>
   );
 }
-
-// Add imports for Tooltip components if not already present globally
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

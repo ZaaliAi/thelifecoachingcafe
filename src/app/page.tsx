@@ -4,11 +4,43 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CoachCard } from '@/components/CoachCard';
 import { TestimonialCard } from '@/components/TestimonialCard';
-import { mockCoaches, mockTestimonials } from '@/data/mock';
+import type { Testimonial } from '@/types';
+import { getFeaturedCoaches } from '@/lib/firestore';
 import { Search, Users, UserPlus } from 'lucide-react';
-import Image from 'next/image';
 
-export default function HomePage() {
+// Testimonials are static for now
+const mockTestimonials: Testimonial[] = [
+  {
+    id: '1',
+    name: 'Sarah L.',
+    text: 'CoachConnect helped me find the perfect coach who understood my needs. The AI matching was spot on!',
+    imageUrl: 'https://placehold.co/100x100.png',
+    dataAiHint: 'happy person',
+    designation: 'User of CoachConnect',
+  },
+  {
+    id: '2',
+    name: 'John B.',
+    text: 'As a coach, registering on CoachConnect was easy, and I love the platform\'s modern design and features.',
+    imageUrl: 'https://placehold.co/100x100.png',
+    dataAiHint: 'professional person',
+    designation: 'Life Coach on CoachConnect',
+  },
+  {
+    id: '3',
+    name: 'Maria G.',
+    text: 'The blog section is full of insightful articles. It\'s a great resource for anyone interested in personal development.',
+    imageUrl: 'https://placehold.co/100x100.png',
+    dataAiHint: 'thoughtful person',
+    designation: 'Reader & User',
+  },
+];
+
+
+export default async function HomePage() {
+  const featuredCoaches = await getFeaturedCoaches(3);
+  console.log('Featured Coaches Data (HomePage):', JSON.stringify(featuredCoaches, null, 2));
+
   return (
     <div className="space-y-16">
       {/* Hero Section */}
@@ -16,7 +48,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
-            Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI<sup className="text-2xl md:text-3xl">&trade;</sup></span>
+            Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI<sup className="text-sm md:text-base align-super">&trade;</sup></span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
             Discover verified life coaches and get personalized recommendations with our AI-powered CoachMatch assistant. Start your journey to a better you today.
@@ -43,11 +75,15 @@ export default function HomePage() {
           <Users className="h-8 w-8 text-accent mr-3" />
           <h2 className="text-3xl font-semibold">Featured Coaches</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {mockCoaches.slice(0, 3).map((coach) => (
-            <CoachCard key={coach.id} coach={coach} />
-          ))}
-        </div>
+        {featuredCoaches.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredCoaches.map((coach) => (
+              <CoachCard key={coach.id} coach={coach} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No featured coaches available at the moment.</p>
+        )}
         <div className="text-center mt-8">
           <Button asChild variant="outline" size="lg">
             <Link href="/browse-coaches">View All Coaches</Link>
@@ -66,7 +102,6 @@ export default function HomePage() {
               <p className="text-muted-foreground">Use our CoachMatch AI to tell us what you're looking for in a coach.</p>
             </div>
             <div className="p-6 bg-card rounded-lg shadow-md">
-              {/* Removed Lightbulb icon from here as well, assuming the user meant the main hero Lightbulb */}
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary mx-auto mb-4 h-12 w-12"><path d="M15.5 2H8.5C7.67 2 7 2.67 7 3.5V14.5C7 15.33 7.67 16 8.5 16H15.5C16.33 16 17 15.33 17 14.5V3.5C17 2.67 16.33 2 15.5 2ZM12 18.5C10.07 18.5 8.5 16.93 8.5 15H15.5C15.5 16.93 13.93 18.5 12 18.5ZM12 5.5C10.34 5.5 9 6.84 9 8.5H15C15 6.84 13.66 5.5 12 5.5Z"/></svg>
               <h3 className="text-xl font-medium mb-2">2. Get Matched</h3>
               <p className="text-muted-foreground">Our AI provides personalized coach recommendations based on your input.</p>
