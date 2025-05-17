@@ -40,7 +40,7 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
   return (
     <div className="space-y-12">
       <section className="text-center py-8">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">CoachConnect Blog</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coaching Cafe Blog</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
           Insights, tips, and stories from our community of expert life coaches.
         </p>
