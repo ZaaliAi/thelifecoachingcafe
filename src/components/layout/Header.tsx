@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, DollarSign, Briefcase } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase, Tag } from 'lucide-react'; // Added Tag
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons/Logo';
 import { useAuth } from '@/lib/auth';
@@ -16,7 +16,7 @@ const navLinks = [
   { href: '/find-a-coach', label: 'CoachMatch AI', icon: Search },
   { href: '/browse-coaches', label: 'Browse Coaches', icon: Users },
   { href: '/blog', label: 'Blog', icon: BookOpen },
-  { href: '/pricing', label: 'Pricing', icon: DollarSign },
+  { href: '/pricing', label: 'Pricing', icon: Tag }, // Changed DollarSign to Tag
 ];
 
 const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" }) => {
