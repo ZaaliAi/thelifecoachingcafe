@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,9 +13,10 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '@/lib/auth'; // Using auth for simulated login after signup
+import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import type { UserRole } from '@/types';
+import type { FirebaseError } from 'firebase/app';
 
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -32,7 +33,7 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth(); // Use login for simulation
+  const { signup, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -40,30 +41,51 @@ export default function SignupPage() {
     resolver: zodResolver(signupSchema),
   });
 
+  useEffect(() => {
+    if (!authLoading && user) {
+      // User is now authenticated (due to onAuthStateChanged after signup)
+      // Redirect based on the role they signed up with or determined by AuthProvider
+      toast({ title: "Account Created!", description: `Welcome, ${user.name}! You are now logged in.` });
+      if (user.role === 'coach') {
+        router.push('/register-coach'); // Redirect to complete coach profile
+      } else {
+        router.push('/dashboard/user'); // Redirect to user dashboard
+      }
+    }
+  }, [user, authLoading, router, toast]);
+
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
-    // Simulate API call for signup
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // If signing up as coach, redirect to coach registration, otherwise log in as user.
-    if (data.role === 'coach') {
+    try {
+      await signup(data.name, data.email, data.password, data.role);
+      // Successful signup, onAuthStateChanged in AuthProvider will set user.
+      // The useEffect above will handle redirection.
+      // We don't push router here, as useEffect handles it when `user` state updates.
+    } catch (error: any) {
       setIsLoading(false);
+      let errorMessage = "Signup failed. Please try again.";
+      if ((error as FirebaseError).code === 'auth/email-already-in-use') {
+        errorMessage = "This email is already registered. Try logging in.";
+      } else if ((error as FirebaseError).code) {
+        errorMessage = `Signup error: ${(error as FirebaseError).message}`;
+      }
       toast({
-        title: "Account Created!",
-        description: "Next, please complete your coach profile.",
+        title: "Signup Failed",
+        description: errorMessage,
+        variant: "destructive",
       });
-      router.push('/register-coach'); // Redirect to more detailed coach registration
-    } else {
-      // Simulate login after user signup
-      login(data.email, data.role as UserRole); 
-      setIsLoading(false);
-      toast({
-        title: "Account Created!",
-        description: `Welcome, ${data.name}! You are now logged in.`,
-      });
-      router.push('/dashboard/user'); // Redirect to user dashboard
     }
+    // setIsLoading(false); // setLoading(false) is handled in AuthProvider or error block
   };
+  
+  // Prevent rendering form if already logged in and redirecting
+  if (authLoading || (!authLoading && user)) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center py-12">
@@ -127,8 +149,8 @@ export default function SignupPage() {
               {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
             </div>
 
-            <Button type="submit" disabled={isLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isLoading ? (
+            <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isLoading || authLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Creating Account...

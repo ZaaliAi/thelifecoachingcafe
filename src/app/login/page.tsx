@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,18 +14,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Loader2, LogIn } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import type { UserRole } from '@/types';
+import type { FirebaseError } from 'firebase/app';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address.'),
   password: z.string().min(1, 'Password is required.'),
-  role: z.enum(['user', 'coach']).optional(), // For simulated login
 });
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -33,28 +32,49 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  useEffect(() => {
+    if (!authLoading && user) {
+      // User is logged in, redirect to their dashboard
+      router.push(`/dashboard/${user.role}`);
+    }
+  }, [user, authLoading, router]);
+
   const onSubmit: SubmitHandler<LoginFormData> = async (data) => {
     setIsLoading(true);
-    // Simulate API call for login
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Use a default role or let the simulated auth handle it
-    let roleToLogin: UserRole = 'user'; // Default
-    if (data.email === 'hello@thelifecoachingcafe.com' && data.password === 'Lifecoach2025!') {
-        roleToLogin = 'admin';
-    } else if (data.email?.includes('coach')) { // Simple mock logic
-        roleToLogin = 'coach';
+    try {
+      await login(data.email, data.password);
+      // Successful login, onAuthStateChanged in AuthProvider will set user.
+      // The useEffect above will handle redirection once user context is updated.
+      // We might not need an immediate toast here if redirection is quick,
+      // but can add one if there's a noticeable delay.
+      // For now, let AuthProvider handle the user state update.
+      // toast({ title: "Login Successful!", description: "Redirecting..." });
+      // No explicit router.push here, handled by useEffect watching `user` state
+    } catch (error: any) {
+      setIsLoading(false);
+      let errorMessage = "Login failed. Please check your credentials.";
+      if ((error as FirebaseError).code === 'auth/user-not-found' || (error as FirebaseError).code === 'auth/wrong-password' || (error as FirebaseError).code === 'auth/invalid-credential') {
+        errorMessage = "Invalid email or password.";
+      } else if ((error as FirebaseError).code) {
+        errorMessage = `Login error: ${(error as FirebaseError).message}`;
+      }
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
-    
-    login(data.email, roleToLogin);
-
-    setIsLoading(false);
-    toast({
-      title: "Login Successful!",
-      description: `Welcome back, ${data.email.split('@')[0]}!`,
-    });
-    router.push(`/dashboard/${roleToLogin}`);
+    // setIsLoading(false); // setLoading(false) is handled in AuthProvider or error block
   };
+  
+  // Prevent rendering form if already logged in and redirecting
+  if (authLoading || (!authLoading && user)) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center py-12">
@@ -63,7 +83,8 @@ export default function LoginPage() {
           <LogIn className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Welcome Back!</CardTitle>
           <CardDescription>
-            Log in to access your CoachConnect account.
+            Log in to access your CoachConnect account. <br/>
+            (Admin: hello@thelifecoachingcafe.com / Lifecoach2025!)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -80,11 +101,8 @@ export default function LoginPage() {
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
             
-            {/* Note: Role selection is for simulation. In a real app, role is determined server-side. */}
-            {/* For admin login, use hello@thelifecoachingcafe.com / Lifecoach2025! */}
-
-            <Button type="submit" disabled={isLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isLoading ? (
+            <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isLoading || authLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Logging In...

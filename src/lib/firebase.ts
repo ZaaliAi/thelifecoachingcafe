@@ -1,30 +1,44 @@
+
 // src/lib/firebase.ts
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth";
 
-// Your web app's Firebase configuration
-// Ensure these are set up in your environment or directly here if not sensitive
+// Your web app's Firebase configuration (directly provided)
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyCF3xIso6izSPcnrUX3J1bD2xLalcEpASc",
+  authDomain: "coachconnect-897af.firebaseapp.com",
+  projectId: "coachconnect-897af",
+  storageBucket: "coachconnect-897af.firebasestorage.app",
+  messagingSenderId: "881397502693",
+  appId: "1:881397502693:web:42db1643b43d027e283a0c"
 };
 
-// Initialize Firebase
+// Log to confirm the source of the config
+console.log("--- Firebase Configuration: Using directly embedded config ---");
+console.log("Project ID:", firebaseConfig.projectId);
+console.log("API Key:", firebaseConfig.apiKey ? "Present" : "MISSING");
+
+
 let app: FirebaseApp;
+
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
+  try {
+    app = initializeApp(firebaseConfig);
+    console.log("Firebase App initialized successfully with embedded config.");
+  } catch (error) {
+    console.error("Firebase initializeApp FAILED even with embedded config. This could indicate an issue with the Firebase SDKs or the provided config values themselves are invalid for your project.", error);
+    console.error("Firebase config that was attempted:", firebaseConfig);
+    throw error; // Re-throw the original Firebase error
+  }
 } else {
   app = getApps()[0];
+  console.log("Firebase App already initialized (this is normal with HMR).");
 }
 
-// Get a reference to the Firestore database
 const db = getFirestore(app);
-// Get a reference to Firebase Storage
 const storage = getStorage(app);
+const auth = getAuth(app);
 
-export { db, storage, app };
+export { db, storage, auth, app };

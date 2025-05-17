@@ -15,20 +15,20 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties } from '@/data/mock'; 
+import { allSpecialties as predefinedSpecialties, mockCoaches } from '@/data/mock'; 
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '@/lib/auth'; // Assuming new coach will be logged in
+import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
 import { useRouter } from 'next/navigation';
 
+// Helper keys for localStorage
+const PENDING_COACH_PROFILE_KEY = 'coachconnect-pending-coach-profile';
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
-  confirmPassword: z.string(),
+  email: z.string().email('Invalid email address.'), // Display only, pre-filled
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
@@ -39,9 +39,6 @@ const coachRegistrationSchema = z.object({
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
   socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
 });
 
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
@@ -57,19 +54,61 @@ export default function CoachRegistrationPage() {
   const [selectedFileForUpload, setSelectedFileForUpload] = useState<File | null>(null);
 
   const { toast } = useToast();
-  const { user, login } = useAuth(); // For getting user ID after simulated signup/login
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const { control, register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CoachRegistrationFormData>({
+  const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
+      name: '',
+      email: '',
       selectedSpecialties: [],
       profileImageUrl: '',
     }
   });
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast({ title: "Authentication Required", description: "Please sign up or log in as a coach first.", variant: "destructive" });
+      router.push('/signup');
+      return;
+    }
+    if (user) {
+      // Attempt to pre-fill from localStorage if pending coach profile exists
+      try {
+        const pendingProfileStr = localStorage.getItem(PENDING_COACH_PROFILE_KEY);
+        if (pendingProfileStr) {
+          const pendingProfile = JSON.parse(pendingProfileStr);
+          reset({ // Use reset to set multiple form values
+            name: pendingProfile.name || user.name || '',
+            email: pendingProfile.email || user.email || '',
+            selectedSpecialties: [], // Keep specialties empty initially
+            profileImageUrl: '',
+            // other fields if stored
+          });
+          localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear after use
+        } else {
+           reset({
+            name: user.name || '',
+            email: user.email || '',
+            selectedSpecialties: [],
+            profileImageUrl: '',
+          });
+        }
+      } catch (e) {
+        console.error("Error reading pending coach profile from localStorage", e);
+        reset({ // Fallback to user context if localStorage fails
+          name: user.name || '',
+          email: user.email || '',
+          selectedSpecialties: [],
+          profileImageUrl: '',
+        });
+      }
+    }
+  }, [user, authLoading, router, toast, reset]);
+
+
   const bioValue = watch('bio');
-  // const currentProfileImageUrl = watch('profileImageUrl'); // For future use if editing existing draft
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -107,29 +146,17 @@ export default function CoachRegistrationPage() {
   }, [bioValue, fetchSuggestions]);
   
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
-    setIsSubmitting(true);
-
-    // Simulate user creation / login to get a user ID for storage path
-    // In a real app, this would happen before this form or as part of a multi-step process.
-    let coachUserId = user?.id;
-    if (!coachUserId) {
-        // Simulate creating/logging in the user if not already logged in as coach
-        login(data.email, 'coach'); // This will set the user in AuthContext
-        // We need to wait for the user state to update to get the ID. This is tricky.
-        // For now, let's assume login updates user context synchronously or we use a temp ID.
-        // A robust solution would involve a proper auth flow.
-        // For this simulation, we'll use a placeholder or re-fetch user after login.
-        // To simplify, we'll assume `login` makes `user.id` available or we use email as part of path.
-        // THIS IS A SIMPLIFICATION.
-        coachUserId = data.email.replace(/[@.]/g, '-'); // Temporary ID based on email
-         toast({ title: "Account Simulated", description: "Proceeding with registration.", variant: "default"});
+    if (!user) {
+      toast({ title: "Authentication Error", description: "You must be logged in to register as a coach.", variant: "destructive"});
+      router.push('/login');
+      return;
     }
-
+    setIsSubmitting(true);
 
     let finalProfileImageUrl = data.profileImageUrl;
     if (selectedFileForUpload) {
         try {
-            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, coachUserId); // Pass coachUserId
+            finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id);
             setValue('profileImageUrl', finalProfileImageUrl);
             setImagePreviewUrl(null); 
             setSelectedFileForUpload(null);
@@ -140,34 +167,42 @@ export default function CoachRegistrationPage() {
         }
     }
     
-    const registrationData = { ...data, profileImageUrl: finalProfileImageUrl, id: coachUserId };
+    const registrationData = { ...data, profileImageUrl: finalProfileImageUrl, id: user.id, firebaseUid: user.id };
     console.log('Coach registration data:', registrationData);
-    // In a real app: Save registrationData to Firestore, including the Firebase Storage URL
+    // In a real app: Save registrationData to Firestore, keyed by user.id (Firebase UID)
+    
     // For mock: Add to mockCoaches or similar
-    mockCoaches.push({
-        id: coachUserId, // Use the generated/retrieved ID
+    const existingCoachIndex = mockCoaches.findIndex(c => c.id === user.id);
+    const coachEntry = {
+        id: user.id,
         name: data.name,
         email: data.email,
         bio: data.bio,
         specialties: data.selectedSpecialties,
-        keywords: suggestedKeywords, // Or derive from form
+        keywords: suggestedKeywords, 
         profileImageUrl: finalProfileImageUrl,
         certifications: data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [],
-        subscriptionTier: data.websiteUrl ? 'premium' : 'free', // Simple logic for tier based on website
+        subscriptionTier: data.websiteUrl || data.introVideoUrl ? 'premium' : 'free', 
         websiteUrl: data.websiteUrl,
         introVideoUrl: data.introVideoUrl,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        location: "Remote" // Default location
-    });
+        location: "Remote" 
+    };
+    if (existingCoachIndex > -1) {
+        mockCoaches[existingCoachIndex] = coachEntry;
+    } else {
+        mockCoaches.push(coachEntry);
+    }
+
 
     await new Promise(resolve => setTimeout(resolve, 2000)); 
     setIsSubmitting(false);
     toast({
-      title: "Registration Submitted!",
-      description: "Your application has been submitted for review. We'll be in touch soon.",
+      title: "Coach Profile Submitted!",
+      description: "Your coach profile has been created/updated. It may be subject to admin review.",
       action: <CheckCircle2 className="text-green-500" />,
     });
-    router.push('/dashboard/coach'); // Redirect to coach dashboard
+    router.push('/dashboard/coach'); 
   };
 
   const handleAddCustomSpecialty = () => {
@@ -194,21 +229,30 @@ export default function CoachRegistrationPage() {
     }
   };
 
+  if (authLoading) {
+    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading...</div>;
+  }
+  if (!user) {
+    // This case should ideally be caught by the useEffect redirect, but as a fallback:
+    return <div className="flex justify-center items-center min-h-screen">Please log in to continue.</div>;
+  }
+
+
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto py-8">
       <Card className="shadow-xl">
         <CardHeader className="text-center">
           <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
-          <CardTitle className="text-3xl font-bold">Become a Coach</CardTitle>
+          <CardTitle className="text-3xl font-bold">Complete Your Coach Profile</CardTitle>
           <CardDescription>
-            Join CoachConnect and help others achieve their goals. Fill out the form below to get started.
+            You've created an account! Now, let's build your coach profile to help clients find you.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             {/* Personal Information */}
             <section className="space-y-6">
-              <h3 className="text-lg font-semibold border-b pb-2">Account Information</h3>
+              <h3 className="text-lg font-semibold border-b pb-2">Your Details</h3>
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input id="name" {...register('name')} placeholder="e.g., Dr. Jane Doe" className={errors.name ? 'border-destructive' : ''} />
@@ -216,22 +260,9 @@ export default function CoachRegistrationPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input id="email" type="email" {...register('email')} placeholder="you@example.com" className={errors.email ? 'border-destructive' : ''} />
+                <Label htmlFor="email">Email Address (from signup)</Label>
+                <Input id="email" type="email" {...register('email')} readOnly className={`bg-muted/50 ${errors.email ? 'border-destructive' : ''}`} />
                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" {...register('password')} className={errors.password ? 'border-destructive' : ''} />
-                  {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input id="confirmPassword" type="password" {...register('confirmPassword')} className={errors.confirmPassword ? 'border-destructive' : ''} />
-                  {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
-                </div>
               </div>
             </section>
             
@@ -326,7 +357,6 @@ export default function CoachRegistrationPage() {
               </div>
             </section>
 
-            {/* Premium Features Encouragement */}
             <section className="space-y-6 p-6 bg-primary/5 rounded-lg border border-primary/20">
                 <Alert variant="default" className="bg-transparent border-0 p-0">
                     <AlertTitle className="text-xl font-semibold text-primary flex items-center">
@@ -387,18 +417,18 @@ export default function CoachRegistrationPage() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertTitle>Admin Review</AlertTitle>
               <AlertDescription>
-                Your registration will be reviewed by an administrator before your profile goes live.
+                Your profile information will be saved. Some features or listings may be subject to admin review.
               </AlertDescription>
             </Alert>
 
-            <Button type="submit" disabled={isSubmitting || isAiLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isSubmitting ? (
+            <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isSubmitting || authLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Submitting...
+                  Saving Profile...
                 </>
               ) : (
-                'Submit Registration'
+                'Save Coach Profile'
               )}
             </Button>
           </form>
