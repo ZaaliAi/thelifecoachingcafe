@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import Image from 'next/image'; // Import next/image
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Briefcase, Tag } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -83,7 +83,7 @@ export function Header() {
       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
-        <Link href="/register-coach">
+        <Link href="/signup?role=coach"> {/* Updated Link */}
           Register as a Coach
         </Link>
       </Button>
@@ -138,7 +138,7 @@ export function Header() {
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
                       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        <Link href="/register-coach">
+                        <Link href="/signup?role=coach"> {/* Updated Link */}
                            Register as a Coach
                         </Link>
                       </Button>
@@ -153,4 +153,3 @@ export function Header() {
     </header>
   );
 }
-

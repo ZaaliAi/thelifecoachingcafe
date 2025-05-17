@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,25 +31,33 @@ const signupSchema = z.object({
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
-export default function SignupPage() {
+function SignupFormContent() {
   const [isLoading, setIsLoading] = useState(false);
   const { signup, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const initialRole = searchParams.get('role') === 'coach' ? 'coach' : 'user';
 
-  const { control, register, handleSubmit, formState: { errors } } = useForm<SignupFormData>({
+  const { control, register, handleSubmit, formState: { errors }, setValue } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
+    defaultValues: {
+      role: initialRole,
+    }
   });
 
   useEffect(() => {
+    // If role query param changes, update form's default value
+    setValue('role', initialRole);
+  }, [initialRole, setValue]);
+
+  useEffect(() => {
     if (!authLoading && user) {
-      // User is now authenticated (due to onAuthStateChanged after signup)
-      // Redirect based on the role they signed up with or determined by AuthProvider
       toast({ title: "Account Created!", description: `Welcome, ${user.name}! You are now logged in.` });
       if (user.role === 'coach') {
-        router.push('/register-coach'); // Redirect to complete coach profile
+        router.push('/register-coach'); 
       } else {
-        router.push('/dashboard/user'); // Redirect to user dashboard
+        router.push('/dashboard/user'); 
       }
     }
   }, [user, authLoading, router, toast]);
@@ -58,8 +66,6 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       await signup(data.name, data.email, data.password, data.role);
-      // Successful signup, onAuthStateChanged in AuthProvider will set user.
-      // The useEffect above will handle redirection.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
@@ -74,10 +80,8 @@ export default function SignupPage() {
         variant: "destructive",
       });
     }
-    // setIsLoading(false); // setLoading(false) is handled in AuthProvider or error block
   };
   
-  // Prevent rendering form if already logged in and redirecting
   if (authLoading || (!authLoading && user)) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -87,88 +91,98 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex items-center justify-center py-12">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center">
-          <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
-          <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>
-          <CardDescription>
-            Join The Life Coaching Cafe today to find or become a life coach.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <Card className="w-full max-w-md shadow-xl">
+      <CardHeader className="text-center">
+        <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
+        <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>
+        <CardDescription>
+          Join The Life Coaching Cafe today to find or become a life coach.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="name">Full Name</Label>
+            <Input id="name" {...register('name')} placeholder="e.g., Alex Smith" className={errors.name ? 'border-destructive' : ''} />
+            {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address</Label>
+            <Input id="email" type="email" {...register('email')} placeholder="you@example.com" className={errors.email ? 'border-destructive' : ''} />
+            {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" {...register('name')} placeholder="e.g., Alex Smith" className={errors.name ? 'border-destructive' : ''} />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" {...register('password')} className={errors.password ? 'border-destructive' : ''} />
+              {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input id="email" type="email" {...register('email')} placeholder="you@example.com" className={errors.email ? 'border-destructive' : ''} />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input id="confirmPassword" type="password" {...register('confirmPassword')} className={errors.confirmPassword ? 'border-destructive' : ''} />
+              {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" {...register('password')} className={errors.password ? 'border-destructive' : ''} />
-                {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input id="confirmPassword" type="password" {...register('confirmPassword')} className={errors.confirmPassword ? 'border-destructive' : ''} />
-                {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>I am a:</Label>
-              <Controller
-                name="role"
-                control={control}
-                render={({ field }) => (
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    className="flex space-x-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="user" id="role-user" />
-                      <Label htmlFor="role-user" className="font-normal">User (Seeking a coach)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="coach" id="role-coach" />
-                      <Label htmlFor="role-coach" className="font-normal">Coach (Want to offer services)</Label>
-                    </div>
-                  </RadioGroup>
-                )}
-              />
-              {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
-            </div>
-
-            <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isLoading || authLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Creating Account...
-                </>
-              ) : (
-                'Sign Up'
+          <div className="space-y-2">
+            <Label>I am a:</Label>
+            <Controller
+              name="role"
+              control={control}
+              render={({ field }) => (
+                <RadioGroup
+                  onValueChange={field.onChange}
+                  value={field.value} // Use value here to ensure it's controlled
+                  className="flex space-x-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="user" id="role-user" />
+                    <Label htmlFor="role-user" className="font-normal">User (Seeking a coach)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="coach" id="role-coach" />
+                    <Label htmlFor="role-coach" className="font-normal">Coach (Want to offer services)</Label>
+                  </div>
+                </RadioGroup>
               )}
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="text-center">
-          <p className="text-sm text-muted-foreground w-full">
-            Already have an account?{' '}
-            <Button variant="link" className="p-0 h-auto text-primary" asChild>
-              <Link href="/login">Log In</Link>
-            </Button>
-          </p>
-        </CardFooter>
-      </Card>
-    </div>
+            />
+            {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
+          </div>
+
+          <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isLoading || authLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              'Sign Up'
+            )}
+          </Button>
+        </form>
+      </CardContent>
+      <CardFooter className="text-center">
+        <p className="text-sm text-muted-foreground w-full">
+          Already have an account?{' '}
+          <Button variant="link" className="p-0 h-auto text-primary" asChild>
+            <Link href="/login">Log In</Link>
+          </Button>
+        </p>
+      </CardFooter>
+    </Card>
   );
+}
+
+
+export default function SignupPage() {
+  return (
+    // Suspense is required by Next.js when using useSearchParams in a Server Component tree
+    <Suspense fallback={<div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading...</div>}>
+      <div className="flex items-center justify-center py-12">
+        <SignupFormContent />
+      </div>
+    </Suspense>
+  )
 }
