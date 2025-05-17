@@ -16,7 +16,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <Lightbulb className="mx-auto h-16 w-16 text-primary mb-6" />
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
-            Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI&trade;</span>
+            Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI<sup className="text-2xl md:text-3xl">&trade;</sup></span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
             Discover verified life coaches and get personalized recommendations with our AI-powered CoachMatch assistant. Start your journey to a better you today.
