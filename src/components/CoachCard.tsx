@@ -1,9 +1,11 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Coach } from '@/types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Briefcase, MapPin, MessageSquare } from 'lucide-react';
 
 interface CoachCardProps {
@@ -11,47 +13,54 @@ interface CoachCardProps {
 }
 
 export function CoachCard({ coach }: CoachCardProps) {
+  const initials = coach.name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
-    <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <CardHeader className="relative p-0">
-        <Image
-          src={coach.profileImageUrl || `https://placehold.co/400x300.png`}
-          alt={coach.name}
-          width={400}
-          height={300}
-          className="object-cover w-full h-48"
-          data-ai-hint={coach.dataAiHint as string || "person portrait"}
-        />
-      </CardHeader>
-      <CardContent className="p-6 flex-grow">
-        <CardTitle className="text-xl font-semibold mb-2">{coach.name}</CardTitle>
-        {coach.location && (
-          <div className="flex items-center text-sm text-muted-foreground mb-2">
-            <MapPin className="h-4 w-4 mr-1" />
-            {coach.location}
-          </div>
-        )}
-        <div className="flex items-center text-sm text-muted-foreground mb-3">
-          <Briefcase className="h-4 w-4 mr-1" />
-          Specialties
-        </div>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {coach.specialties.slice(0, 3).map((specialty) => (
-            <Badge key={specialty} variant="secondary" className="text-xs">
-              {specialty}
-            </Badge>
-          ))}
-          {coach.specialties.length > 3 && (
-            <Badge variant="outline" className="text-xs">
-              +{coach.specialties.length - 3} more
-            </Badge>
+    <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
+      <CardHeader className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-6">
+        <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
+          <AvatarImage src={coach.profileImageUrl || `https://placehold.co/96x96.png`} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person portrait"} />
+          <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 text-center sm:text-left">
+          <CardTitle className="text-xl font-semibold">{coach.name}</CardTitle>
+          {coach.location && (
+            <p className="text-sm text-muted-foreground flex items-center justify-center sm:justify-start mt-1">
+              <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
+              {coach.location}
+            </p>
           )}
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-3">
+      </CardHeader>
+      <CardContent className="p-6 pt-0 flex-grow">
+        <p className="text-sm text-muted-foreground line-clamp-4 mb-4">
           {coach.bio}
         </p>
+        <div className="mb-2">
+          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-2 flex items-center">
+            <Briefcase className="h-4 w-4 mr-1.5 flex-shrink-0" />
+            Specialties
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {coach.specialties.slice(0, 3).map((specialty) => (
+              <Badge key={specialty} variant="secondary" className="text-xs">
+                {specialty}
+              </Badge>
+            ))}
+            {coach.specialties.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{coach.specialties.length - 3} more
+              </Badge>
+            )}
+          </div>
+        </div>
       </CardContent>
-      <CardFooter className="p-6 border-t">
+      <CardFooter className="p-6 border-t mt-auto">
         <div className="flex gap-2 w-full">
         <Button asChild variant="outline" className="flex-1">
             <Link href={`/coach/${coach.id}`}>View Profile</Link>
@@ -66,3 +75,4 @@ export function CoachCard({ coach }: CoachCardProps) {
     </Card>
   );
 }
+
