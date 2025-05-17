@@ -1,10 +1,11 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
 import type { BlogPost } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, UserCircle, Edit3 } from 'lucide-react';
+import { CalendarDays, UserCircle, Edit3, Eye } from 'lucide-react'; // Added Eye icon
 import { format } from 'date-fns';
 
 interface BlogPostCardProps {
@@ -41,7 +42,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           </Link>
         </CardTitle>
         <CardDescription className="text-sm text-muted-foreground line-clamp-3 mb-3">
-          {post.excerpt || post.content.substring(0, 100) + '...'}
+          {post.excerpt || post.content?.substring(0, 100) + '...'}
         </CardDescription>
         <div className="flex items-center text-xs text-muted-foreground space-x-3">
           <div className="flex items-center">
@@ -54,15 +55,20 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           </div>
         </div>
          {post.status !== 'published' && (
-            <Badge variant={post.status === 'pending_approval' ? 'default' : 'destructive'} className="mt-3 text-xs">
-              Status: {post.status.replace('_', ' ')}
+            <Badge 
+              variant={post.status === 'pending_approval' ? 'secondary' : (post.status === 'draft' ? 'outline' : 'destructive')} 
+              className="mt-3 text-xs"
+            >
+              Status: {post.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
             </Badge>
           )}
       </CardContent>
       <CardFooter className="p-6 border-t">
         <div className="flex justify-between w-full items-center">
-          <Button asChild variant="outline">
-            <Link href={`/blog/${post.slug}`}>Read More</Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/blog/${post.slug}`}>
+              <Eye className="mr-2 h-4 w-4" /> Read More
+            </Link>
           </Button>
           {showEditButton && (
              <Button asChild variant="ghost" size="sm">
@@ -76,3 +82,5 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
     </Card>
   );
 }
+
+    
