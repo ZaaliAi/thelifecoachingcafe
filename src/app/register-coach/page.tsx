@@ -15,15 +15,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserPlus, Lightbulb, CheckCircle2, UploadCloud, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties } from '@/data/mock'; // Keep for available options, though mockCoaches isn't used directly here for data
+import { allSpecialties as predefinedSpecialties } from '@/lib/firestore'; 
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
 import { useRouter } from 'next/navigation';
-import { setUserProfile } from '@/lib/firestore'; // Import Firestore function
-import type { Coach, FirestoreUserProfile } from '@/types';
+import { setUserProfile } from '@/lib/firestore'; 
+import type { FirestoreUserProfile } from '@/types';
 
 
 // Helper keys for localStorage
@@ -38,7 +38,7 @@ const coachRegistrationSchema = z.object({
   keywords: z.string().optional(), // Comma-separated keywords
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(),
-  location: z.string().optional(), // Location field
+  location: z.string().optional(), 
   // Premium Features
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
@@ -67,17 +67,23 @@ export default function CoachRegistrationPage() {
     defaultValues: {
       name: '',
       email: '',
+      bio: '',
       selectedSpecialties: [],
       profileImageUrl: '',
       keywords: '',
       location: '',
+      certifications: '',
+      websiteUrl: '',
+      introVideoUrl: '',
+      socialLinkPlatform: '',
+      socialLinkUrl: '',
     }
   });
 
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please sign up or log in as a coach first.", variant: "destructive" });
-      router.push('/signup?role=coach'); // Redirect to signup with role coach if not logged in
+      router.push('/signup?role=coach'); 
       return;
     }
     if (user) {
@@ -88,15 +94,15 @@ export default function CoachRegistrationPage() {
         if (pendingProfileStr) {
           const pendingProfile = JSON.parse(pendingProfileStr);
           pendingName = pendingProfile.name || pendingName;
-          pendingEmail = pendingProfile.email || pendingEmail;
-          // localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear after use or on successful submission
+          // Email should come from the authenticated user object primarily
+          pendingEmail = user.email || pendingProfile.email || pendingEmail; 
         }
       } catch (e) {
         console.error("Error reading pending coach profile from localStorage", e);
       }
       reset({
         name: pendingName,
-        email: pendingEmail,
+        email: pendingEmail, // Use confirmed email from auth or pending
         bio: '',
         selectedSpecialties: [],
         profileImageUrl: '',
@@ -120,19 +126,12 @@ export default function CoachRegistrationPage() {
         setIsAiLoading(true);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          // const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
-          // Simulate AI response if Genkit isn't fully set up or for testing
-          await new Promise(resolve => setTimeout(resolve, 1000)); 
-          const simulatedResponse: SuggestCoachSpecialtiesOutput = {
-             specialties: predefinedSpecialties.filter(s => bioText.toLowerCase().includes(s.split(" ")[0].toLowerCase())).slice(0,3), 
-             keywords: ['AI keyword 1', 'AI keyword 2', 'AI suggestion 3']
-          };
-          setSuggestedSpecialtiesState(simulatedResponse.specialties);
-          setSuggestedKeywordsState(simulatedResponse.keywords);
-          // Optionally auto-select suggested specialties if they are in predefinedSpecialties
-          // const currentSelected = control._formValues.selectedSpecialties || [];
-          // const newSelected = Array.from(new Set([...currentSelected, ...simulatedResponse.specialties.filter(s => predefinedSpecialties.includes(s))]));
-          // setValue('selectedSpecialties', newSelected);
+          const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
+          setSuggestedSpecialtiesState(response.specialties || []);
+          setSuggestedKeywordsState(response.keywords || []);
+           if (response.keywords && response.keywords.length > 0 && !watch('keywords')) {
+             setValue('keywords', response.keywords.join(', '));
+          }
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
           toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
@@ -141,7 +140,7 @@ export default function CoachRegistrationPage() {
         }
       }
     }, 1000), 
-    [toast] // control and setValue removed as direct dependencies; they don't change
+    [toast, setValue, watch]
   );
 
   useEffect(() => {
@@ -161,9 +160,11 @@ export default function CoachRegistrationPage() {
     let finalProfileImageUrl = data.profileImageUrl;
     if (selectedFileForUpload) {
         try {
+            // For registration, we use user.id as it's now available after signup.
+            // The third argument (existingImageUrl) is omitted as it's a new profile.
             finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id);
             setValue('profileImageUrl', finalProfileImageUrl);
-            setImagePreviewUrl(null); 
+            setImagePreviewUrl(finalProfileImageUrl); // Update preview to the stored URL
             setSelectedFileForUpload(null);
         } catch (uploadError: any) {
             toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
@@ -175,28 +176,34 @@ export default function CoachRegistrationPage() {
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
+    // Determine subscription tier based on whether any premium fields are filled
+    const isAttemptingPremium = !!(data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl));
+    const subscriptionTier = isAttemptingPremium ? 'premium' : 'free';
+
+
     const profileToSave: Partial<FirestoreUserProfile> = {
         name: data.name,
         email: data.email, // email from form, should match auth user's email
         bio: data.bio,
-        role: 'coach', // Explicitly set role to coach
+        role: 'coach', 
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        profileImageUrl: finalProfileImageUrl || undefined, // Ensure undefined if empty string
+        profileImageUrl: finalProfileImageUrl || undefined, 
         certifications: certificationsArray,
         location: data.location || undefined,
-        subscriptionTier: (data.websiteUrl || data.introVideoUrl || (data.socialLinkPlatform && data.socialLinkUrl)) ? 'premium' : 'free', 
+        subscriptionTier: subscriptionTier, 
         websiteUrl: data.websiteUrl || undefined,
         introVideoUrl: data.introVideoUrl || undefined,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+        // createdAt and updatedAt will be handled by setUserProfile (merge:true and serverTimestamp logic)
     };
 
     try {
-        await setUserProfile(user.id, profileToSave); // This will merge and add timestamps
-        localStorage.removeItem(PENDING_COACH_PROFILE_KEY); // Clear pending profile on successful submission
+        await setUserProfile(user.id, profileToSave); 
+        localStorage.removeItem(PENDING_COACH_PROFILE_KEY); 
         toast({
           title: "Coach Profile Submitted!",
-          description: "Your coach profile has been created/updated. It may be subject to admin review.",
+          description: "Your coach profile has been created. It may be subject to admin review.",
           action: <CheckCircle2 className="text-green-500" />,
         });
         router.push('/dashboard/coach'); 
@@ -209,10 +216,10 @@ export default function CoachRegistrationPage() {
   };
 
   const handleAddCustomSpecialty = () => {
-    const customSpecialty = control._formValues.customSpecialty?.trim();
-    if (customSpecialty && !availableSpecialties.includes(customSpecialty)) {
-      setAvailableSpecialties(prev => [...prev, customSpecialty]);
-      setValue('selectedSpecialties', [...(control._formValues.selectedSpecialties || []), customSpecialty]);
+    const customSpecialtyValue = watch('customSpecialty')?.trim();
+    if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
+      setAvailableSpecialties(prev => [...prev, customSpecialtyValue]);
+      setValue('selectedSpecialties', [...(watch('selectedSpecialties') || []), customSpecialtyValue]);
       setValue('customSpecialty', ''); 
     }
   };
@@ -228,7 +235,13 @@ export default function CoachRegistrationPage() {
       reader.readAsDataURL(file);
     } else {
       setSelectedFileForUpload(null);
-      setImagePreviewUrl(null);
+      // If a file was previously selected for upload & then cleared, 
+      // and there's no existing image from DB (which there wouldn't be on registration), clear preview.
+      if (!user?.profileImageUrl) {
+        setImagePreviewUrl(null);
+      } else {
+         setImagePreviewUrl(user.profileImageUrl); // Fallback to existing if available
+      }
     }
   };
 
@@ -274,13 +287,13 @@ export default function CoachRegistrationPage() {
               </div>
 
               { (isAiLoading || suggestedKeywordsState.length > 0 || suggestedSpecialtiesState.length > 0) && (
-                <Alert variant="default" className="bg-accent/20">
+                <Alert variant="default" className="bg-accent/20 border-accent/50">
                   <Lightbulb className="h-5 w-5 text-primary" />
-                  <AlertTitle className="font-semibold">AI Suggestions Based on Your Bio</AlertTitle>
-                  <AlertDescription className="space-y-1">
+                  <AlertTitle className="font-semibold text-primary">AI Suggestions Based on Your Bio</AlertTitle>
+                  <AlertDescription className="space-y-1 text-foreground/80">
                     {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                    {suggestedKeywordsState.length > 0 && <p className="text-sm">Suggested Keywords: {suggestedKeywordsState.join(', ')}</p>}
-                    {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Suggested specialties: {suggestedSpecialtiesState.join(', ')}</p>}
+                    {suggestedKeywordsState.length > 0 && <p className="text-sm">Suggested Keywords: <span className="font-medium">{suggestedKeywordsState.join(', ')}</span></p>}
+                    {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Suggested specialties: <span className="font-medium">{suggestedSpecialtiesState.join(', ')}</span></p>}
                   </AlertDescription>
                 </Alert>
               )}
@@ -295,7 +308,7 @@ export default function CoachRegistrationPage() {
                       {availableSpecialties.map((specialty) => (
                         <div key={specialty} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`specialty-${specialty}`}
+                            id={`specialty-${specialty.replace(/\s+/g, '-')}`}
                             checked={field.value?.includes(specialty)}
                             onCheckedChange={(checked) => {
                               return checked
@@ -307,7 +320,7 @@ export default function CoachRegistrationPage() {
                                   );
                             }}
                           />
-                          <Label htmlFor={`specialty-${specialty}`} className="font-normal">{specialty}</Label>
+                          <Label htmlFor={`specialty-${specialty.replace(/\s+/g, '-')}`} className="font-normal">{specialty}</Label>
                         </div>
                       ))}
                     </div>
@@ -322,7 +335,7 @@ export default function CoachRegistrationPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="keywords" className="flex items-center"><Tag className="mr-2 h-4 w-4 text-muted-foreground"/>Keywords (comma-separated)</Label>
-                <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, mindset, career change" />
+                <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, mindset, career change" className={errors.keywords ? 'border-destructive' : ''}/>
                 {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
                  <p className="text-xs text-muted-foreground">Help clients find you by adding relevant keywords.</p>
               </div>
@@ -352,7 +365,7 @@ export default function CoachRegistrationPage() {
                 )}
                 {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                 <p className="text-xs text-muted-foreground">
-                  Upload an image. For best results, use a square image.
+                  Upload a professional image. Square images work best.
                 </p>
               </div>
               
@@ -363,7 +376,7 @@ export default function CoachRegistrationPage() {
 
                <div className="space-y-2">
                 <Label htmlFor="location" className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Location (Optional)</Label>
-                <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
+                <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" className={errors.location ? 'border-destructive' : ''} />
                  {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
               </div>
             </section>
@@ -448,4 +461,3 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
-

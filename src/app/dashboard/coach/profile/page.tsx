@@ -15,13 +15,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, UserCircle, Lightbulb, Save, UploadCloud, Link as LinkIcon, Crown, Globe, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
-import { allSpecialties as predefinedSpecialties, mockCoaches } from '@/data/mock';
-import type { Coach } from '@/types';
+import { allSpecialties as predefinedSpecialties } from '@/lib/firestore'; // Using allSpecialties from firestore.ts now
+import type { Coach, FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { uploadProfileImage } from '@/services/imageUpload';
+import { getUserProfile, setUserProfile } from '@/lib/firestore'; // Import Firestore functions
+
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -29,6 +31,7 @@ const coachProfileSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
+  keywords: z.string().optional(), // Added keywords
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')),
   certifications: z.string().optional(),
   location: z.string().optional(),
@@ -47,7 +50,7 @@ export default function CoachProfilePage() {
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(predefinedSpecialties);
-  const [currentCoach, setCurrentCoach] = useState<Coach | null>(null);
+  const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -58,55 +61,55 @@ export default function CoachProfilePage() {
   const { control, register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<CoachProfileFormData>({
     resolver: zodResolver(coachProfileSchema),
     defaultValues: {
+      name: '',
+      email: '',
+      bio: '',
       selectedSpecialties: [],
       profileImageUrl: '',
+      keywords: '',
+      location: '',
+      certifications: '',
+      websiteUrl: '',
+      introVideoUrl: '',
+      socialLinkPlatform: '',
+      socialLinkUrl: '',
     }
   });
 
   const bioValue = watch('bio');
-  const currentProfileImageUrl = watch('profileImageUrl'); // This will hold the URL from DB or the newly uploaded one
+  const currentProfileImageUrlValue = watch('profileImageUrl'); 
 
   useEffect(() => {
-    if (authLoading) return;
-    // Simulating fetching current coach data. In a real app, fetch by user.id
-    const coachData = mockCoaches.find(c => c.id === (user?.id || '1')); // Fallback to '1' for mock if no user
-    if (coachData) {
-      setCurrentCoach(coachData);
-      reset({
-        name: coachData.name,
-        email: coachData.email || `${user?.email}`,
-        bio: coachData.bio,
-        selectedSpecialties: coachData.specialties,
-        profileImageUrl: coachData.profileImageUrl || '',
-        certifications: coachData.certifications?.join(', '),
-        location: coachData.location,
-        websiteUrl: coachData.websiteUrl,
-        introVideoUrl: coachData.introVideoUrl,
-        socialLinkPlatform: coachData.socialLinks?.[0]?.platform,
-        socialLinkUrl: coachData.socialLinks?.[0]?.url,
-      });
-      const allSpecs = new Set([...predefinedSpecialties, ...coachData.specialties]);
-      setAvailableSpecialties(Array.from(allSpecs));
-    } else if (user) {
-      // Initialize with some basic data if coach not found in mock for current user
-      setCurrentCoach({
-        id: user.id,
-        name: user.name || '',
-        email: user.email,
-        bio: '',
-        specialties: [],
-        keywords: [],
-        subscriptionTier: 'free', // default
-      });
-       reset({
-        name: user.name || '',
-        email: user.email,
-        bio: '',
-        selectedSpecialties: [],
-        profileImageUrl: '',
-      });
-    }
-  }, [reset, user, authLoading]);
+    if (authLoading || !user) return;
+    
+    const fetchCoachData = async () => {
+      const coachData = await getUserProfile(user.id);
+      if (coachData && coachData.role === 'coach') {
+        setCurrentCoach(coachData);
+        reset({
+          name: coachData.name,
+          email: coachData.email || `${user?.email}`,
+          bio: coachData.bio || '',
+          selectedSpecialties: coachData.specialties || [],
+          keywords: coachData.keywords?.join(', ') || '',
+          profileImageUrl: coachData.profileImageUrl || '',
+          certifications: coachData.certifications?.join(', ') || '',
+          location: coachData.location || '',
+          websiteUrl: coachData.websiteUrl || '',
+          introVideoUrl: coachData.introVideoUrl || '',
+          socialLinkPlatform: coachData.socialLinks?.[0]?.platform || '',
+          socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
+        });
+        const allSpecs = new Set([...predefinedSpecialties, ...(coachData.specialties || [])]);
+        setAvailableSpecialties(Array.from(allSpecs));
+        if(coachData.profileImageUrl) setImagePreviewUrl(coachData.profileImageUrl);
+      } else if(coachData && coachData.role !== 'coach'){
+        toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
+        // router.push('/dashboard/user'); // Or appropriate redirect
+      }
+    };
+    fetchCoachData();
+  }, [reset, user, authLoading, toast]);
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -114,22 +117,21 @@ export default function CoachProfilePage() {
         setIsAiLoading(true);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const simulatedResponse: SuggestCoachSpecialtiesOutput = {
-             specialties: predefinedSpecialties.filter(s => bioText.toLowerCase().includes(s.split(" ")[0].toLowerCase())).slice(0,3),
-             keywords: ['updated keyword1', 'updated keyword2']
-          };
-          setSuggestedSpecialtiesState(simulatedResponse.specialties);
-          setSuggestedKeywords(simulatedResponse.keywords);
+          const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
+          setSuggestedSpecialtiesState(response.specialties || []);
+          setSuggestedKeywords(response.keywords || []);
+          if (response.keywords && response.keywords.length > 0 && !watch('keywords')) {
+             setValue('keywords', response.keywords.join(', '));
+          }
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
-          toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions.", variant: "destructive" });
+          toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
         } finally {
           setIsAiLoading(false);
         }
       }
     }, 1000),
-    [toast]
+    [toast, setValue, watch] 
   );
 
   useEffect(() => {
@@ -149,9 +151,9 @@ export default function CoachProfilePage() {
     if (selectedFileForUpload) {
         try {
             finalProfileImageUrl = await uploadProfileImage(selectedFileForUpload, user.id, currentCoach.profileImageUrl);
-            setValue('profileImageUrl', finalProfileImageUrl); // Update form value with new URL
-            setImagePreviewUrl(null); // Clear preview as it's now uploaded
-            setSelectedFileForUpload(null); // Clear selected file
+            setValue('profileImageUrl', finalProfileImageUrl); 
+            setImagePreviewUrl(finalProfileImageUrl); 
+            setSelectedFileForUpload(null); 
         } catch (uploadError: any) {
             toast({ title: "Image Upload Failed", description: uploadError.message, variant: "destructive" });
             setIsSubmitting(false);
@@ -159,38 +161,47 @@ export default function CoachProfilePage() {
         }
     }
     
-    const updatedProfileData = { ...data, profileImageUrl: finalProfileImageUrl };
-    console.log('Updating coach profile data:', updatedProfileData);
-    // Simulate API call to save profile data
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Update mockCoaches (or would save to DB)
-    const coachIndex = mockCoaches.findIndex(c => c.id === currentCoach.id);
-    if (coachIndex !== -1) {
-      mockCoaches[coachIndex] = {
-        ...mockCoaches[coachIndex],
-        ...updatedProfileData,
-        specialties: updatedProfileData.selectedSpecialties,
-        certifications: updatedProfileData.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [],
-        socialLinks: updatedProfileData.socialLinkPlatform && updatedProfileData.socialLinkUrl ? [{platform: updatedProfileData.socialLinkPlatform, url: updatedProfileData.socialLinkUrl}] : [],
-      };
+    const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
+    const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
+
+    const profileToSave: Partial<FirestoreUserProfile> = {
+        name: data.name,
+        // email is not updated here, assumed to be fixed from auth
+        bio: data.bio,
+        role: 'coach', 
+        specialties: data.selectedSpecialties,
+        keywords: keywordsArray,
+        profileImageUrl: finalProfileImageUrl || undefined, 
+        certifications: certificationsArray,
+        location: data.location || undefined,
+        // subscriptionTier is managed by admin, not here
+        websiteUrl: data.websiteUrl || undefined,
+        introVideoUrl: data.introVideoUrl || undefined,
+        socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
+    };
+
+
+    try {
+        await setUserProfile(user.id, profileToSave);
+        toast({
+          title: "Profile Updated!",
+          description: "Your profile changes have been saved successfully.",
+          action: <Save className="text-green-500" />,
+        });
+    } catch (error) {
+        console.error('Error updating coach profile in Firestore:', error);
+        toast({ title: "Profile Save Error", description: "Could not save your profile to the database.", variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
     }
-
-
-    setIsSubmitting(false);
-    toast({
-      title: "Profile Updated!",
-      description: "Your profile changes have been saved successfully.",
-      action: <Save className="text-green-500" />,
-    });
   };
 
   const handleAddCustomSpecialty = () => {
-    const customSpecialty = control._formValues.customSpecialty?.trim();
-    if (customSpecialty && !availableSpecialties.includes(customSpecialty)) {
-      setAvailableSpecialties(prev => [...prev, customSpecialty]);
-      setValue('selectedSpecialties', [...(control._formValues.selectedSpecialties || []), customSpecialty]);
-      setValue('customSpecialty', '');
+    const customSpecialtyValue = watch('customSpecialty')?.trim();
+    if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
+      setAvailableSpecialties(prev => [...prev, customSpecialtyValue]);
+      setValue('selectedSpecialties', [...(watch('selectedSpecialties') || []), customSpecialtyValue]);
+      setValue('customSpecialty', ''); 
     }
   };
 
@@ -205,16 +216,12 @@ export default function CoachProfilePage() {
       reader.readAsDataURL(file);
     } else {
       setSelectedFileForUpload(null);
-      setImagePreviewUrl(null);
+      setImagePreviewUrl(currentCoach?.profileImageUrl || null); // Revert to original if selection cleared
     }
   };
 
-  if (authLoading || !currentCoach && !user) { // Show loading if auth is pending or if no user and no coach data yet
+  if (authLoading || (!user && !currentCoach)) { 
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading profile...</div>;
-  }
-  if (!user && !authLoading) { // If auth is done and still no user, prompt login
-      router.push('/login'); // Or show a message
-      return <div className="flex justify-center items-center h-full">Please log in to view your profile.</div>;
   }
   
   const isPremium = currentCoach?.subscriptionTier === 'premium';
@@ -228,8 +235,8 @@ export default function CoachProfilePage() {
                 <CardDescription>Keep your information current to attract the right clients.</CardDescription>
             </div>
             {currentCoach && (
-              <Badge variant={isPremium ? "default" : "secondary"} className={isPremium ? "bg-yellow-500 text-white" : ""}>
-                  <Crown className="mr-2 h-4 w-4" /> {currentCoach.subscriptionTier.toUpperCase()} Tier
+              <Badge variant={isPremium ? "default" : "secondary"} className={isPremium ? "bg-yellow-500 text-white hover:bg-yellow-600" : ""}>
+                  {isPremium && <Crown className="mr-2 h-4 w-4" />} {currentCoach.subscriptionTier?.toUpperCase()} Tier
               </Badge>
             )}
         </div>
@@ -258,13 +265,13 @@ export default function CoachProfilePage() {
           </section>
 
           { (isAiLoading || suggestedKeywords.length > 0 || suggestedSpecialtiesState.length > 0) && (
-            <Alert variant="default" className="bg-accent/20">
+            <Alert variant="default" className="bg-accent/20 border-accent/50">
               <Lightbulb className="h-5 w-5 text-primary" />
-              <AlertTitle className="font-semibold">AI Suggestions Based on Your Bio</AlertTitle>
-              <AlertDescription className="space-y-1">
+              <AlertTitle className="font-semibold text-primary">AI Suggestions Based on Your Bio</AlertTitle>
+              <AlertDescription className="space-y-1 text-foreground/80">
                 {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                {suggestedKeywords.length > 0 && <p className="text-sm">Suggested Keywords: {suggestedKeywords.join(', ')}</p>}
-                {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Consider adding these specialties: {suggestedSpecialtiesState.join(', ')}</p>}
+                {suggestedKeywords.length > 0 && <p className="text-sm">Suggested Keywords: <span className="font-medium">{suggestedKeywords.join(', ')}</span></p>}
+                {suggestedSpecialtiesState.length > 0 && <p className="text-sm">Consider adding these specialties: <span className="font-medium">{suggestedSpecialtiesState.join(', ')}</span></p>}
               </AlertDescription>
             </Alert>
           )}
@@ -282,7 +289,7 @@ export default function CoachProfilePage() {
                         {availableSpecialties.map((specialty) => (
                             <div key={specialty} className="flex items-center space-x-2">
                             <Checkbox
-                                id={`specialty-${specialty}`}
+                                id={`specialty-${specialty.replace(/\s+/g, '-')}`} // Ensure ID is valid
                                 checked={field.value?.includes(specialty)}
                                 onCheckedChange={(checked) => {
                                 return checked
@@ -294,7 +301,7 @@ export default function CoachProfilePage() {
                                     );
                                 }}
                             />
-                            <Label htmlFor={`specialty-${specialty}`} className="font-normal">{specialty}</Label>
+                            <Label htmlFor={`specialty-${specialty.replace(/\s+/g, '-')}`} className="font-normal">{specialty}</Label>
                             </div>
                         ))}
                         </div>
@@ -306,9 +313,12 @@ export default function CoachProfilePage() {
                     <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}>Add</Button>
                     </div>
                 </div>
+
                 <div className="space-y-1">
-                    <Label htmlFor="location">Location (Optional)</Label>
-                    <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
+                    <Label htmlFor="keywords">Keywords (Comma-separated)</Label>
+                    <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, executive coaching" />
+                    {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
+                     <p className="text-xs text-muted-foreground">Help clients find you with relevant keywords.</p>
                 </div>
                 
                 <div className="space-y-1">
@@ -323,10 +333,10 @@ export default function CoachProfilePage() {
                             className="flex-grow"
                         />
                     </div>
-                     {(imagePreviewUrl || currentProfileImageUrl) && (
+                     {(imagePreviewUrl || currentProfileImageUrlValue) && (
                         <div className="mt-2 relative w-32 h-32">
                             <Image
-                                src={imagePreviewUrl || currentProfileImageUrl || "https://placehold.co/128x128.png"}
+                                src={imagePreviewUrl || currentProfileImageUrlValue || "https://placehold.co/128x128.png"}
                                 alt="Profile preview"
                                 fill
                                 className="rounded-md object-cover border"
@@ -336,13 +346,17 @@ export default function CoachProfilePage() {
                     )}
                     {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
                      <p className="text-xs text-muted-foreground">
-                        Upload an image. For best results, use a square image.
+                        Upload a professional image. Square images work best.
                     </p>
                 </div>
 
                 <div className="space-y-1">
                     <Label htmlFor="certifications">Certifications (Optional, comma-separated)</Label>
-                    <Input id="certifications" {...register('certifications')} />
+                    <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
+                </div>
+                 <div className="space-y-1">
+                    <Label htmlFor="location">Location (Optional)</Label>
+                    <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" />
                 </div>
             </div>
           </section>
@@ -352,17 +366,17 @@ export default function CoachProfilePage() {
             <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="text-lg font-semibold">Premium Features</h3>
                 {!isPremium && (
-                    <Button variant="outline" size="sm" asChild className="border-yellow-500 text-yellow-600 hover:bg-yellow-50">
-                        <Link href="/pricing"><Crown className="mr-2 h-4 w-4" /> Upgrade to Premium</Link>
+                    <Button variant="outline" size="sm" asChild className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700">
+                        <Link href="/pricing"><Crown className="mr-2 h-4 w-4 text-yellow-500" /> Upgrade to Premium</Link>
                     </Button>
                 )}
             </div>
-            <div className="space-y-4">
+            <div className={`space-y-4 ${!isPremium ? 'opacity-60 cursor-not-allowed' : ''}`}>
                 <div className="space-y-1">
                     <Label htmlFor="websiteUrl" className={!isPremium ? "text-muted-foreground" : ""}>Website URL</Label>
                      <div className="flex items-center gap-2">
                         <Globe className="h-5 w-5 text-muted-foreground" />
-                        <Input id="websiteUrl" {...register('websiteUrl')} className={errors.websiteUrl ? 'border-destructive' : ''} disabled={!isPremium} />
+                        <Input id="websiteUrl" {...register('websiteUrl')} className={errors.websiteUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://yourwebsite.com" />
                     </div>
                     {errors.websiteUrl && <p className="text-sm text-destructive">{errors.websiteUrl.message}</p>}
                      {!isPremium && <p className="text-xs text-muted-foreground">Available for Premium coaches.</p>}
@@ -371,7 +385,7 @@ export default function CoachProfilePage() {
                     <Label htmlFor="introVideoUrl" className={!isPremium ? "text-muted-foreground" : ""}>Intro Video URL (e.g., YouTube)</Label>
                     <div className="flex items-center gap-2">
                         <Video className="h-5 w-5 text-muted-foreground" />
-                        <Input id="introVideoUrl" {...register('introVideoUrl')} className={errors.introVideoUrl ? 'border-destructive' : ''} disabled={!isPremium} />
+                        <Input id="introVideoUrl" {...register('introVideoUrl')} className={errors.introVideoUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://youtube.com/watch?v=yourvideo" />
                     </div>
                     {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
                     {!isPremium && <p className="text-xs text-muted-foreground">Available for Premium coaches.</p>}
@@ -385,12 +399,12 @@ export default function CoachProfilePage() {
                     <Label htmlFor="socialLinkUrl" className={!isPremium ? "text-muted-foreground" : ""}>Social Media URL</Label>
                     <div className="flex items-center gap-2">
                         <LinkIcon className="h-5 w-5 text-muted-foreground" />
-                        <Input id="socialLinkUrl" {...register('socialLinkUrl')} className={errors.socialLinkUrl ? 'border-destructive' : ''} disabled={!isPremium} />
+                        <Input id="socialLinkUrl" {...register('socialLinkUrl')} className={errors.socialLinkUrl ? 'border-destructive' : ''} disabled={!isPremium} placeholder="https://linkedin.com/in/yourprofile" />
                     </div>
                     {errors.socialLinkUrl && <p className="text-sm text-destructive">{errors.socialLinkUrl.message}</p>}
                     </div>
                 </div>
-                 {!isPremium && <p className="text-xs text-muted-foreground">Social media links are available for Premium coaches.</p>}
+                 {!isPremium && <p className="text-xs text-muted-foreground mt-1">Social media links are available for Premium coaches.</p>}
             </div>
           </section>
           
