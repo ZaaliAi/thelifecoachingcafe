@@ -5,7 +5,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
 
-// Your web app's Firebase configuration (directly provided)
+// Your web app's Firebase configuration (using environment variables)
 const firebaseConfig = {
   apiKey: "AIzaSyCF3xIso6izSPcnrUX3J1bD2xLalcEpASc",
   authDomain: "coachconnect-897af.firebaseapp.com",
@@ -16,13 +16,14 @@ const firebaseConfig = {
 };
 
 // Log to confirm the source of the config
-console.log("--- Firebase Configuration: Using directly embedded config ---");
+console.log("--- Firebase Configuration: Using environment variables ---");
 console.log("Project ID:", firebaseConfig.projectId);
-console.log("API Key:", firebaseConfig.apiKey ? "Present" : "MISSING");
+console.log("API Key:", firebaseConfig.apiKey ? "Present" : "MISSING - Check NEXT_PUBLIC_FIREBASE_API_KEY in .env.local");
 
 
 let app: FirebaseApp;
 
+// Check if Firebase app is already initialized
 if (!getApps().length) {
   try {
     app = initializeApp(firebaseConfig);
