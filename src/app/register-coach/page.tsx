@@ -243,7 +243,7 @@ export default function CoachRegistrationPage() {
                         Unlock powerful features like a Premium Badge on your profile, link your personal website, embed an engaging intro video, and connect your social media. Attract more clients and stand out from the crowd.
                     </AlertDescription>
                     <Button asChild variant="outline" size="sm" className="mt-4 border-primary text-primary hover:bg-primary/10">
-                        <Link href="/pricing">Explore Premium Benefits</Link>
+                        <Link href="/pricing">Get Premium</Link>
                     </Button>
                 </Alert>
 
@@ -306,3 +306,4 @@ export default function CoachRegistrationPage() {
     </div>
   );
 }
+
