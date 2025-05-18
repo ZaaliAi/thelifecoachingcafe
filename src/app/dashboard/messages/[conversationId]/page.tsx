@@ -27,9 +27,7 @@ export default function ConversationThreadPage() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,12 +35,15 @@ export default function ConversationThreadPage() {
 
   const fetchConversationDetails = useCallback(async () => {
     if (!user || !conversationId || !user.id) {
-      if(!user && !authLoading) router.push('/login'); // Redirect if not logged in and auth is done loading
+      if (!user && !authLoading) {
+        console.warn("[ConversationThreadPage] User not authenticated, redirecting to login.");
+        router.push('/login');
+      }
       return;
     }
     setIsLoadingMessages(true);
     setError(null);
-    console.log(`[ConversationThreadPage] Fetching details for conversationId: ${conversationId}, userId: ${user.id}`);
+    console.log(`[ConversationThreadPage] Fetching details for conversationId: ${conversationId}, currentUserId: ${user.id}`);
 
     try {
       const ids = conversationId.split('_');
@@ -50,37 +51,56 @@ export default function ConversationThreadPage() {
 
       if (!otherPartyId) {
         setError("Could not determine the other party in this conversation.");
+        console.error("[ConversationThreadPage] otherPartyId could not be determined from conversationId:", conversationId, "userId:", user.id);
         setIsLoadingMessages(false);
         return;
       }
       console.log(`[ConversationThreadPage] Determined otherPartyId: ${otherPartyId}`);
 
-      const [fetchedProfile, fetchedMessages] = await Promise.all([
-        getUserProfile(otherPartyId),
-        getMessagesForUser(user.id, otherPartyId) // This now fetches messages for this specific thread and marks as read
-      ]);
+      let fetchedProfile: FirestoreUserProfile | null = null;
+      try {
+        fetchedProfile = await getUserProfile(otherPartyId);
+        setOtherPartyProfile(fetchedProfile);
+        console.log(`[ConversationThreadPage] Fetched otherPartyProfile: ${fetchedProfile?.name || 'Not found'}`);
+      } catch (profileError: any) {
+        console.error(`[ConversationThreadPage] Error fetching otherPartyProfile (${otherPartyId}):`, profileError.code, profileError.message, profileError);
+        setError(`Failed to load other party's profile. Details: ${profileError.message || 'Please try again.'}`);
+        setIsLoadingMessages(false); // Stop loading if profile fetch fails
+        return;
+      }
       
-      console.log(`[ConversationThreadPage] Fetched profile: ${fetchedProfile?.name}, Fetched messages count: ${fetchedMessages.length}`);
+      if (!fetchedProfile) {
+        setError("Could not load details for the other person in this conversation (profile not found).");
+        setIsLoadingMessages(false);
+        return;
+      }
 
-      setOtherPartyProfile(fetchedProfile);
-      setMessages(fetchedMessages);
+      let fetchedMessages: MessageType[] = [];
+      try {
+        fetchedMessages = await getMessagesForUser(user.id, otherPartyId);
+        setMessages(fetchedMessages);
+        console.log(`[ConversationThreadPage] Fetched messages count: ${fetchedMessages.length}`);
+      } catch (messagesError: any) {
+         console.error(`[ConversationThreadPage] Error fetching messages between ${user.id} and ${otherPartyId}:`, messagesError.code, messagesError.message, messagesError);
+         setError(`Failed to load messages for the conversation. Details: ${messagesError.message || 'Please try again.'}`);
+      }
 
     } catch (err: any) {
-      console.error("[ConversationThreadPage] Error fetching conversation details:", err.code, err.message, err);
-      setError(`Failed to load conversation. ${err.message || 'Please try again.'}`);
+      console.error("[ConversationThreadPage] General error in fetchConversationDetails:", err.code, err.message, err);
+      setError(`Failed to load conversation. Details: ${err.message || 'Please try again.'}`);
     } finally {
       setIsLoadingMessages(false);
     }
   }, [user, conversationId, authLoading, router]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user && conversationId) {
       fetchConversationDetails();
     } else if (!authLoading && !user) {
        setError("Please log in to view messages.");
        setIsLoadingMessages(false);
     }
-  }, [user, authLoading, fetchConversationDetails]);
+  }, [user, authLoading, conversationId, fetchConversationDetails]);
 
   useEffect(() => {
     scrollToBottom();
@@ -89,7 +109,10 @@ export default function ConversationThreadPage() {
 
   const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newMessageContent.trim() || !user || !otherPartyProfile) return;
+    if (!newMessageContent.trim() || !user || !otherPartyProfile) {
+      console.warn("[ConversationThreadPage] Send message prerequisites not met:", {newMessageContent, user, otherPartyProfile});
+      return;
+    }
 
     setIsSending(true);
     try {
@@ -97,23 +120,23 @@ export default function ConversationThreadPage() {
         senderId: user.id,
         senderName: user.name || user.email || "Me",
         recipientId: otherPartyProfile.id,
-        recipientName: otherPartyProfile.name || otherPartyProfile.email,
+        recipientName: otherPartyProfile.name || otherPartyProfile.email || "Recipient",
         content: newMessageContent,
       });
       setNewMessageContent("");
-      // Re-fetch messages to include the new one and update read status
-      // Optimistic UI update could be added here too
       fetchConversationDetails(); 
     } catch (err) {
-      console.error("Error sending message:", err);
+      console.error("[ConversationThreadPage] Error sending message:", err);
       setError("Failed to send message. Please try again.");
     } finally {
       setIsSending(false);
     }
   };
+  
+  const isLoading = authLoading || isLoadingMessages;
 
-  if (authLoading) {
-     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /> Authenticating...</div>;
+  if (isLoading && !error) {
+     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /> Loading conversation...</div>;
   }
   
   if (!user && !authLoading) {
@@ -122,13 +145,9 @@ export default function ConversationThreadPage() {
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
         <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
         <p className="text-muted-foreground mb-4">Please log in to view your messages.</p>
-        <Button asChild><Link href="/login">Log In</Link></Button>
+        <Button asChild><Link href={`/login?redirect=/dashboard/messages/${conversationId}`}>Log In</Link></Button>
       </div>
     );
-  }
-
-  if (isLoadingMessages && !error) { // Only show main loader if no error yet
-    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /> Loading conversation...</div>;
   }
 
   if (error) {
@@ -140,11 +159,11 @@ export default function ConversationThreadPage() {
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Messages
         </Button>
-      </div>
+      </div> // Corrected closing tag here
     );
   }
 
-  if (!otherPartyProfile) {
+  if (!otherPartyProfile && !isLoading) {
      return (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -159,21 +178,26 @@ export default function ConversationThreadPage() {
 
 
   return (
-    <Card className="h-[calc(100vh-10rem)] md:h-[calc(100vh-12rem)] flex flex-col shadow-xl"> {/* Adjust height as needed */}
+    <Card className="h-[calc(100vh-10rem)] md:h-[calc(100vh-12rem)] flex flex-col shadow-xl">
       <CardHeader className="p-4 border-b flex flex-row items-center gap-3">
         <Button variant="ghost" size="icon" className="mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        {otherPartyProfile.profileImageUrl && (
+        {otherPartyProfile?.profileImageUrl && (
             <Avatar className="h-10 w-10">
-                <AvatarImage src={otherPartyProfile.profileImageUrl} alt={otherPartyProfile.name} data-ai-hint="person avatar" />
-                <AvatarFallback>{otherPartyProfile.name.substring(0,1).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={otherPartyProfile.profileImageUrl} alt={otherPartyProfile.name || ''} data-ai-hint="person avatar" />
+                <AvatarFallback>{otherPartyProfile.name?.substring(0,1).toUpperCase() || '?'}</AvatarFallback>
             </Avatar>
         )}
-        <CardTitle className="text-xl">{otherPartyProfile.name}</CardTitle>
+         {!otherPartyProfile?.profileImageUrl && otherPartyProfile && (
+           <Avatar className="h-10 w-10">
+             <AvatarFallback>{otherPartyProfile.name?.substring(0,1).toUpperCase() || '?'}</AvatarFallback>
+           </Avatar>
+         )}
+        <CardTitle className="text-xl">{otherPartyProfile?.name || 'Conversation'}</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full p-4 space-y-4" ref={scrollAreaRef}>
+        <ScrollArea className="h-full p-4 space-y-4">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -181,15 +205,15 @@ export default function ConversationThreadPage() {
                 msg.senderId === user?.id ? "justify-end" : "justify-start"
               }`}
             >
-              {msg.senderId !== user?.id && otherPartyProfile.profileImageUrl && (
+              {msg.senderId !== user?.id && otherPartyProfile?.profileImageUrl && (
                 <Avatar className="h-8 w-8 self-start">
-                  <AvatarImage src={otherPartyProfile.profileImageUrl} alt={otherPartyProfile.name} data-ai-hint="person avatar"/>
-                  <AvatarFallback>{otherPartyProfile.name.substring(0,1).toUpperCase()}</AvatarFallback>
+                  <AvatarImage src={otherPartyProfile.profileImageUrl} alt={otherPartyProfile.name || ''} data-ai-hint="person avatar"/>
+                  <AvatarFallback>{otherPartyProfile.name?.substring(0,1).toUpperCase() || '?'}</AvatarFallback>
                 </Avatar>
               )}
-               {msg.senderId !== user?.id && !otherPartyProfile.profileImageUrl && (
+               {msg.senderId !== user?.id && !otherPartyProfile?.profileImageUrl && otherPartyProfile && (
                  <Avatar className="h-8 w-8 self-start">
-                  <AvatarFallback>{otherPartyProfile.name.substring(0,1).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>{otherPartyProfile.name?.substring(0,1).toUpperCase() || '?'}</AvatarFallback>
                 </Avatar>
                )}
 
@@ -206,13 +230,13 @@ export default function ConversationThreadPage() {
                 </p>
               </div>
 
-              {msg.senderId === user?.id && user.profileImageUrl && (
+              {msg.senderId === user?.id && user?.profileImageUrl && (
                  <Avatar className="h-8 w-8 self-start">
                   <AvatarImage src={user.profileImageUrl} alt={user.name || "My Avatar"} data-ai-hint="person avatar"/>
                   <AvatarFallback>{(user.name || "Me").substring(0,1).toUpperCase()}</AvatarFallback>
                 </Avatar>
               )}
-               {msg.senderId === user?.id && !user.profileImageUrl && (
+               {msg.senderId === user?.id && !user?.profileImageUrl && user && (
                  <Avatar className="h-8 w-8 self-start">
                    <AvatarFallback>{(user.name || "Me").substring(0,1).toUpperCase()}</AvatarFallback>
                 </Avatar>
