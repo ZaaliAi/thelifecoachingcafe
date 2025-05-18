@@ -18,15 +18,14 @@ import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type Sugges
 import type { FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
-import NextImage from 'next/image'; // Renamed to avoid conflict
+import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { getUserProfile, setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
-// Image upload service is no longer directly used here for file upload
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.').optional(),
+  email: z.string().email('Invalid email address.').optional(), // Display only
   bio: z.string().min(50, 'Bio must be at least 50 characters to trigger AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
@@ -78,12 +77,13 @@ export default function CoachProfilePage() {
   });
 
   const bioValue = watch('bio');
-  const profileImageUrlValue = watch('profileImageUrl'); // For preview
+  const profileImageUrlValue = watch('profileImageUrl');
 
   useEffect(() => {
     if (authLoading || !user) return;
 
     const fetchCoachData = async () => {
+      setIsSubmitting(true);
       const coachData = await getUserProfile(user.id);
       if (coachData && coachData.role === 'coach') {
         setCurrentCoach(coachData);
@@ -105,8 +105,18 @@ export default function CoachProfilePage() {
         setAvailableSpecialties(Array.from(allSpecs));
       } else if(coachData && coachData.role !== 'coach'){
         toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
-        // router.push('/dashboard/user');
+        // router.push('/dashboard/user'); // Consider redirecting if not a coach
+      } else if (!coachData && user.role === 'coach') {
+        // User is authenticated as a coach, but no Firestore profile exists yet.
+        // This might happen if the initial profile creation in auth.tsx failed or was interrupted.
+        // Pre-fill with whatever we have from auth.
+        console.warn(`[CoachProfilePage] No existing Firestore profile for coach ${user.id}. Pre-filling from auth context.`);
+        reset({
+          name: user.name || '',
+          email: user.email || '',
+        });
       }
+      setIsSubmitting(false);
     };
     fetchCoachData();
   }, [reset, user, authLoading, toast]);
@@ -142,7 +152,7 @@ export default function CoachProfilePage() {
   }, [bioValue, fetchSuggestions]);
 
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
-    if (!user || !currentCoach) {
+    if (!user || !currentCoach) { // currentCoach check ensures we are updating an existing profile
         toast({ title: "Error", description: "User not authenticated or coach data missing.", variant: "destructive" });
         return;
     }
@@ -151,7 +161,7 @@ export default function CoachProfilePage() {
     const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
     const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
 
-    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier'>> = { 
+    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier' | 'status'>> = { 
         name: data.name,
         bio: data.bio,
         specialties: data.selectedSpecialties,
@@ -162,7 +172,7 @@ export default function CoachProfilePage() {
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        updatedAt: new Date(),
+        // updatedAt is handled by setUserProfile
     };
 
     try {
@@ -207,8 +217,8 @@ export default function CoachProfilePage() {
     }
   };
 
-  if (authLoading || (!user && !currentCoach)) {
-    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading profile...</div>;
+  if (authLoading || (!user && !currentCoach)) { // Show loader if auth is loading or if no user and no currentCoach (initial state)
+    return <div className="flex justify-center items-center h-full min-h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading profile...</div>;
   }
 
   const isPremium = currentCoach?.subscriptionTier === 'premium';
@@ -249,6 +259,7 @@ export default function CoachProfilePage() {
                     <Input id="profileImageUrl" type="url" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''}/>
                 </div>
                 {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                <p className="text-xs text-muted-foreground">Don’t have an image URL? Send us your photo via email and we’ll handle the upload.</p>
                 {profileImageUrlValue && z.string().url().safeParse(profileImageUrlValue).success && (
                   <div className="mt-2 relative w-32 h-32">
                     <NextImage src={profileImageUrlValue} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
