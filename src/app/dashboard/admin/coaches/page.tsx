@@ -7,51 +7,56 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown } from "lucide-react";
+import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown, ShieldQuestion, Hourglass } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Coach } from '@/types';
+import type { Coach, CoachStatus, FirestoreUserProfile } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { getAllCoaches, updateCoachSubscriptionTier, setUserProfile } from '@/lib/firestore'; // Assuming setUserProfile can update status
+import { getAllCoaches, updateCoachSubscriptionTier, updateCoachStatus } from '@/lib/firestore'; 
 
-type CoachApplication = Coach & { status?: 'pending' | 'approved' | 'rejected' }; // Make status optional
+// Explicitly type the coach objects used in this component's state
+type AdminCoachView = Coach & { status: CoachStatus };
+
 
 export default function AdminManageCoachesPage() {
-  const [coachApplications, setCoachApplications] = useState<CoachApplication[]>([]);
+  const [coachesList, setCoachesList] = useState<AdminCoachView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const fetchCoaches = async () => {
+    setIsLoading(true);
+    try {
+      // getAllCoaches might need to be adjusted if it now only fetches 'approved' coaches
+      // For admin, we need all coaches regardless of status.
+      // Let's assume for now getAllCoaches can fetch all, or we'd need a new admin-specific fetcher.
+      // For now, let's assume it returns all coaches for admin context or we filter client-side for demo
+      const allCoachesFromDb = await getAllCoaches({ includeAllStatuses: true } as any); // Temporary any if getAllCoaches is strict
+      
+      const applications: AdminCoachView[] = allCoachesFromDb.map(coach => ({
+        ...coach,
+        status: coach.status || 'pending_approval', // Ensure status is always present
+      }));
+      setCoachesList(applications);
+    } catch (error) {
+      console.error("Failed to fetch coaches for admin:", error);
+      toast({ title: "Error", description: "Could not fetch coach data.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    const fetchCoaches = async () => {
-      setIsLoading(true);
-      try {
-        const coaches = await getAllCoaches(); 
-        // Simulate application status if not present in Firestore model
-        const applications: CoachApplication[] = coaches.map((coach, index) => ({
-          ...coach,
-          status: coach.status || (index % 3 === 0 ? 'pending' : (index % 3 === 1 ? 'approved' : 'rejected')), // Fallback status logic
-        }));
-        setCoachApplications(applications);
-      } catch (error) {
-        console.error("Failed to fetch coaches:", error);
-        toast({ title: "Error", description: "Could not fetch coach data.", variant: "destructive" });
-      }
-      setIsLoading(false);
-    };
     fetchCoaches();
   }, [toast]);
 
-  const handleApproval = async (coachId: string, newStatus: 'approved' | 'rejected') => {
+  const handleStatusChange = async (coachId: string, newStatus: CoachStatus) => {
     try {
-      // In Firestore, 'status' might be part of the user profile or a separate collection.
-      // Assuming it's part of the user profile for now.
-      await setUserProfile(coachId, { status: newStatus as any }); // You might need to adjust FirestoreUserProfile type
-      setCoachApplications(prev => 
+      await updateCoachStatus(coachId, newStatus);
+      setCoachesList(prev => 
         prev.map(app => app.id === coachId ? { ...app, status: newStatus } : app)
       );
       toast({
-        title: `Coach Application ${newStatus}`,
-        description: `Coach application for ${coachApplications.find(c=>c.id===coachId)?.name} has been ${newStatus}.`,
+        title: `Coach Status Updated`,
+        description: `Coach ${coachesList.find(c=>c.id===coachId)?.name}'s status set to ${newStatus.replace('_', ' ')}.`,
       });
     } catch (error) {
       console.error("Failed to update coach status:", error);
@@ -62,12 +67,12 @@ export default function AdminManageCoachesPage() {
   const handleSubscriptionTierChange = async (coachId: string, newTier: 'free' | 'premium') => {
     try {
       await updateCoachSubscriptionTier(coachId, newTier);
-      setCoachApplications(prev =>
+      setCoachesList(prev =>
         prev.map(app => app.id === coachId ? { ...app, subscriptionTier: newTier } : app)
       );
       toast({
         title: "Subscription Tier Updated",
-        description: `Coach ${coachApplications.find(c => c.id === coachId)?.name}'s subscription tier set to ${newTier}.`,
+        description: `Coach ${coachesList.find(c => c.id === coachId)?.name}'s subscription tier set to ${newTier}.`,
       });
     } catch (error) {
       console.error("Failed to update subscription tier:", error);
@@ -79,13 +84,31 @@ export default function AdminManageCoachesPage() {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading coach applications...</div>;
   }
 
+  const getStatusBadgeVariant = (status: CoachStatus) => {
+    switch (status) {
+      case 'approved': return 'default'; // Greenish or primary
+      case 'pending_approval': return 'secondary'; // Yellowish/Orange
+      case 'rejected': return 'destructive'; // Red
+      default: return 'outline';
+    }
+  };
+
+   const getStatusIcon = (status: CoachStatus) => {
+    switch (status) {
+      case 'approved': return <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />;
+      case 'pending_approval': return <Hourglass className="mr-1 h-4 w-4 text-yellow-500" />;
+      case 'rejected': return <XCircle className="mr-1 h-4 w-4 text-red-500" />;
+      default: return <ShieldQuestion className="mr-1 h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-2xl flex items-center">
           <Users className="mr-3 h-7 w-7 text-primary" /> Manage Coach Registrations & Subscriptions
         </CardTitle>
-        <CardDescription>Review applications, and manage coach subscription tiers.</CardDescription>
+        <CardDescription>Review applications, approve coaches, and manage subscription tiers.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
@@ -94,14 +117,13 @@ export default function AdminManageCoachesPage() {
               <TableHead>Avatar</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Specialties</TableHead>
               <TableHead>App Status</TableHead>
               <TableHead>Subscription</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {coachApplications.map((coach) => (
+            {coachesList.map((coach) => (
               <TableRow key={coach.id}>
                 <TableCell>
                   {coach.profileImageUrl && (
@@ -112,12 +134,27 @@ export default function AdminManageCoachesPage() {
                   )}
                 </TableCell>
                 <TableCell className="font-medium">{coach.name}</TableCell>
-                <TableCell>{coach.email || `${coach.name.toLowerCase().replace(' ', '.')}@example.com`}</TableCell>
-                <TableCell>{coach.specialties.slice(0, 1).join(', ')}{coach.specialties.length > 1 ? '...' : ''}</TableCell>
+                <TableCell>{coach.email || 'N/A'}</TableCell>
                 <TableCell>
-                  <Badge variant={coach.status === 'approved' ? 'default' : coach.status === 'pending' ? 'secondary' : 'destructive'}>
-                    {coach.status ? (coach.status.charAt(0).toUpperCase() + coach.status.slice(1)) : 'N/A'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                     <Badge variant={getStatusBadgeVariant(coach.status)} className="capitalize flex items-center">
+                        {getStatusIcon(coach.status)}
+                        {coach.status.replace('_', ' ')}
+                    </Badge>
+                    <Select
+                        value={coach.status}
+                        onValueChange={(value: CoachStatus) => handleStatusChange(coach.id, value)}
+                    >
+                        <SelectTrigger className="h-8 w-[150px] text-xs">
+                            <SelectValue placeholder="Change Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                            <SelectItem value="approved">Approved</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                        </SelectContent>
+                    </Select>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -140,26 +177,6 @@ export default function AdminManageCoachesPage() {
                   </div>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                  {coach.status === 'pending' && (
-                    <>
-                      <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-100" onClick={() => handleApproval(coach.id, 'approved')}>
-                        <CheckCircle2 className="mr-1 h-4 w-4" /> Approve
-                      </Button>
-                      <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleApproval(coach.id, 'rejected')}>
-                        <XCircle className="mr-1 h-4 w-4" /> Reject
-                      </Button>
-                    </>
-                  )}
-                   {coach.status === 'approved' && (
-                     <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleApproval(coach.id, 'rejected')}>
-                        <XCircle className="mr-1 h-4 w-4" /> Revoke App.
-                      </Button>
-                   )}
-                   {coach.status === 'rejected' && (
-                     <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-100" onClick={() => handleApproval(coach.id, 'approved')}>
-                        <CheckCircle2 className="mr-1 h-4 w-4" /> Re-approve App.
-                      </Button>
-                   )}
                   <Button variant="outline" size="sm" asChild>
                     <Link href={`/coach/${coach.id}`} target="_blank" rel="noopener noreferrer">
                       <Eye className="mr-1 h-4 w-4" /> View Profile
@@ -170,7 +187,7 @@ export default function AdminManageCoachesPage() {
             ))}
           </TableBody>
         </Table>
-        {coachApplications.length === 0 && <p className="text-center text-muted-foreground py-8">No coach applications found.</p>}
+        {coachesList.length === 0 && <p className="text-center text-muted-foreground py-8">No coach applications found.</p>}
       </CardContent>
     </Card>
   );
