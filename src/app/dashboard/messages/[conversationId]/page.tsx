@@ -2,14 +2,15 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, MessageCircle, Send, UserCircleIcon, Loader2 } from "lucide-react"; // Added Loader2
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; 
+import { ArrowLeft, MessageCircle, Send, UserCircleIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { getMessagesForUser, sendMessage as sendFirestoreMessage, getUserProfile, getCoachById } from "@/lib/firestore";
-import type { Message as MessageType, FirestoreUserProfile, Coach } from "@/types"; // Added FirestoreUserProfile and Coach
+// Removed markMessagesAsRead from here as it's called within getMessagesForUser
+import { getMessagesForUser, sendMessage as sendFirestoreMessage, getUserProfile, getCoachById } from "@/lib/firestore"; 
+import type { Message as MessageType, FirestoreUserProfile, Coach } from "@/types";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
@@ -22,7 +23,7 @@ export default function ConversationThreadPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
-  const conversationId = params.conversationId as string; // This is the otherPartyId
+  const conversationId = params.conversationId as string; 
   
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [newMessageContent, setNewMessageContent] = useState("");
@@ -41,7 +42,7 @@ export default function ConversationThreadPage() {
   const fetchConversationDetails = useCallback(async () => {
     if (!user || !user.id || !conversationId) {
         setIsLoading(false);
-        if (!authLoading && !user) { // only show error if auth has completed and no user
+        if (!authLoading && !user) {
              toast({ title: "Error", description: "User not authenticated. Cannot load conversation.", variant: "destructive" });
         }
         return;
@@ -49,32 +50,28 @@ export default function ConversationThreadPage() {
     console.log(`[ConversationThreadPage] Fetching details for user: ${user.id}, other party: ${conversationId}`);
     setIsLoading(true);
     try {
-      // Fetch other party's details
-      // Try fetching as a regular user first
-      let otherPartyProfile: (FirestoreUserProfile & { id: string }) | null = await getUserProfile(conversationId);
+      let otherPartyProfile: (FirestoreUserProfile & { id: string }) | Coach | null = null;
+      if (user.role === 'coach') { 
+        otherPartyProfile = await getUserProfile(conversationId);
+      } else { 
+        otherPartyProfile = await getCoachById(conversationId);
+      }
       
       if (otherPartyProfile) {
-        console.log(`[ConversationThreadPage] Found other party as user: ${otherPartyProfile.name}`);
-        setOtherParty({ name: otherPartyProfile.name || "Unknown User", avatar: otherPartyProfile.profileImageUrl, dataAiHint: otherPartyProfile.dataAiHint });
+        console.log(`[ConversationThreadPage] Found other party: ${otherPartyProfile.name}`);
+        setOtherParty({ name: otherPartyProfile.name || "Unknown Contact", avatar: otherPartyProfile.profileImageUrl, dataAiHint: otherPartyProfile.dataAiHint });
       } else {
-        // If not found as a regular user, try fetching as a coach
-        const coachProfile: Coach | null = await getCoachById(conversationId);
-        if (coachProfile) {
-          console.log(`[ConversationThreadPage] Found other party as coach: ${coachProfile.name}`);
-          setOtherParty({ name: coachProfile.name || "Unknown Coach", avatar: coachProfile.profileImageUrl, dataAiHint: coachProfile.dataAiHint });
-        } else {
-          console.warn(`[ConversationThreadPage] Could not find profile for other party ID: ${conversationId}`);
-          toast({ title: "Error", description: "Could not load contact details for this conversation.", variant: "destructive" });
-          setOtherParty({ name: "Unknown Contact" });
-        }
+        console.warn(`[ConversationThreadPage] Could not find profile for other party ID: ${conversationId}`);
+        toast({ title: "Error", description: "Could not load contact details for this conversation.", variant: "destructive" });
+        setOtherParty({ name: "Unknown Contact" });
       }
 
-      // Fetch messages
-      const allUserMessages = await getMessagesForUser(user.id);
-      console.log(`[ConversationThreadPage] Fetched ${allUserMessages.length} total messages for user ${user.id}`);
+      // getMessagesForUser now internally handles marking messages as read
+      const allUserMessages = await getMessagesForUser(user.id, conversationId); 
+      console.log(`[ConversationThreadPage] Fetched ${allUserMessages.length} total messages for user ${user.id} with specific otherPartyId ${conversationId}`);
       
       const threadMessages = allUserMessages.filter(
-        (msg) => msg.otherPartyId === conversationId // Filter by otherPartyId already set by getMessagesForUser
+        (msg) => msg.otherPartyId === conversationId // This filter might be redundant if getMessagesForUser already does it
       ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       
       console.log(`[ConversationThreadPage] Filtered to ${threadMessages.length} messages for conversation with ${conversationId}`);
@@ -86,17 +83,18 @@ export default function ConversationThreadPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, conversationId, toast, authLoading]); // Added authLoading as a dependency
+  }, [user, conversationId, toast, authLoading]); // Added toast to dependencies
 
   useEffect(() => {
     if (!authLoading && user && user.id) {
       fetchConversationDetails();
     } else if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please log in to view messages.", variant: "destructive" });
-      const loginPath = router.pathname?.includes('/dashboard/coach') ? '/login?role=coach' : '/login';
-      router.push(loginPath);
+      // Determine redirect based on typical user paths if needed, or a generic login
+      // const loginPath = router.pathname?.includes('/dashboard/coach') ? '/login?role=coach' : '/login';
+      router.push(`/login?redirect=/dashboard/messages/${conversationId}`);
     }
-  }, [user, authLoading, fetchConversationDetails, router]); // Removed toast and conversationId from here as fetchConversationDetails handles them
+  }, [user, authLoading, fetchConversationDetails, router, toast, conversationId]); 
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,11 +108,11 @@ export default function ConversationThreadPage() {
         senderId: user.id,
         senderName: user.name || user.email?.split('@')[0] || "Me",
         recipientId: conversationId,
-        recipientName: otherParty.name, // Use the fetched other party name
+        recipientName: otherParty.name, // Use fetched other party name
         content: newMessageContent,
       });
       setNewMessageContent("");
-      fetchConversationDetails(); // Refresh messages immediately
+      fetchConversationDetails(); // Re-fetch messages to show the new one and mark as read
     } catch (error) {
       console.error("[ConversationThreadPage] Error sending message:", error);
       toast({ title: "Send Error", description: "Could not send message. Please try again.", variant: "destructive" });
@@ -130,7 +128,7 @@ export default function ConversationThreadPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] max-w-3xl mx-auto"> {/* Adjust height as needed */}
+    <div className="flex flex-col h-[calc(100vh-10rem)] max-w-3xl mx-auto">
       <Card className="flex flex-col flex-grow overflow-hidden shadow-lg">
         <CardHeader className="border-b p-4 sticky top-0 bg-card z-10">
           <div className="flex items-center justify-between">
@@ -150,7 +148,8 @@ export default function ConversationThreadPage() {
               )}
               <CardTitle className="text-lg truncate">{otherParty.name}</CardTitle>
             </div>
-            <div className="w-8"> {/* Spacer for balance if needed */}</div>
+            <div className="w-8"> 
+            </div>
           </div>
         </CardHeader>
         
@@ -176,7 +175,7 @@ export default function ConversationThreadPage() {
               >
                 <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                 <p className={`text-xs mt-1 ${msg.senderId === user?.id ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left"}`}>
-                  {format(new Date(msg.timestamp), "p")}
+                  {format(new Date(msg.timestamp), "p")} {!msg.read && msg.recipientId === user?.id && <span className="text-xs text-green-400 ml-1">(Delivered)</span>}
                 </p>
               </div>
             </div>
