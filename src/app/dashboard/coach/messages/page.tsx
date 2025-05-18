@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Loader2, AlertCircle, Info } from "lucide-react";
+import { MessageSquare, Loader2, AlertCircle, Info, RefreshCw } from "lucide-react";
 import type { Message as MessageType } from "@/types";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth";
-import { useEffect, useState } from "react";
-import { getMessagesForUser, getUserProfile } from "@/lib/firestore";
+import { useEffect, useState, useCallback } from "react";
+import { getMessagesForUser, getUserProfile, getCoachById } from "@/lib/firestore";
+import Link from "next/link";
 
 export default function CoachMessagesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,52 +18,72 @@ export default function CoachMessagesPage() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchMessages = useCallback(async () => {
     if (user && user.id && user.role === 'coach') {
       setIsLoadingMessages(true);
       setError(null);
-      getMessagesForUser(user.id)
-        .then(async (fetchedMessages) => {
-          // Group messages by other party and get the latest message for each conversation
-          const convosMap = new Map<string, MessageType>();
-          for (const msg of fetchedMessages) {
-            const otherPartyId = msg.senderId === user.id ? msg.recipientId : msg.senderId;
-            if (!convosMap.has(otherPartyId) || new Date(msg.timestamp) > new Date(convosMap.get(otherPartyId)!.timestamp)) {
-              // Attempt to fetch the other party's profile image if not already on the message
-              let otherPartyAvatar = null;
-              const userProfile = await getUserProfile(otherPartyId); // Assuming clients are 'user' role
-              if (userProfile && userProfile.profileImageUrl) {
-                otherPartyAvatar = userProfile.profileImageUrl;
-              }
+      console.log(`[CoachMessagesPage] Attempting to fetch messages for coach UID: ${user.id}`);
+      try {
+        const fetchedMessages = await getMessagesForUser(user.id);
+        console.log(`[CoachMessagesPage] Fetched ${fetchedMessages.length} raw messages for coach ${user.id}`);
+        
+        const convosMap = new Map<string, MessageType>();
+        for (const msg of fetchedMessages) {
+          const otherPartyId = msg.senderId === user.id ? msg.recipientId : msg.senderId;
+          let otherPartyName = msg.senderId === user.id ? msg.recipientName : msg.senderName;
+          let otherPartyAvatar = null; // Keep track of fetched avatar
 
-              convosMap.set(otherPartyId, {
-                ...msg,
-                otherPartyName: msg.senderId === user.id ? msg.recipientName : msg.senderName,
-                otherPartyAvatar: otherPartyAvatar || undefined,
-                dataAiHint: "person avatar"
-              });
+          // Prioritize fetching other party's display name and avatar if not already on message
+          if (!otherPartyName || !msg.otherPartyAvatar) {
+            const userProfile = await getUserProfile(otherPartyId); // Assuming clients are 'user' role primarily
+            if (userProfile) {
+              otherPartyName = userProfile.name || otherPartyName || 'Unknown User';
+              otherPartyAvatar = userProfile.profileImageUrl || msg.otherPartyAvatar || undefined;
+            } else {
+              // Fallback if getUserProfile returns null (e.g. no profile or other role)
+              otherPartyName = otherPartyName || 'Unknown User';
+              otherPartyAvatar = msg.otherPartyAvatar || undefined;
             }
+          } else {
+            otherPartyAvatar = msg.otherPartyAvatar || undefined;
           }
-          setConversations(Array.from(convosMap.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-        })
-        .catch(err => {
-          console.error("Error fetching coach messages:", err);
-          setError("Failed to load messages.");
-        })
-        .finally(() => {
-          setIsLoadingMessages(false);
-        });
+
+
+          if (!convosMap.has(otherPartyId) || new Date(msg.timestamp) > new Date(convosMap.get(otherPartyId)!.timestamp)) {
+            convosMap.set(otherPartyId, {
+              ...msg,
+              otherPartyName: otherPartyName,
+              otherPartyAvatar: otherPartyAvatar,
+              dataAiHint: "person avatar"
+            });
+          }
+        }
+        const sortedConversations = Array.from(convosMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setConversations(sortedConversations);
+        console.log(`[CoachMessagesPage] Processed into ${sortedConversations.length} conversations for coach ${user.id}`);
+
+      } catch (err: any) {
+        console.error("[CoachMessagesPage] Error fetching coach messages:", err.code, err.message, err);
+        setError(`Failed to load messages. ${err.message || 'Please try again.'}`);
+      } finally {
+        setIsLoadingMessages(false);
+      }
     } else if (!authLoading && (!user || user.role !== 'coach')) {
       setIsLoadingMessages(false);
       setError("Please log in as a coach to view your messages.");
+      console.warn("[CoachMessagesPage] User not authenticated or not a coach.");
     }
   }, [user, authLoading]);
 
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
   if (authLoading || isLoadingMessages) {
     return (
-      <div className="flex justify-center items-center h-full min-h-[300px]">
+      <div className="flex flex-col justify-center items-center h-full min-h-[300px] space-y-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading messages...</span>
+        <span>Loading messages...</span>
       </div>
     );
   }
@@ -87,37 +108,43 @@ export default function CoachMessagesPage() {
             <CardTitle className="text-destructive">Error Loading Messages</CardTitle>
             <CardDescription className="text-destructive/80">{error}</CardDescription>
           </CardHeader>
+          <CardContent>
+            <Button onClick={fetchMessages} variant="outline">
+                <RefreshCw className="mr-2 h-4 w-4"/> Try Again
+            </Button>
+          </CardContent>
         </Card>
       )}
 
       {!error && conversations.length > 0 ? (
         <div className="space-y-4">
           {conversations.map((message) => (
-            // Each card could eventually link to a full conversation view: /dashboard/coach/messages/[conversationId]
-            <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== user?.id ? 'border-primary border-2' : ''}`}>
+            <Card 
+                key={message.id} 
+                className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== user?.id ? 'border-primary ring-2 ring-primary' : 'border-border'}`}
+            >
               <CardContent className="p-4 flex items-start space-x-4">
-                 {message.otherPartyAvatar && (
+                 {(message.otherPartyAvatar) ? (
                   <Avatar className="h-10 w-10 border">
                     <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName || 'User'} data-ai-hint={message.dataAiHint as string || 'person avatar'} />
                     <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
                   </Avatar>
-                )}
-                {!message.otherPartyAvatar && (
-                     <Avatar className="h-10 w-10 border">
-                        <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+                ) : (
+                     <Avatar className="h-10 w-10 border bg-muted">
+                        <AvatarFallback className="text-muted-foreground">{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
                 )}
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold">{message.otherPartyName || (message.senderId === user?.id ? "To Client" : "From Client")}</h3>
-                    <span className="text-xs text-muted-foreground">{format(new Date(message.timestamp), 'PPpp')}</span>
+                    <span className="text-xs text-muted-foreground">{format(new Date(message.timestamp), 'PP p')}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1 truncate">
-                     {message.senderId === user?.id ? <span className="font-medium">You: </span> : ''}{message.content}
+                     {message.senderId === user?.id ? <span className="font-medium text-foreground/80">You: </span> : ''}{message.content}
                   </p>
                 </div>
                 <div className="flex flex-col items-end space-y-1">
-                    {!message.read && message.senderId !== user?.id && <Badge variant="default" className="bg-primary text-primary-foreground">New</Badge>}
+                    {!message.read && message.senderId !== user?.id && <Badge className="bg-primary text-primary-foreground hover:bg-primary/90">New</Badge>}
                     <Button variant="outline" size="sm" disabled>View Thread</Button>
                 </div>
               </CardContent>
@@ -132,9 +159,16 @@ export default function CoachMessagesPage() {
                     <CardTitle>No Messages Yet</CardTitle>
                     <CardDescription>Your client messages will appear here once you start receiving inquiries.</CardDescription>
                 </CardHeader>
+                 <CardContent>
+                    <Button onClick={fetchMessages} variant="outline">
+                        <RefreshCw className="mr-2 h-4 w-4"/> Check for Messages
+                    </Button>
+                </CardContent>
             </Card>
          )
       )}
     </div>
   );
 }
+
+    
