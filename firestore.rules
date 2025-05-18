@@ -1,0 +1,154 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+  // --- Helper Functions ---
+  function isAuthenticated() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return isAuthenticated() && request.auth.uid == userId;
+  }
+
+  function userDocExists(userId) {
+    return exists(/databases/$(database)/documents/users/$(userId));
+  }
+
+  function getUserRole(userId) {
+    if (!userDocExists(userId)) { return null; }
+    let userDocData = get(/databases/$(database)/documents/users/$(userId)).data;
+    if (!('role' in userDocData)) { return null; }
+    return userDocData.role;
+  }
+
+  function isAdmin() {
+    return isAuthenticated() && getUserRole(request.auth.uid) == 'admin';
+  }
+
+  function isCoach() {
+    return isAuthenticated() && getUserRole(request.auth.uid) == 'coach';
+  }
+
+  // --- /users/{userId} ---
+  match /users/{userId} {
+    // READ:
+    allow read: if (resource.data.role == 'coach') || isOwner(userId) || isAdmin();
+
+    // CREATE:
+    allow create: if isAuthenticated() &&
+                    request.auth.uid == userId &&
+                    request.resource.data.name is string &&
+                    request.resource.data.name.size() > 0 &&
+                    request.resource.data.email == request.auth.token.email &&
+                    request.resource.data.role in ['user', 'coach', 'admin'] &&
+                    request.resource.data.createdAt == request.time &&
+                    request.resource.data.updatedAt == request.time &&
+                    (request.resource.data.profileImageUrl == null || request.resource.data.profileImageUrl is string) &&
+                    (
+                      (request.resource.data.role == 'coach' && request.resource.data.subscriptionTier == 'free') ||
+                      (request.resource.data.role in ['user', 'admin'] && !('subscriptionTier' in request.resource.data))
+                    ) &&
+                    (
+                      (request.resource.data.role == 'coach' &&
+                        request.resource.data.keys().hasOnly(['name', 'email', 'role', 'createdAt', 'updatedAt', 'profileImageUrl', 'subscriptionTier'])
+                      ) ||
+                      (request.resource.data.role in ['user', 'admin'] &&
+                        request.resource.data.keys().hasOnly(['name', 'email', 'role', 'createdAt', 'updatedAt', 'profileImageUrl'])
+                      )
+                    );
+
+    // UPDATE (EXTREMELY SIMPLIFIED FOR DEBUGGING OWNER PATH)
+    allow update: if (
+                      isOwner(userId) &&
+                      request.resource.data.updatedAt == request.time // Only check this and ownership for now
+                    ) ||
+                    ( // Admin update path remains the same
+                      isAdmin() &&
+                      request.resource.data.updatedAt == request.time
+                    );
+
+    // DELETE:
+    allow delete: if isAdmin();
+  }
+
+  // --- /blogs/{blogId} ---
+  match /blogs/{blogId} {
+    // READ:
+    allow read: if resource.data.status == 'published' ||
+                   (isAuthenticated() && request.auth.uid == resource.data.authorId) ||
+                   isAdmin();
+
+    // CREATE:
+    allow create: if isCoach() &&
+                    request.resource.data.authorId == request.auth.uid &&
+                    request.resource.data.title is string &&
+                    request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200 &&
+                    request.resource.data.content is string &&
+                    request.resource.data.content.size() > 0 &&
+                    request.resource.data.slug is string && request.resource.data.slug.size() > 0 &&
+                    request.resource.data.authorName is string && request.resource.data.authorName.size() > 0 &&
+                    request.resource.data.status in ['draft', 'pending_approval'] &&
+                    request.resource.data.createdAt == request.time &&
+                    request.resource.data.updatedAt == request.time &&
+                    (!('featuredImageUrl' in request.resource.data) || request.resource.data.featuredImageUrl is string) &&
+                    (!('excerpt' in request.resource.data) || request.resource.data.excerpt is string) &&
+                    (!('tags' in request.resource.data) || request.resource.data.tags is list);
+
+    // UPDATE:
+    allow update: if (
+                      (isOwner(resource.data.authorId) &&
+                        request.resource.data.authorId == resource.data.authorId &&
+                        request.resource.data.createdAt == resource.data.createdAt &&
+                        request.resource.data.slug == resource.data.slug &&
+                        request.resource.data.updatedAt == request.time &&
+                        (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() < 200)) &&
+                        (!('content' in request.resource.data) || (request.resource.data.content is string && request.resource.data.content.size() > 0)) &&
+                        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'pending_approval', resource.data.status] ) &&
+                        (!('featuredImageUrl' in request.resource.data) || request.resource.data.featuredImageUrl is string) &&
+                        (!('excerpt' in request.resource.data) || request.resource.data.excerpt is string) &&
+                        (!('tags' in request.resource.data) || request.resource.data.tags is list)
+                      ) ||
+                      (isAdmin() &&
+                        request.resource.data.authorId == resource.data.authorId &&
+                        request.resource.data.createdAt == resource.data.createdAt &&
+                        request.resource.data.slug == resource.data.slug &&
+                        request.resource.data.updatedAt == request.time &&
+                        (!('status' in request.resource.data) || request.resource.data.status in ['draft', 'pending_approval', 'published', 'rejected']) &&
+                        (!('title' in request.resource.data) || (request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() < 200)) &&
+                        (!('content' in request.resource.data) || (request.resource.data.content is string && request.resource.data.content.size() > 0)) &&
+                        (!('featuredImageUrl' in request.resource.data) || request.resource.data.featuredImageUrl is string) &&
+                        (!('excerpt' in request.resource.data) || request.resource.data.excerpt is string) &&
+                        (!('tags' in request.resource.data) || request.resource.data.tags is list)
+                      )
+                    );
+
+    // DELETE:
+    allow delete: if isOwner(resource.data.authorId) || isAdmin();
+  }
+
+  // --- /messages/{messageId} ---
+  match /messages/{messageId} {
+    allow create: if isAuthenticated() &&
+      request.resource.data.senderId == request.auth.uid &&
+      request.resource.data.recipientId is string &&
+      request.resource.data.content is string && // Changed from 'message'
+      request.resource.data.createdAt == request.time &&
+      request.resource.data.senderName is string &&
+      request.resource.data.recipientName is string &&
+      request.resource.data.keys().hasOnly(['senderId', 'recipientId', 'content', 'createdAt', 'senderName', 'recipientName', 'read']);
+
+    allow read, update, delete: if isAuthenticated() &&
+      (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId);
+  }
+
+  // --- Default Deny All ---
+  match /{document=**} {
+    allow read, write: if false;
+  }
+ }
+}
+
+    
