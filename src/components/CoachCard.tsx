@@ -52,9 +52,9 @@ export function CoachCard({ coach }: CoachCardProps) {
               {coach.location}
             </p>
           )}
-          {coach.dataSource && (
+          {/* Removed dataSource badge: coach.dataSource && (
             <Badge variant="outline" className="text-xs mt-1">Source: {coach.dataSource}</Badge>
-          )}
+          ) */}
         </div>
       </CardHeader>
       <CardContent className="p-6 pt-0 flex-grow">
