@@ -35,6 +35,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!authLoading && user) {
       // User is logged in, redirect to their dashboard
+      console.log(`[LoginPage] User already logged in as ${user.role}, redirecting to /dashboard/${user.role}`);
       router.push(`/dashboard/${user.role}`);
     }
   }, [user, authLoading, router]);
@@ -43,15 +44,19 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
-      // Successful login, onAuthStateChanged in AuthProvider will set user.
-      // The useEffect above will handle redirection once user context is updated.
+      // Successful login is handled by onAuthStateChanged in AuthProvider,
+      // which then updates the user context. The useEffect above will redirect.
+      // No immediate redirect here to allow AuthContext to update first.
+      // If we reach here, it means login in auth.tsx didn't throw an error immediately,
+      // but actual user state update and redirection rely on onAuthStateChanged.
+      // A small delay or loading state might be good here before redirection.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Login failed. Please check your credentials.";
-      if ((error as FirebaseError).code === 'auth/user-not-found' || (error as FirebaseError).code === 'auth/wrong-password' || (error as FirebaseError).code === 'auth/invalid-credential') {
-        errorMessage = "Invalid email or password.";
-      } else if ((error as FirebaseError).code) {
-        errorMessage = `Login error: ${(error as FirebaseError).message}`;
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = "Invalid email or password. Please try again.";
+      } else if (error.code) {
+        errorMessage = `Login error: ${error.message}`;
       }
       toast({
         title: "Login Failed",
@@ -59,17 +64,29 @@ export default function LoginPage() {
         variant: "destructive",
       });
     }
-    // setIsLoading(false); // setLoading(false) is handled in AuthProvider or error block
+    // Do not set setIsLoading(false) here if login might still be in progress via onAuthStateChanged
+    // It's better to let the loading state persist until redirection or a definitive error.
   };
   
-  // Prevent rendering form if already logged in and redirecting
-  if (authLoading || (!authLoading && user)) {
+  // Prevent rendering form if already logged in and redirecting, or initial auth check is happening
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
+  // If user becomes available after loading, useEffect will redirect.
+  // This prevents flash of login form if user is already authenticated.
+  if (!authLoading && user) {
+     return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-2">Redirecting...</p>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex items-center justify-center py-12">
@@ -78,8 +95,7 @@ export default function LoginPage() {
           <LogIn className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Welcome Back!</CardTitle>
           <CardDescription>
-            Log in to access your The Life Coaching Cafe account. <br/>
-            (Admin: hello@thelifecoachingcafe.com / Lifecoach2025!)
+            Log in to access your The Life Coaching Cafe account.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,8 +112,8 @@ export default function LoginPage() {
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
             
-            <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isLoading || authLoading ? (
+            <Button type="submit" disabled={isLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Logging In...
