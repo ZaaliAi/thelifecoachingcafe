@@ -1,194 +1,175 @@
-
 "use client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Loader2, AlertCircle, Info, RefreshCw } from "lucide-react";
-import type { Message as MessageType, FirestoreUserProfile, Coach } from "@/types"; // Ensure Coach type is imported
-import { format } from "date-fns";
+
+import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from 'next/navigation'; // Corrected import for App Router
+import { getMessagesForUserOrCoach } from "@/lib/messageService";
+import type { Message } from "@/types";
 import { useAuth } from "@/lib/auth";
-import { useEffect, useState, useCallback } from "react";
-import { getMessagesForUser, getUserProfile, getCoachById } from "@/lib/firestore"; // getUserProfile for other party
-import { useRouter } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Assuming you have an Avatar component
+import { Button } from "@/components/ui/button";
+import { ChevronRight, MessageSquarePlus } from "lucide-react"; // Icons
+
+interface DisplayedConversation {
+  conversationId: string; 
+  otherPartyId: string;
+  otherPartyName: string;
+  otherPartyAvatar?: string | null; // Optional: if you can fetch this
+  lastMessageContent: string;
+  lastMessageTimestamp: string;
+  unreadCount: number;
+}
 
 export default function CoachMessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [conversations, setConversations] = useState<MessageType[]>([]);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [rawMessages, setRawMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const fetchMessages = useCallback(async () => {
-    if (authLoading) {
-      console.log("[CoachMessagesPage] Auth is still loading, waiting to fetch messages.");
-      return;
-    }
-    if (!user || !user.id || user.role !== 'coach') {
-      setError("Please log in as a coach to view your messages.");
-      setIsLoadingMessages(false);
-      console.warn("[CoachMessagesPage] User not authenticated or not a coach. User:", JSON.stringify(user), "AuthLoading:", authLoading);
-      return;
-    }
-
-    setIsLoadingMessages(true);
-    setError(null);
-    console.log(`[CoachMessagesPage] Attempting to fetch messages for coach UID: ${user.id}. User object:`, JSON.stringify(user));
-    try {
-      const fetchedMessages = await getMessagesForUser(user.id);
-      console.log(`[CoachMessagesPage] Fetched ${fetchedMessages.length} raw messages for coach ${user.id}`);
-      
-      const convosMap = new Map<string, MessageType>();
-      const enrichedMessagesPromises = fetchedMessages.map(async (msg) => {
-        let enrichedMsg = { ...msg };
-        if (msg.otherPartyId && (!msg.otherPartyName || !msg.otherPartyAvatar)) {
-            // For coach, the other party is likely a 'user' (client)
-            const otherPartyProfile: FirestoreUserProfile | null = await getUserProfile(msg.otherPartyId);
-            if (otherPartyProfile) {
-              enrichedMsg.otherPartyName = otherPartyProfile.name || 'Client';
-              enrichedMsg.otherPartyAvatar = otherPartyProfile.profileImageUrl;
-              enrichedMsg.dataAiHint = otherPartyProfile.dataAiHint || "person avatar";
-            } else {
-              enrichedMsg.otherPartyName = enrichedMsg.otherPartyName || 'Unknown Client'; // Fallback if profile not found
-            }
+  useEffect(() => {
+    console.log("[CoachMessagesPage] Auth loading:", authLoading, "User object:", user);
+    if (!authLoading && user && user.id) {
+      const coachId = user.id;
+      console.log(`[CoachMessagesPage] Authenticated. Attempting to load messages for coach UID: ${coachId}`);
+      setErrorMessage(null);
+      const loadMessages = async () => {
+        setIsLoading(true);
+        try {
+          const data = await getMessagesForUserOrCoach(coachId);
+          console.log("[CoachMessagesPage] Successfully fetched data:", data);
+          if (Array.isArray(data)) {
+            setRawMessages(data);
+          } else {
+            console.error("[CoachMessagesPage] getMessagesForUserOrCoach did not return an array:", data);
+            setRawMessages([]);
+            setErrorMessage("Received unexpected data format.");
+          }
+        } catch (error: any) {
+          console.error("[CoachMessagesPage] CRITICAL: Failed to load messages for coach.", error);
+          setRawMessages([]);
+          setErrorMessage(`Error loading messages: ${error.message || 'Unknown error'}.`);
+        } finally {
+          setIsLoading(false);
         }
-        return enrichedMsg;
-      });
-
-      const resolvedEnrichedMessages = await Promise.all(enrichedMessagesPromises);
-
-      for (const enrichedMsg of resolvedEnrichedMessages) {
-        const otherPartyId = enrichedMsg.otherPartyId;
-        if (!otherPartyId) {
-            console.warn("[CoachMessagesPage] Message missing otherPartyId after enrichment:", enrichedMsg.id);
-            continue;
-        }
-        if (!convosMap.has(otherPartyId) || new Date(enrichedMsg.timestamp) > new Date(convosMap.get(otherPartyId)!.timestamp)) {
-          convosMap.set(otherPartyId, enrichedMsg);
-        }
-      }
-      
-      const sortedConversations = Array.from(convosMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setConversations(sortedConversations);
-      console.log(`[CoachMessagesPage] Processed into ${sortedConversations.length} conversations for coach ${user.id}`);
-
-    } catch (err: any) {
-      console.error("[CoachMessagesPage] Error in fetchMessages:", err.code, err.message, err);
-      setError(`Failed to load messages. ${err.message || 'Please try again.'}`);
-    } finally {
-      setIsLoadingMessages(false);
+      };
+      loadMessages();
+    } else if (!authLoading && !user) {
+      console.warn("[CoachMessagesPage] Not authenticated. Cannot load messages.");
+      setIsLoading(false);
+      setRawMessages([]);
+      setErrorMessage("Please log in to view your messages.");
     }
   }, [user, authLoading]);
 
-  useEffect(() => {
-    // This effect will run when authLoading changes or when user object changes.
-    if (!authLoading && user && user.id && user.role === 'coach') {
-      console.log(`[CoachMessagesPage] useEffect: User context available. Coach ID: ${user.id}. Triggering fetchMessages.`);
-      fetchMessages();
-    } else if (!authLoading && (!user || user.role !== 'coach')) {
-        console.warn("[CoachMessagesPage] useEffect: No coach in context or user is not a coach. User:", JSON.stringify(user));
-         setError("Please log in as a coach to view your messages.");
-         setIsLoadingMessages(false);
-    }
-  }, [user, authLoading, fetchMessages]);
+  const displayedConversations = useMemo(() => {
+    if (!user || !user.id || rawMessages.length === 0) return [];
 
-  if (authLoading || isLoadingMessages) {
-    return (
-      <div className="flex flex-col justify-center items-center h-full min-h-[300px] space-y-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span>Loading messages for {user?.name || 'coach'}...</span>
-      </div>
-    );
+    const conversationsMap = new Map<string, DisplayedConversation>();
+
+    // Sort messages by timestamp to correctly identify the last message
+    const sortedMessages = [...rawMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    sortedMessages.forEach(msg => {
+      const otherPartyId = msg.senderId === user.id ? msg.recipientId : msg.senderId;
+      const otherPartyName = msg.senderId === user.id 
+        ? (msg.recipientName || otherPartyId) 
+        : (msg.senderName || otherPartyId);
+      
+      // Construct a consistent conversation ID by sorting UIDs
+      const ids = [user.id, otherPartyId].sort();
+      const conversationId = ids.join('_');
+
+      let currentUnreadCount = 0;
+      if (msg.recipientId === user.id && !msg.read) {
+        currentUnreadCount = 1;
+      }
+
+      const existingConversation = conversationsMap.get(conversationId);
+      if (existingConversation) {
+        existingConversation.lastMessageContent = msg.content;
+        existingConversation.lastMessageTimestamp = msg.timestamp;
+        if (msg.recipientId === user.id && !msg.read) {
+          existingConversation.unreadCount += 1;
+        }
+      } else {
+        conversationsMap.set(conversationId, {
+          conversationId,
+          otherPartyId,
+          otherPartyName,
+          // TODO: Fetch otherPartyAvatar if available from user profiles
+          lastMessageContent: msg.content,
+          lastMessageTimestamp: msg.timestamp,
+          unreadCount: currentUnreadCount,
+        });
+      }
+    });
+    // Sort conversations by the timestamp of their last message (most recent first)
+    return Array.from(conversationsMap.values()).sort((a,b) => new Date(b.lastMessageTimestamp).getTime() - new Date(a.lastMessageTimestamp).getTime());
+  }, [rawMessages, user]);
+
+  if (authLoading || (isLoading && user)) {
+    return <div className="container mx-auto p-4 text-center"><p>Loading conversations...</p></div>;
+  }
+  if (errorMessage) {
+    return <div className="container mx-auto p-4 text-center text-red-600"><p>{errorMessage}</p></div>;
+  }
+  if (!user) {
+    return <div className="container mx-auto p-4 text-center"><p>Please log in.</p></div>;
   }
 
   return (
-    <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-3xl flex items-center">
-            <MessageSquare className="mr-3 h-8 w-8 text-primary" />
-            Client Messages
-          </CardTitle>
-          <CardDescription>View and respond to messages from potential and current clients. Click to view full thread.</CardDescription>
-        </CardHeader>
-      </Card>
+    <div className="container mx-auto p-4 max-w-3xl">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Message Center</h1>
+        {/* Optional: Button to start a new message if applicable for coaches */}
+        {/* 
+        <Button variant="outline" onClick={() => router.push('/messages/new')}> 
+          <MessageSquarePlus className="mr-2 h-4 w-4" /> New Message
+        </Button>
+        */}
+      </div>
 
-      {error && (
-         <Card className="text-center py-12 bg-destructive/10 border-destructive">
-          <CardHeader>
-            <AlertCircle className="mx-auto h-10 w-10 text-destructive mb-3" />
-            <CardTitle className="text-destructive">Error Loading Messages</CardTitle>
-            <CardDescription className="text-destructive/80">{error}</CardDescription>
-            <pre className="mt-2 text-xs text-left whitespace-pre-wrap text-destructive/70 p-2 bg-destructive/5 rounded">
-              Debug info: Coach UID - {user?.id || 'N/A'}
-            </pre>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={fetchMessages} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4"/> Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {!error && conversations.length > 0 ? (
-        <div className="space-y-4">
-          {conversations.map((message) => {
-            const otherPartyId = message.otherPartyId;
-            if (!otherPartyId) {
-                console.warn("[CoachMessagesPage] Skipping message render due to missing otherPartyId:", message.id);
-                return null; // Should ideally not happen
-            }
-
-            return (
-              <Card 
-                  key={message.id} 
-                  className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== user?.id ? 'border-primary ring-2 ring-primary' : 'border-border'}`}
-              >
-                <CardContent className="p-4 flex items-start space-x-4">
-                  {(message.otherPartyAvatar) ? (
-                    <Avatar className="h-10 w-10 border">
-                      <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName || 'User'} data-ai-hint={message.dataAiHint as string || 'person avatar'} />
-                      <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'C'}</AvatarFallback>
-                    </Avatar>
-                  ) : (
-                      <Avatar className="h-10 w-10 border bg-muted">
-                          <AvatarFallback className="text-muted-foreground">{message.otherPartyName?.charAt(0)?.toUpperCase() || 'C'}</AvatarFallback>
-                      </Avatar>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold truncate">{message.otherPartyName || (message.senderId === user?.id ? "To Client" : "From Client")}</h3>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{format(new Date(message.timestamp), 'PP p')}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1 truncate">
-                      {message.senderId === user?.id ? <span className="font-medium text-foreground/80">You: </span> : ''}{message.content}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end space-y-1 flex-shrink-0">
-                      {!message.read && message.senderId !== user?.id && <Badge className="bg-primary text-primary-foreground hover:bg-primary/90">New</Badge>}
-                      <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/messages/${otherPartyId}`)} >View Thread</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+      {displayedConversations.length === 0 && !isLoading ? (
+        <div className="text-center py-10">
+          <MessageSquarePlus className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No conversations</h3>
+          <p className="mt-1 text-sm text-gray-500">You currently have no active conversations.</p>
         </div>
       ) : (
-         !error && (
-            <Card className="text-center py-16">
-                <CardHeader>
-                    <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <CardTitle>No Messages Yet</CardTitle>
-                    <CardDescription>Your client messages will appear here once you start receiving inquiries.</CardDescription>
-                </CardHeader>
-                 <CardContent>
-                    <Button onClick={fetchMessages} variant="outline">
-                        <RefreshCw className="mr-2 h-4 w-4"/> Check for Messages
-                    </Button>
-                </CardContent>
-            </Card>
-         )
+        <div className="border rounded-md">
+          <ul className="divide-y divide-gray-200">
+            {displayedConversations.map((conv) => (
+              <li key={conv.conversationId} className="hover:bg-gray-50 transition-colors">
+                <Link href={`/dashboard/messages/${conv.conversationId}`} legacyBehavior>
+                  <a className="block p-4 sm:p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center min-w-0">
+                        <Avatar className="h-10 w-10 sm:h-12 sm:w-12 mr-3 sm:mr-4">
+                          {/* Placeholder for avatar - you'd fetch this if available */}
+                          <AvatarFallback>{conv.otherPartyName.substring(0, 1).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm sm:text-base font-semibold text-primary truncate">{conv.otherPartyName}</p>
+                          <p className="text-xs sm:text-sm text-gray-500 truncate">{conv.lastMessageContent}</p>
+                        </div>
+                      </div>
+                      <div className="text-right ml-2 flex-shrink-0">
+                        <p className="text-xs text-gray-400 mb-1">{new Date(conv.lastMessageTimestamp).toLocaleDateString([], { month: 'short', day: 'numeric'})}</p>
+                        {conv.unreadCount > 0 && 
+                          <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {conv.unreadCount}
+                          </span>
+                        }
+                        <ChevronRight className="h-5 w-5 text-gray-400 hidden sm:inline-block ml-auto mt-1" />
+                      </div>
+                    </div>
+                  </a>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
