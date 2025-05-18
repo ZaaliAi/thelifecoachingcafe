@@ -9,7 +9,7 @@ import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole
 
 // --- Helper Functions for Data Mapping ---
 const mapCoachFromFirestore = (docData: any, id: string): Coach => {
-  const data = docData as Omit<FirestoreUserProfile, 'id'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
+  const data = docData as Omit<FirestoreUserProfile, 'id'> & { createdAt?: Timestamp, updatedAt?: Timestamp, status?: CoachStatus };
   return {
     id,
     name: data.name || 'Unnamed Coach',
@@ -27,8 +27,8 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     introVideoUrl: data.introVideoUrl === undefined ? null : data.introVideoUrl,
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
-    status: data.status || 'pending_approval',
-    dataSource: 'Firestore', // Added for debugging
+    status: data.status || 'pending_approval', // Default if status is not set
+    dataSource: 'Firestore',
   };
 };
 
@@ -56,11 +56,11 @@ const mapMessageFromFirestore = (docData: any, id: string): Message => {
   return {
     id,
     senderId: data.senderId,
-    senderName: data.senderName,
-    recipientId: data.recipientId,
-    recipientName: data.recipientName,
+    senderName: data.senderName || 'Unknown Sender',
+    recipientId: data.recipientId, // Changed from receiverId
+    recipientName: data.recipientName || 'Unknown Recipient',
     content: data.content,
-    timestamp: data.timestamp.toDate().toISOString(),
+    timestamp: data.timestamp.toDate().toISOString(), // Convert Firestore Timestamp to ISO string
     read: data.read || false,
   };
 };
@@ -75,6 +75,12 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     console.error("[setUserProfile] CRITICAL: userId is undefined or null. Profile cannot be saved.");
     throw new Error("User ID is required to set user profile.");
   }
+  // Ensure email is a string if present, critical for create
+  if (profileData.email !== undefined && (typeof profileData.email !== 'string' || profileData.email.trim() === '')) {
+    console.error("[setUserProfile] CRITICAL: profileData.email is invalid:", profileData.email);
+    throw new Error("Valid email is required in profileData for setUserProfile.");
+  }
+
 
   const userDocRef = doc(db, "users", userId);
 
@@ -83,21 +89,23 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     const isCreating = !userSnap.exists();
 
     const dataToSet: { [key: string]: any } = {
-      // Always set/update this for both create and update
+      // Server timestamp for updates, also for initial creation
       updatedAt: serverTimestamp(),
     };
 
-    // Fields for initial creation or general update
+    // Fields that should always be taken from profileData if present
     if (profileData.name !== undefined) dataToSet.name = profileData.name;
     if (profileData.bio !== undefined) dataToSet.bio = profileData.bio;
     if (profileData.specialties !== undefined) dataToSet.specialties = profileData.specialties;
     if (profileData.keywords !== undefined) dataToSet.keywords = profileData.keywords;
     
-    // Handle profileImageUrl: allow null to clear, or a string
+    // Handle profileImageUrl: allow null to clear, or a string.
+    // If it's explicitly in profileData, use its value (which could be null).
+    // If not in profileData (e.g. during some updates), this field won't be touched by setDoc with merge:true.
     if (profileData.hasOwnProperty('profileImageUrl')) {
       dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? null : profileData.profileImageUrl;
     } else if (isCreating) {
-      dataToSet.profileImageUrl = null; // Ensure it's set to null on create if not provided
+      dataToSet.profileImageUrl = null; // Ensure it's explicitly set to null on create if not provided by auth.tsx
     }
     
     if (profileData.certifications !== undefined) dataToSet.certifications = profileData.certifications;
@@ -108,9 +116,9 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     
     // Fields typically set only on creation or by admin
     if (isCreating) {
-      if (profileData.email === undefined) throw new Error("[setUserProfile] Email is required for new user profile creation.");
+      if (profileData.email === undefined) throw new Error("[setUserProfile] Email is required for new user profile creation in dataToSet prep.");
       dataToSet.email = profileData.email;
-      if (profileData.role === undefined) throw new Error("[setUserProfile] Role is required for new user profile creation.");
+      if (profileData.role === undefined) throw new Error("[setUserProfile] Role is required for new user profile creation in dataToSet prep.");
       dataToSet.role = profileData.role;
       dataToSet.createdAt = serverTimestamp();
 
@@ -118,20 +126,22 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
         dataToSet.subscriptionTier = profileData.subscriptionTier !== undefined ? profileData.subscriptionTier : 'free';
         dataToSet.status = profileData.status !== undefined ? profileData.status : 'pending_approval';
       }
+      // No 'status' or 'subscriptionTier' for 'user' or 'admin' by default from initial signup
     } else {
-      // For updates, admin might change these
-      if (profileData.role !== undefined) dataToSet.role = profileData.role; // If admin changes role
+      // For updates, admin might change these, or specific flows.
+      // These are only added if they were present in the original profileData.
+      if (profileData.role !== undefined) dataToSet.role = profileData.role;
       if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier;
       if (profileData.status !== undefined) dataToSet.status = profileData.status;
     }
     
-    console.log(`[setUserProfile] FINAL data object for ${isCreating ? 'setDoc (new)' : 'setDoc (merge)'} on /users/${userId}:`, JSON.stringify(dataToSet, null, 2));
+    console.log(`[setUserProfile] FINAL data object for setDoc (merge: ${!isCreating}) on /users/${userId}:`, JSON.stringify(dataToSet, null, 2));
     
-    await setDoc(userDocRef, dataToSet, { merge: !isCreating }); 
+    await setDoc(userDocRef, dataToSet, { merge: true }); // Always merge true to handle both create and update safely
     
     console.log(`[setUserProfile] User profile data written successfully for user: ${userId}. Operation: ${isCreating ? 'CREATE' : 'UPDATE'}`);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error(`[setUserProfile] Error creating/updating user profile for ${userId}:`, error);
     console.error("[setUserProfile] Data that was attempted (original profileData arg):", JSON.stringify(profileData, null, 2)); 
     throw error;
@@ -155,16 +165,16 @@ export async function getUserProfile(userId: string): Promise<(FirestoreUserProf
 
 // --- Coach Fetching Functions ---
 export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
-  console.log(`[getFeaturedCoaches] Fetching up to ${count} approved featured coaches...`);
+  console.log(`[getFeaturedCoaches] Fetching up to ${count} approved, featured coaches...`);
   try {
     const q = query(
       collection(db, "users"),
       where("role", "==", "coach"),
-      where("status", "==", "approved"),
-      // orderBy("name", "asc"), // Temporarily removed for debugging permissions
+      where("status", "==", "approved"), // Only show approved coaches
+      orderBy("name", "asc"), // Firestore will require an index for this
       firestoreLimit(count)
     );
-    console.log("[getFeaturedCoaches] Executing Firestore query...");
+    console.log("[getFeaturedCoaches] Executing Firestore query:", q);
     const querySnapshot = await getDocs(q);
     console.log(`[getFeaturedCoaches] Firestore query returned ${querySnapshot.docs.length} documents.`);
     
@@ -177,24 +187,25 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   } catch (error: any) {
     console.error("[getFeaturedCoaches] Error getting featured coaches:", error.code, error.message, error);
     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
-        console.error("[getFeaturedCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index.");
+        console.error("[getFeaturedCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index (users: role ASC, status ASC, name ASC).");
     }
-    return [];
+    return []; 
   }
 }
 
 export async function getAllCoaches(filters?: { searchTerm?: string, includeAllStatuses?: boolean }): Promise<Coach[]> {
   console.log("[getAllCoaches] Fetching coaches. Filters:", JSON.stringify(filters) || "None");
   try {
-    let qConstraints = [where("role", "==", "coach")];
+    const qConstraints = [where("role", "==", "coach")];
 
     if (!filters?.includeAllStatuses) {
       qConstraints.push(where("status", "==", "approved"));
     }
     
-    // Temporarily remove orderBy for debugging permission issues from Genkit flow
-    // qConstraints.push(orderBy("name", "asc"));
-    qConstraints.push(firestoreLimit(50)); 
+    // orderBy("name", "asc") was temporarily removed for debugging, now restored.
+    // Firestore will require an index: users collection (role ASC, status ASC, name ASC) OR (role ASC, name ASC) if includeAllStatuses is true
+    qConstraints.push(orderBy("name", "asc")); 
+    qConstraints.push(firestoreLimit(50));
 
     const coachesQuery = query(collection(db, "users"), ...qConstraints);
 
@@ -203,7 +214,6 @@ export async function getAllCoaches(filters?: { searchTerm?: string, includeAllS
     console.log(`[getAllCoaches] Firestore query returned ${querySnapshot.docs.length} coaches initially.`);
     
     let allCoaches = querySnapshot.docs.map(docSnapshot => {
-      // console.log(`[getAllCoaches] Mapping doc: ${docSnapshot.id}`, docSnapshot.data());
       return mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id);
     });
 
@@ -292,19 +302,19 @@ export async function updateCoachStatus(coachId: string, status: CoachStatus): P
   }
 }
 
-
+// --- Blog Post Functions ---
 export async function createFirestoreBlogPost(postData: Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'updatedAt' | 'slug'> & { slug?: string }): Promise<string> {
   try {
     const blogsCollection = collection(db, "blogs");
     const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
     
-    const dataWithTimestampsAndSlug = {
+    const dataWithTimestampsAndSlug: FirestoreBlogPost = {
       ...postData,
       slug: slug,
       createdAt: serverTimestamp(), 
       updatedAt: serverTimestamp(),
       tags: postData.tags || [],
-      featuredImageUrl: postData.featuredImageUrl || null,
+      featuredImageUrl: postData.featuredImageUrl || null, // Ensure null if not provided
       excerpt: postData.excerpt || '',
     };
     
@@ -329,11 +339,10 @@ export async function updateFirestoreBlogPost(postId: string, postData: Partial<
     if (postData.tags !== undefined) {
        dataToUpdate.tags = Array.isArray(postData.tags) ? postData.tags.map(tag => tag.trim()).filter(Boolean) : [];
     }
-    if (postData.hasOwnProperty('featuredImageUrl')) { // Allows setting to null/empty
+    if (postData.hasOwnProperty('featuredImageUrl')) { 
       dataToUpdate.featuredImageUrl = postData.featuredImageUrl || null;
     }
     if (postData.status !== undefined) dataToUpdate.status = postData.status;
-
 
     await updateDoc(postDocRef, dataToUpdate);
   } catch (error) {
@@ -438,8 +447,11 @@ export async function getAllBlogPostsForAdmin(count = 50): Promise<BlogPost[]> {
     );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
-  } catch (error) {
+  } catch (error: any) {
     console.error("[getAllBlogPostsForAdmin] Error getting all blog posts for admin:", error);
+     if (error.code === 'failed-precondition') { 
+        console.error("[getAllBlogPostsForAdmin] This is likely a missing/incorrect index for query on 'blogs' collection: (createdAt DESC). Please create this index in Firestore.");
+    }
     return [];
   }
 }
@@ -471,7 +483,7 @@ export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise
     const q = query(
       blogsCollection,
       where("authorId", "==", authorId),
-      where("status", "==", "published"),
+      where("status", "==", "published"), // Now also filters by status
       orderBy("createdAt", "desc"),
       firestoreLimit(count)
     );
@@ -487,15 +499,20 @@ export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise
   }
 }
 
-
+// --- Messaging Functions ---
 export async function sendMessage(messageData: Omit<FirestoreMessage, 'id' | 'timestamp' | 'read'>): Promise<string> {
   console.log("[sendMessage] Attempting to send message with data:", JSON.stringify(messageData, null, 2));
   try {
     const messagesCollection = collection(db, "messages");
+    // Construct the message to send, ensuring all fields expected by security rules are present
     const messageToSend: Omit<FirestoreMessage, 'id'> = {
-      ...messageData,
-      timestamp: serverTimestamp(), // Correctly use serverTimestamp
-      read: false,
+      senderId: messageData.senderId,
+      senderName: messageData.senderName,
+      recipientId: messageData.recipientId,
+      recipientName: messageData.recipientName,
+      content: messageData.content, // Ensure this field name matches your rules ('content' vs 'message')
+      timestamp: serverTimestamp(),
+      read: false, // New messages are unread
     };
     const newMessageRef = await addDoc(messagesCollection, messageToSend);
     console.log("[sendMessage] Message sent successfully with ID:", newMessageRef.id);
@@ -509,47 +526,60 @@ export async function sendMessage(messageData: Omit<FirestoreMessage, 'id' | 'ti
 
 export async function getMessagesForUser(userId: string): Promise<Message[]> {
   console.log(`[getMessagesForUser] Fetching messages for user: ${userId}`);
-  if (!userId) return [];
+  if (!userId) {
+    console.error("[getMessagesForUser] No userId provided.");
+    return [];
+  }
+
+  const messages: Message[] = [];
+  const messagesMap = new Map<string, Message>(); // To avoid duplicates if querying both sides
+
   try {
-    const messagesRef = collection(db, "messages");
-    // Query for messages sent BY the user
-    const qSent = query(messagesRef, where("senderId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(30));
-    // Query for messages received BY the user
-    const qReceived = query(messagesRef, where("recipientId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(30));
-
-    const [sentSnapshot, receivedSnapshot] = await Promise.all([
-      getDocs(qSent),
-      getDocs(qReceived)
-    ]);
-
-    const messagesMap = new Map<string, Message>();
-
-    sentSnapshot.forEach(docSnap => {
-      messagesMap.set(docSnap.id, mapMessageFromFirestore(docSnap.data(), docSnap.id));
+    console.log(`[getMessagesForUser] Querying messages sent by ${userId}`);
+    const sentQuery = query(
+      collection(db, "messages"),
+      where("senderId", "==", userId),
+      orderBy("timestamp", "desc"),
+      firestoreLimit(50) // Increased limit for broader initial fetch
+    );
+    const sentSnapshot = await getDocs(sentQuery);
+    console.log(`[getMessagesForUser] Fetched ${sentSnapshot.docs.length} messages sent by ${userId}.`);
+    sentSnapshot.forEach(doc => {
+      messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id));
     });
-    receivedSnapshot.forEach(docSnap => {
-      // Avoid duplicates if a user messages themselves (though unlikely in this app)
-      if (!messagesMap.has(docSnap.id)) {
-        messagesMap.set(docSnap.id, mapMessageFromFirestore(docSnap.data(), docSnap.id));
+
+    console.log(`[getMessagesForUser] Querying messages received by ${userId}`);
+    const receivedQuery = query(
+      collection(db, "messages"),
+      where("recipientId", "==", userId),
+      orderBy("timestamp", "desc"),
+      firestoreLimit(50) // Increased limit for broader initial fetch
+    );
+    const receivedSnapshot = await getDocs(receivedQuery);
+    console.log(`[getMessagesForUser] Fetched ${receivedSnapshot.docs.length} messages received by ${userId}.`);
+    receivedSnapshot.forEach(doc => {
+      if (!messagesMap.has(doc.id)) { // Avoid duplicates
+        messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id));
       }
     });
     
     const allMessages = Array.from(messagesMap.values());
-    // Sort all messages by timestamp descending
     allMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     
-    console.log(`[getMessagesForUser] Fetched and processed ${allMessages.length} messages for user ${userId}`);
-    return allMessages.slice(0, 50); // Limit total combined messages for performance
+    console.log(`[getMessagesForUser] Processed ${allMessages.length} total messages for user ${userId}.`);
+    return allMessages.slice(0, 50); // Return combined and sorted, limited list
+
   } catch (error: any) {
     console.error(`[getMessagesForUser] Error fetching messages for user ${userId}:`, error.code, error.message, error);
     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
-        console.error("[getMessagesForUser] This is likely a Firestore Security Rule issue or missing/incorrect indexes for messages queries (e.g., senderId+timestamp, recipientId+timestamp).");
+      console.error("[getMessagesForUser] This is likely a Firestore Security Rule issue or missing/incorrect indexes for messages queries (e.g., senderId+timestamp DESC, recipientId+timestamp DESC).");
     }
-    return [];
+    return []; // Return empty array on error
   }
 }
 
 
+// --- Admin Dashboard Stats ---
 export async function getPendingCoachCount(): Promise<number> {
   try {
     const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "pending_approval"));
@@ -568,6 +598,7 @@ export async function getPendingBlogPostCount(): Promise<number> {
 
 export async function getTotalUserCount(): Promise<number> {
  try {
+    // This counts all documents in the 'users' collection, regardless of role.
     const q = query(collection(db, "users")); 
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count;
@@ -586,6 +617,7 @@ export async function getCoachBlogStats(authorId: string): Promise<{ pending: nu
     if (!authorId) return { pending: 0, published: 0};
     try {
         const blogsCollection = collection(db, "blogs");
+        // Counts posts that are 'draft' OR 'pending_approval'
         const pendingQuery = query(blogsCollection, where("authorId", "==", authorId), where("status", "in", ["draft", "pending_approval"]));
         const publishedQuery = query(blogsCollection, where("authorId", "==", authorId), where("status", "==", "published"));
 
@@ -599,6 +631,8 @@ export async function getCoachBlogStats(authorId: string): Promise<{ pending: nu
         };
     } catch (error) {
         console.error(`Error getting blog stats for coach ${authorId}:`, error);
+        // Firestore may require separate indexes for these 'in' queries or combined queries.
+        // e.g., (authorId ASC, status ASC)
         return { pending: 0, published: 0 };
     }
 }
@@ -610,10 +644,11 @@ export async function getCoachUnreadMessageCount(coachId: string): Promise<numbe
         const q = query(messagesCollection, where("recipientId", "==", coachId), where("read", "==", false));
         const snapshot = await getCountFromServer(q);
         return snapshot.data().count;
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error getting unread message count for coach ${coachId}:`, error);
+        if (error.code === 'failed-precondition') {
+             console.error("[getCoachUnreadMessageCount] This is likely a missing/incorrect index for query on 'messages' collection: (recipientId ASC, read ASC). Please create this index in Firestore.");
+        }
         return 0;
     }
 }
-
-    

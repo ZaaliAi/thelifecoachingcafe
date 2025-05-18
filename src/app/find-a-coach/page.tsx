@@ -15,6 +15,7 @@ import type { CoachMatchAiSearchInput, CoachMatchAiSearchOutput } from '@/ai/flo
 import { coachMatchAiSearch } from '@/ai/flows/coach-match-ai';
 import type { Coach } from '@/types';
 import { getCoachById } from '@/lib/firestore';
+import Link from 'next/link';
 
 
 const searchSchema = z.object({
@@ -61,28 +62,28 @@ export default function FindACoachPage() {
 
     try {
       const input: CoachMatchAiSearchInput = { userInput: data.userInput };
-      // Simulate AI call and response structure
-      // const response = await coachMatchAiSearch(input); 
+      const response = await coachMatchAiSearch(input); 
       
       // --- Simulated AI Response (for environments where Genkit might not be running) ---
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-      // Attempt to get a few coaches from Firestore to simulate AI finding them
-      const allCoaches = await getCoachById("1").then(c => c ? [c] : []); // Example using one coach
-      if (allCoaches.length === 0) { // Simple fallback if DB is empty or coach "1" not found
-          allCoaches.push({ id: 'sim1', name: "Simulated Coach A", specialties: ["Career Coaching"], bio: "A simulated coach.", subscriptionTier: "premium" });
-          allCoaches.push({ id: 'sim2', name: "Simulated Coach B", specialties: ["Mindfulness"], bio: "Another simulated coach.", subscriptionTier: "free"});
-      }
-      const simulatedResponse: CoachMatchAiSearchOutput = {
-        rankedCoachList: allCoaches.slice(0,2).map(coach => ({
-            coachId: coach.id,
-            coachName: coach.name,
-            matchScore: Math.random() * 100,
-            specialties: coach.specialties.slice(0,2)
-        })).sort((a,b) => b.matchScore - a.matchScore)
-      };
+      // await new Promise(resolve => setTimeout(resolve, 1500)); 
+      // // Attempt to get a few coaches from Firestore to simulate AI finding them
+      // const allCoaches = await getCoachById("1").then(c => c ? [c] : []); // Example using one coach
+      // if (allCoaches.length === 0) { // Simple fallback if DB is empty or coach "1" not found
+      //     allCoaches.push({ id: 'sim1', name: "Simulated Coach A", specialties: ["Career Coaching"], bio: "A simulated coach.", subscriptionTier: "premium" });
+      //     allCoaches.push({ id: 'sim2', name: "Simulated Coach B", specialties: ["Mindfulness"], bio: "Another simulated coach.", subscriptionTier: "free"});
+      // }
+      // const simulatedResponse: CoachMatchAiSearchOutput = {
+      //   rankedCoachList: allCoaches.slice(0,2).map(coach => ({
+      //       coachId: coach.id,
+      //       coachName: coach.name,
+      //       matchScore: Math.random() * 100,
+      //       specialties: coach.specialties.slice(0,2)
+      //   })).sort((a,b) => b.matchScore - a.matchScore)
+      // };
       // --- End Simulated AI Response ---
       
-      const adaptedCoachesPromises = simulatedResponse.rankedCoachList.map(adaptAiCoachToAppCoach);
+      // const adaptedCoachesPromises = simulatedResponse.rankedCoachList.map(adaptAiCoachToAppCoach);
+      const adaptedCoachesPromises = response.rankedCoachList.map(adaptAiCoachToAppCoach);
       const adaptedCoaches = await Promise.all(adaptedCoachesPromises);
       setSearchResults(adaptedCoaches);
 
