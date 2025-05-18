@@ -27,7 +27,7 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     introVideoUrl: data.introVideoUrl === undefined ? null : data.introVideoUrl,
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
-    status: data.status || 'pending_approval', 
+    status: data.status || 'pending_approval',
     dataSource: 'Firestore',
   };
 };
@@ -51,18 +51,30 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
   };
 };
 
-const mapMessageFromFirestore = (docData: any, id: string): Message => {
+const mapMessageFromFirestore = (docData: any, id: string, currentUserId: string): Message => {
   const data = docData as Omit<FirestoreMessage, 'id'> & { timestamp: Timestamp };
+  let otherPartyId = '';
+  let otherPartyName = 'Unknown';
+  if (data.senderId === currentUserId) {
+    otherPartyId = data.recipientId;
+    otherPartyName = data.recipientName || 'Recipient';
+  } else {
+    otherPartyId = data.senderId;
+    otherPartyName = data.senderName || 'Sender';
+  }
+
   return {
     id,
     senderId: data.senderId,
     senderName: data.senderName || 'Unknown Sender',
-    recipientId: data.recipientId, 
+    recipientId: data.recipientId,
     recipientName: data.recipientName || 'Unknown Recipient',
     content: data.content,
-    timestamp: data.timestamp.toDate().toISOString(), 
+    timestamp: data.timestamp.toDate().toISOString(),
     read: data.read || false,
-    // otherPartyName and otherPartyAvatar will be populated client-side
+    otherPartyId: otherPartyId,
+    otherPartyName: otherPartyName,
+    // otherPartyAvatar will be populated client-side if needed
   };
 };
 
@@ -84,40 +96,31 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     const isCreating = !userSnap.exists();
 
     const dataToSet: { [key: string]: any } = {
-      updatedAt: serverTimestamp(), // Always set/update this
+      updatedAt: serverTimestamp(),
     };
 
-    // Conditionally add fields from profileData only if they are defined
-    // This prevents sending `field: undefined` which Firestore rejects
+    // Explicitly add fields that are expected to be part of the profileData object.
+    // This ensures that if a field is intentionally omitted from profileData (e.g. role during profile update by user),
+    // it won't be written as 'undefined'.
     if (profileData.name !== undefined) dataToSet.name = profileData.name;
-    
-    // Email and role are typically set only on creation from auth.tsx
-    // and should not be part of profileData for updates from profile forms
+    if (isCreating && profileData.email !== undefined) dataToSet.email = profileData.email; // Email only on create
+    if (isCreating && profileData.role !== undefined) dataToSet.role = profileData.role;   // Role only on create
+
+    // Handle fields specific to initial creation or updates
     if (isCreating) {
-      if (profileData.email === undefined) {
-        console.error("[setUserProfile] CRITICAL: Email is required for new user profile creation.");
-        throw new Error("Email is required for new user profile creation.");
-      }
-      dataToSet.email = profileData.email;
-      if (profileData.role === undefined) {
-        console.error("[setUserProfile] CRITICAL: Role is required for new user profile creation.");
-        throw new Error("Role is required for new user profile creation.");
-      }
-      dataToSet.role = profileData.role;
       dataToSet.createdAt = serverTimestamp();
-      
-      // For new coach profiles, set defaults if not explicitly provided by auth.tsx
+      // Defaults for new coach profile
       if (profileData.role === 'coach') {
         dataToSet.subscriptionTier = profileData.subscriptionTier !== undefined ? profileData.subscriptionTier : 'free';
         dataToSet.status = profileData.status !== undefined ? profileData.status : 'pending_approval';
       }
-      // Ensure profileImageUrl is null if not provided by auth.tsx
+      // Ensure profileImageUrl is explicitly null if not provided during creation
       dataToSet.profileImageUrl = profileData.profileImageUrl !== undefined ? profileData.profileImageUrl : null;
-
     } else { // This is an update operation
-      if (profileData.role !== undefined) dataToSet.role = profileData.role; // Admin might change this
-      if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier; // Admin might change this
-      if (profileData.status !== undefined) dataToSet.status = profileData.status; // Admin might change this
+      // Fields that an admin might change, or that are part of the profile edit form
+      if (profileData.role !== undefined) dataToSet.role = profileData.role;
+      if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier;
+      if (profileData.status !== undefined) dataToSet.status = profileData.status;
       if (profileData.hasOwnProperty('profileImageUrl')) {
          dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? null : profileData.profileImageUrl;
       }
@@ -131,13 +134,14 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     if (profileData.hasOwnProperty('location')) {
        dataToSet.location = profileData.location === undefined ? null : profileData.location;
     }
-     if (profileData.hasOwnProperty('websiteUrl')) {
+    if (profileData.hasOwnProperty('websiteUrl')) {
        dataToSet.websiteUrl = profileData.websiteUrl === undefined ? null : profileData.websiteUrl;
     }
     if (profileData.hasOwnProperty('introVideoUrl')) {
        dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? null : profileData.introVideoUrl;
     }
     if (profileData.socialLinks !== undefined) dataToSet.socialLinks = profileData.socialLinks;
+
 
     console.log(`[setUserProfile] FINAL data object for setDoc (merge: true) on /users/${userId}:`, JSON.stringify(dataToSet, null, 2));
     
@@ -489,10 +493,11 @@ export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise
       firestoreLimit(count)
     );
     const querySnapshot = await getDocs(q);
-    console.log(`[getBlogPostsByAuthor] Fetched ${querySnapshot.docs.length} published posts for author ${authorId}.`);
-    return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
+    const posts = querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
+    console.log(`[getBlogPostsByAuthor] Fetched ${posts.length} published posts for author ${authorId}.`);
+    return posts;
   } catch (error: any) {
-     console.error(`[getBlogPostsByAuthor] Error getting blog posts for author ${authorId}:`, error.code, error.message);
+     console.error(`[getBlogPostsByAuthor] Error getting blog posts for author ${authorId}:`, error.code, error.message, error);
     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
         console.error("[getBlogPostsByAuthor] This is likely a Firestore Security Rule issue or a missing/incorrect index (blogs: authorId ASC, status ASC, createdAt DESC).");
     }
@@ -503,6 +508,10 @@ export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise
 // --- Messaging Functions ---
 export async function sendMessage(messageData: Omit<FirestoreMessage, 'id' | 'timestamp' | 'read'>): Promise<string> {
   console.log("[sendMessage] Attempting to send message with data:", JSON.stringify(messageData, null, 2));
+  if (!messageData.senderId || !messageData.recipientId || !messageData.content || !messageData.senderName || !messageData.recipientName) {
+    console.error("[sendMessage] Critical data missing for sending message:", messageData);
+    throw new Error("Sender ID, Recipient ID, content, sender name, and recipient name are required to send a message.");
+  }
   try {
     const messagesCollection = collection(db, "messages");
     const messageToSend: Omit<FirestoreMessage, 'id'> = {
@@ -540,17 +549,20 @@ export async function getMessagesForUser(userId: string): Promise<Message[]> {
       messagesRef,
       where("senderId", "==", userId),
       orderBy("timestamp", "desc"),
-      firestoreLimit(30) // Limit for performance
+      firestoreLimit(30)
     );
     const sentSnapshot = await getDocs(sentQuery);
     console.log(`[getMessagesForUser] Fetched ${sentSnapshot.docs.length} messages sent by ${userId}.`);
     sentSnapshot.forEach(doc => {
-      if (!messagesMap.has(doc.id)) {
-        messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id));
+      if (!messagesMap.has(doc.id)) { // Avoid duplicates if a message somehow matched both queries
+        messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id, userId));
       }
     });
   } catch (error: any) {
     console.error(`[getMessagesForUser] Error fetching SENT messages for user ${userId}:`, error.code, error.message, error);
+    if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+      console.error("[getMessagesForUser] SENT query failed. This is likely a Firestore Security Rule issue or missing/incorrect index for (senderId, timestamp).");
+    }
     // Don't throw yet, try to fetch received messages
   }
 
@@ -560,18 +572,20 @@ export async function getMessagesForUser(userId: string): Promise<Message[]> {
       messagesRef,
       where("recipientId", "==", userId),
       orderBy("timestamp", "desc"),
-      firestoreLimit(30) // Limit for performance
+      firestoreLimit(30)
     );
     const receivedSnapshot = await getDocs(receivedQuery);
     console.log(`[getMessagesForUser] Fetched ${receivedSnapshot.docs.length} messages received by ${userId}.`);
     receivedSnapshot.forEach(doc => {
       if (!messagesMap.has(doc.id)) { 
-        messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id));
+        messagesMap.set(doc.id, mapMessageFromFirestore(doc.data(), doc.id, userId));
       }
     });
   } catch (error: any) {
     console.error(`[getMessagesForUser] Error fetching RECEIVED messages for user ${userId}:`, error.code, error.message, error);
-    // If both queries fail, this error might be the one that surfaces or is re-thrown
+    if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
+      console.error("[getMessagesForUser] RECEIVED query failed. This is likely a Firestore Security Rule issue or missing/incorrect index for (recipientId, timestamp).");
+    }
     if (messagesMap.size === 0) throw error; // Re-throw if no messages at all could be fetched
   }
   
@@ -579,7 +593,7 @@ export async function getMessagesForUser(userId: string): Promise<Message[]> {
   allMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   
   console.log(`[getMessagesForUser] Processed ${allMessages.length} total messages for user ${userId}.`);
-  return allMessages.slice(0, 50); // Limit total combined messages for performance
+  return allMessages.slice(0, 50);
 }
 
 
@@ -652,5 +666,3 @@ export async function getCoachUnreadMessageCount(coachId: string): Promise<numbe
         return 0;
     }
 }
-
-    
