@@ -4,18 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Search, Loader2, AlertCircle } from "lucide-react";
-import type { Message as MessageType } from "@/types"; // Renamed to avoid conflict
+import { MessageSquare, Search, Loader2, AlertCircle, Info } from "lucide-react";
+import type { Message as MessageType } from "@/types";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import { getMessagesForUser } from "@/lib/firestore";
-
+import { getMessagesForUser, getCoachById, getUserProfile } from "@/lib/firestore"; // Assuming getUserProfile can fetch basic user info by ID
 
 export default function UserMessagesPage() {
   const { user, loading: authLoading } = useAuth();
-  const [messages, setMessages] = useState<any[]>([]); // Using any for now
+  const [conversations, setConversations] = useState<MessageType[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,20 +23,38 @@ export default function UserMessagesPage() {
       setIsLoadingMessages(true);
       setError(null);
       getMessagesForUser(user.id)
-        .then(fetchedMessages => {
-          // Basic mapping, assuming sender/receiver names might need to be fetched or are on the message
-          // For now, we'll display IDs or generic names
-          const processedMessages = fetchedMessages.map(msg => ({
-            ...msg,
-            otherPartyName: msg.senderId === user.id ? msg.recipientName : msg.senderName,
-            // otherPartyAvatar: "https://placehold.co/40x40.png", // Placeholder
-            // dataAiHint: "person avatar"
-          }));
-          setMessages(processedMessages);
+        .then(async (fetchedMessages) => {
+          // Group messages by other party and get the latest message for each conversation
+          const convosMap = new Map<string, MessageType>();
+          for (const msg of fetchedMessages) {
+            const otherPartyId = msg.senderId === user.id ? msg.recipientId : msg.senderId;
+            if (!convosMap.has(otherPartyId) || new Date(msg.timestamp) > new Date(convosMap.get(otherPartyId)!.timestamp)) {
+              // Attempt to fetch the other party's profile image if not already on the message
+              let otherPartyAvatar = null;
+              // Try fetching as coach first, then as general user if needed
+              const coachProfile = await getCoachById(otherPartyId);
+              if (coachProfile && coachProfile.profileImageUrl) {
+                otherPartyAvatar = coachProfile.profileImageUrl;
+              } else {
+                const userProfile = await getUserProfile(otherPartyId);
+                if (userProfile && userProfile.profileImageUrl) {
+                  otherPartyAvatar = userProfile.profileImageUrl;
+                }
+              }
+
+              convosMap.set(otherPartyId, {
+                ...msg,
+                otherPartyName: msg.senderId === user.id ? msg.recipientName : msg.senderName,
+                otherPartyAvatar: otherPartyAvatar || undefined, // Use fetched avatar or undefined
+                dataAiHint: "person avatar" // Default hint
+              });
+            }
+          }
+          setConversations(Array.from(convosMap.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
         })
         .catch(err => {
           console.error("Error fetching user messages:", err);
-          setError("Failed to load messages.");
+          setError("Failed to load your messages.");
         })
         .finally(() => {
           setIsLoadingMessages(false);
@@ -67,37 +84,40 @@ export default function UserMessagesPage() {
                     <MessageSquare className="mr-3 h-8 w-8 text-primary" />
                     My Messages
                 </CardTitle>
-                <CardDescription>Your conversations with coaches.</CardDescription>
+                <CardDescription>Your conversations with coaches. Click to view full thread (feature coming soon).</CardDescription>
             </div>
             <Button asChild className="mt-4 sm:mt-0 bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Link href="/find-a-coach"><Search className="mr-2 h-4 w-4"/>Find a Coach to Message</Link>
             </Button>
         </CardHeader>
-        <CardContent>
-          {/* Optional: Add search/filter for messages */}
-        </CardContent>
       </Card>
       
       {error && (
          <Card className="text-center py-12 bg-destructive/10 border-destructive">
           <CardHeader>
             <AlertCircle className="mx-auto h-10 w-10 text-destructive mb-3" />
-            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardTitle className="text-destructive">Error Loading Messages</CardTitle>
             <CardDescription className="text-destructive/80">{error}</CardDescription>
           </CardHeader>
         </Card>
       )}
 
-      {!error && messages.length > 0 ? (
+      {!error && conversations.length > 0 ? (
         <div className="space-y-4">
-          {messages.map((message) => (
+          {conversations.map((message) => (
+            // Each card could eventually link to a full conversation view: /dashboard/user/messages/[conversationId]
             <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== user?.id ? 'border-primary border-2' : ''}`}>
               <CardContent className="p-4 flex items-start space-x-4">
                 {message.otherPartyAvatar && (
                   <Avatar className="h-10 w-10 border">
-                    <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName} data-ai-hint={message.dataAiHint as string} />
-                    <AvatarFallback>{message.otherPartyName?.charAt(0) || '?'}</AvatarFallback>
+                    <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName || 'User'} data-ai-hint={message.dataAiHint as string || 'person avatar'} />
+                    <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
                   </Avatar>
+                )}
+                {!message.otherPartyAvatar && (
+                     <Avatar className="h-10 w-10 border">
+                        <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+                    </Avatar>
                 )}
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
@@ -105,12 +125,12 @@ export default function UserMessagesPage() {
                     <span className="text-xs text-muted-foreground">{format(new Date(message.timestamp), 'PPpp')}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1 truncate">
-                    {message.senderId === user?.id ? 'You: ' : ''}{message.content}
+                    {message.senderId === user?.id ? <span className="font-medium">You: </span> : ''}{message.content}
                   </p>
                 </div>
                 <div className="flex flex-col items-end space-y-1">
                     {!message.read && message.senderId !== user?.id && <Badge variant="default" className="bg-primary text-primary-foreground">New</Badge>}
-                    <Button variant="outline" size="sm" disabled>View Thread (Soon)</Button>
+                    <Button variant="outline" size="sm" disabled>View Thread</Button>
                 </div>
               </CardContent>
             </Card>
@@ -118,8 +138,9 @@ export default function UserMessagesPage() {
         </div>
       ) : (
         !error && (
-            <Card className="text-center py-12">
+            <Card className="text-center py-16">
                 <CardHeader>
+                    <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <CardTitle>No Messages Yet</CardTitle>
                     <CardDescription>Start a conversation with a coach to see your messages here.</CardDescription>
                 </CardHeader>
@@ -130,11 +151,6 @@ export default function UserMessagesPage() {
                 </CardContent>
             </Card>
         )
-      )}
-      {!error && messages.length > 0 && (
-        <div className="mt-8 flex justify-center">
-          <Button variant="outline" disabled>Load More Messages (Soon)</Button>
-        </div>
       )}
     </div>
   );

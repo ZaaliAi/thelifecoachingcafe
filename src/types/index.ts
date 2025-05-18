@@ -7,7 +7,7 @@ export interface User {
   email: string; // Should always be a string from Firebase Auth
   role: UserRole;
   name?: string;
-  profileImageUrl?: string; // This will be a URL string from Firebase Storage or null
+  profileImageUrl?: string | null; // Explicitly allow null
 }
 
 // Firestore specific user profile structure
@@ -18,21 +18,20 @@ export interface FirestoreUserProfile {
   name: string;
   email: string; // User's email, should match Auth email.
   role: UserRole;
-  createdAt: FirebaseTimestampOrDate; // Firestore Timestamp on server, Date on client after fetch
-  updatedAt: FirebaseTimestampOrDate; // Firestore Timestamp on server, Date on client after fetch
+  createdAt: any; // Firestore Timestamp on server, Date on client after fetch
+  updatedAt: any; // Firestore Timestamp on server, Date on client after fetch
   bio?: string;
   specialties?: string[];
   keywords?: string[];
   profileImageUrl?: string | null; // URL from Firebase Storage or null
   certifications?: string[];
-  location?: string;
+  location?: string | null;
   websiteUrl?: string | null; // Premium feature
   introVideoUrl?: string | null; // Premium feature
   socialLinks?: { platform: string; url: string }[]; // Premium feature
   subscriptionTier?: 'free' | 'premium';
   status?: CoachStatus; // For coach approval by admin
-  // Any other fields specific to user settings or profile that aren't in the simpler User type.
-  dataAiHint?: string; // for placeholder images if used
+  dataAiHint?: string;
 }
 
 // This type represents the detailed Coach profile for frontend display,
@@ -48,8 +47,8 @@ export interface Coach {
   dataAiHint?: string;
   certifications?: string[];
   socialLinks?: { platform: string; url: string }[];
-  location?: string;
-  availability?: string; // Example, not fully implemented
+  location?: string | null;
+  availability?: string;
   subscriptionTier: 'free' | 'premium';
   websiteUrl?: string | null;
   introVideoUrl?: string | null;
@@ -62,8 +61,6 @@ export interface Coach {
 // Type for Firestore Timestamps or JS Date objects (for flexibility)
 type FirebaseTimestampOrDate = any; // Simplification, ideally import firebase.firestore.Timestamp
 
-// This type is primarily for frontend display and components.
-// Data fetched from Firestore (FirestoreBlogPost) will be mapped to this.
 export interface BlogPost {
   id: string;
   slug: string;
@@ -80,7 +77,6 @@ export interface BlogPost {
   dataAiHint?: string;
 }
 
-// Firestore specific blog post structure
 export interface FirestoreBlogPost {
   id?: string; // Document ID, usually handled separately
   slug: string;
@@ -93,7 +89,7 @@ export interface FirestoreBlogPost {
   updatedAt?: FirebaseTimestampOrDate;
   status: 'draft' | 'pending_approval' | 'published' | 'rejected';
   tags?: string[];
-  featuredImageUrl?: string;
+  featuredImageUrl?: string | null; // Allow null
   dataAiHint?: string;
 }
 
@@ -107,11 +103,30 @@ export interface Testimonial {
   designation?: string;
 }
 
+// For application use (timestamp is ISO string)
 export interface Message {
   id: string;
   senderId: string;
-  receiverId: string;
+  senderName?: string; // Denormalized for display
+  recipientId: string; // Changed from receiverId for consistency
+  recipientName?: string; // Denormalized for display
   content: string;
-  timestamp: string; // ISO date string (converted from Firestore Timestamp)
+  timestamp: string; // ISO date string
+  read: boolean;
+  // For UI display, not stored in Firestore directly on this object usually
+  otherPartyName?: string;
+  otherPartyAvatar?: string | null;
+  dataAiHint?: string;
+}
+
+// For Firestore storage (timestamp is Firestore Timestamp)
+export interface FirestoreMessage {
+  id?: string; // Firestore document ID
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  recipientName: string;
+  content: string;
+  timestamp: FirebaseTimestampOrDate; // Firestore Server Timestamp
   read: boolean;
 }
