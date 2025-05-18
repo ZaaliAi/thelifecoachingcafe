@@ -1,29 +1,68 @@
 
-"use client"; // This page involves user-specific data and actions
+"use client";
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { BlogPostCard } from "@/components/BlogPostCard";
-import { mockBlogPosts } from "@/data/mock"; // Assuming current coach's ID is '1' for mock data
-import { PlusCircle, FileText } from "lucide-react";
-import { useAuth } from "@/lib/auth"; // To get current coach ID
+import { PlusCircle, FileText, Loader2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import type { BlogPost } from "@/types";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getMyBlogPosts } from "@/lib/firestore"; // Import Firestore function
 
 export default function CoachBlogManagementPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [coachPosts, setCoachPosts] = useState<BlogPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user && user.role === 'coach') {
-      // In a real app, fetch posts by user.id
-      // For mock, filter by authorId if user.id matches mock coach id structure
-      // Let's assume mock coach has id '1' (Dr. Eleanor Vance)
-      const currentCoachId = "1"; // Replace with dynamic user.id in real app.
-      setCoachPosts(mockBlogPosts.filter(post => post.authorId === currentCoachId));
+    if (user && user.role === 'coach' && user.id) {
+      setIsLoadingPosts(true);
+      setError(null);
+      getMyBlogPosts(user.id)
+        .then(posts => {
+          setCoachPosts(posts);
+        })
+        .catch(err => {
+          console.error("Error fetching coach blog posts:", err);
+          setError("Failed to load your blog posts. Please try again later.");
+        })
+        .finally(() => {
+          setIsLoadingPosts(false);
+        });
+    } else if (!authLoading && (!user || user.role !== 'coach')) {
+        setIsLoadingPosts(false);
+        setError("You must be logged in as a coach to manage blog posts.");
     }
-  }, [user]);
+  }, [user, authLoading]);
+
+  if (authLoading || isLoadingPosts) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[300px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading your blog posts...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+     return (
+        <Card className="text-center py-12 bg-destructive/10 border-destructive">
+          <CardHeader>
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive mb-3" />
+            <CardTitle className="text-destructive">Error Loading Posts</CardTitle>
+            <CardDescription className="text-destructive/80">{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+             <Button asChild variant="outline">
+                <Link href="/dashboard/coach">Back to Dashboard</Link>
+            </Button>
+          </CardContent>
+        </Card>
+     )
+  }
 
   return (
     <div className="space-y-8">

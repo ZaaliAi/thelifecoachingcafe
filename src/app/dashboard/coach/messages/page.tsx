@@ -1,23 +1,58 @@
 
+"use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare } from "lucide-react";
-import type { Message } from "@/types"; // Assuming a Message type
+import { MessageSquare, Loader2, AlertCircle } from "lucide-react";
+import type { Message as MessageType } from "@/types"; // Renamed to avoid conflict
 import { format } from "date-fns";
-
-// Mock messages for placeholder - replace with Firestore fetching
-const mockMessages: (Message & { userName: string, userAvatar?: string, dataAiHint?: string })[] = [
-  { id: '1', senderId: 'user1', receiverId: 'coach1', content: "Hello Coach, I'm interested in your services.", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), read: false, userName: "Alex Johnson", userAvatar: "https://placehold.co/40x40.png", dataAiHint: "person face" },
-  { id: '2', senderId: 'user2', receiverId: 'coach1', content: "I'd like to schedule a consultation.", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), read: true, userName: "Samantha Lee", userAvatar: "https://placehold.co/40x40.png", dataAiHint: "woman smiling" },
-  { id: '3', senderId: 'user3', receiverId: 'coach1', content: "Can you tell me more about your career coaching program?", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), read: false, userName: "Mike Brown", userAvatar: "https://placehold.co/40x40.png", dataAiHint: "man thinking" },
-];
-
+import { useAuth } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { getMessagesForUser } from "@/lib/firestore";
 
 export default function CoachMessagesPage() {
-  // In a real app, fetch messages for the logged-in coach from Firestore
-  const messages = mockMessages; // Replace this with actual data fetching
+  const { user, loading: authLoading } = useAuth();
+  const [messages, setMessages] = useState<any[]>([]); // Using any for now
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user && user.id && user.role === 'coach') {
+      setIsLoadingMessages(true);
+      setError(null);
+      getMessagesForUser(user.id)
+        .then(fetchedMessages => {
+          const processedMessages = fetchedMessages.map(msg => ({
+            ...msg,
+            otherPartyName: msg.senderId === user.id ? msg.recipientName : msg.senderName,
+            // otherPartyAvatar: "https://placehold.co/40x40.png", // Placeholder
+            // dataAiHint: "person avatar"
+          }));
+          setMessages(processedMessages);
+        })
+        .catch(err => {
+          console.error("Error fetching coach messages:", err);
+          setError("Failed to load messages.");
+        })
+        .finally(() => {
+          setIsLoadingMessages(false);
+        });
+    } else if (!authLoading && (!user || user.role !== 'coach')) {
+      setIsLoadingMessages(false);
+      setError("Please log in as a coach to view your messages.");
+    }
+  }, [user, authLoading]);
+
+  if (authLoading || isLoadingMessages) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[300px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading messages...</span>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-8">
@@ -34,44 +69,57 @@ export default function CoachMessagesPage() {
         </CardContent>
       </Card>
 
-      {messages.length > 0 ? (
+      {error && (
+         <Card className="text-center py-12 bg-destructive/10 border-destructive">
+          <CardHeader>
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive mb-3" />
+            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardDescription className="text-destructive/80">{error}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {!error && messages.length > 0 ? (
         <div className="space-y-4">
           {messages.map((message) => (
-            <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read ? 'border-primary border-2' : ''}`}>
+            <Card key={message.id} className={`hover:shadow-md transition-shadow ${!message.read && message.senderId !== user?.id ? 'border-primary border-2' : ''}`}>
               <CardContent className="p-4 flex items-start space-x-4">
-                {message.userAvatar && (
+                {message.otherPartyAvatar && (
                   <Avatar className="h-10 w-10 border">
-                    <AvatarImage src={message.userAvatar} alt={message.userName} data-ai-hint={message.dataAiHint} />
-                    <AvatarFallback>{message.userName.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName || 'User'} data-ai-hint={message.dataAiHint as string || 'person avatar'} />
+                    <AvatarFallback>{message.otherPartyName?.charAt(0) || 'U'}</AvatarFallback>
                   </Avatar>
                 )}
                 <div className="flex-1">
                   <div className="flex justify-between items-center">
-                    <h3 className="font-semibold">{message.userName}</h3>
+                    <h3 className="font-semibold">{message.otherPartyName || (message.senderId === user?.id ? "To: " + message.recipientName : "From: " + message.senderName)}</h3>
                     <span className="text-xs text-muted-foreground">{format(new Date(message.timestamp), 'PPpp')}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1 truncate">{message.content}</p>
+                  <p className="text-sm text-muted-foreground mt-1 truncate">
+                     {message.senderId === user?.id ? 'You: ' : ''}{message.content}
+                  </p>
                 </div>
                 <div className="flex flex-col items-end space-y-1">
-                    {!message.read && <Badge variant="default" className="bg-primary text-primary-foreground">New</Badge>}
-                    <Button variant="outline" size="sm">View</Button>
+                    {!message.read && message.senderId !== user?.id && <Badge variant="default" className="bg-primary text-primary-foreground">New</Badge>}
+                    <Button variant="outline" size="sm" disabled>View (Soon)</Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <Card className="text-center py-12">
-            <CardHeader>
-                <CardTitle>No Messages Yet</CardTitle>
-                <CardDescription>Your client messages will appear here once you start receiving inquiries.</CardDescription>
-            </CardHeader>
-        </Card>
+         !error && (
+            <Card className="text-center py-12">
+                <CardHeader>
+                    <CardTitle>No Messages Yet</CardTitle>
+                    <CardDescription>Your client messages will appear here once you start receiving inquiries.</CardDescription>
+                </CardHeader>
+            </Card>
+         )
       )}
-       {/* Pagination Placeholder */}
-      {messages.length > 0 && (
+      {!error && messages.length > 0 && (
         <div className="mt-8 flex justify-center">
-          <Button variant="outline" disabled>Load More Messages</Button>
+          <Button variant="outline" disabled>Load More Messages (Soon)</Button>
         </div>
       )}
     </div>

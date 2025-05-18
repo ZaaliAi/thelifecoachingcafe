@@ -1,13 +1,37 @@
 
+"use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { MessageSquare, UserCircle, Search } from "lucide-react";
+import { MessageSquare, UserCircle, Search, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { useEffect, useState } from "react";
 
 export default function UserDashboardPage() {
-  // In a real app, fetch user-specific data here
-  const userName = "Valued User"; // Placeholder
-  const recentMessagesCount = 3; // Placeholder
+  const { user, loading } = useAuth();
+  const [userName, setUserName] = useState("Valued User");
+  // Message count would require a specific query, placeholder for now
+  const [recentMessagesCount, setRecentMessagesCount] = useState(0); 
+
+  useEffect(() => {
+    if (user) {
+      setUserName(user.name || user.email?.split('@')[0] || "User");
+      // In a real app, fetch recentMessagesCount here
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  if (!user) {
+    // This should ideally be handled by the DashboardLayout redirecting to /login
+    return <p>Please log in to view your dashboard.</p>;
+  }
 
   return (
     <div className="space-y-8">
@@ -62,19 +86,12 @@ export default function UserDashboardPage() {
         </Card>
       </div>
 
-      {/* Placeholder for search history or saved coaches */}
       <Card>
         <CardHeader>
           <CardTitle>Activity Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">Your recent searches and saved coaches will appear here.</p>
-          {/* Example:
-          <ul className="mt-4 space-y-2">
-            <li className="flex justify-between items-center p-3 bg-muted/50 rounded-md"><span>Search: "Career coaching"</span> <Button variant="ghost" size="sm">View Results</Button></li>
-            <li className="flex justify-between items-center p-3 bg-muted/50 rounded-md"><span>Saved Coach: Dr. Eleanor Vance</span> <Button variant="ghost" size="sm">View Profile</Button></li>
-          </ul>
-          */}
+          <p className="text-muted-foreground">Your recent searches and saved coaches will appear here (feature coming soon).</p>
         </CardContent>
       </Card>
     </div>

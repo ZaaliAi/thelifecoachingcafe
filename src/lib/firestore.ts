@@ -2,7 +2,7 @@
 import type { Timestamp } from "firebase/firestore";
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
-  serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc
+  serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup,getCountFromServer
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus } from '@/types';
@@ -10,27 +10,25 @@ import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole
 // Helper to convert Firestore Timestamps to ISO strings for a coach object
 const mapCoachFromFirestore = (docData: any, id: string): Coach => {
   const data = docData as Omit<FirestoreUserProfile, 'id'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
-  console.log(`[mapCoachFromFirestore] Mapping data for coach ${id}:`, data);
+  console.log(`[mapCoachFromFirestore] Raw data for coach ${id}:`, JSON.stringify(data));
   return {
     id,
     name: data.name || 'Unnamed Coach',
-    email: data.email,
+    email: data.email, // email will be present from FirestoreUserProfile
     bio: data.bio || 'No bio available.',
-    // role: data.role || 'coach', // Role is part of User, not directly on Coach display type usually
     specialties: data.specialties || [],
     keywords: data.keywords || [],
-    profileImageUrl: data.profileImageUrl || undefined,
+    profileImageUrl: data.profileImageUrl === undefined ? null : data.profileImageUrl, // Ensure null if undefined
     dataAiHint: data.dataAiHint,
     certifications: data.certifications || [],
     socialLinks: data.socialLinks || [],
     location: data.location || undefined,
-    // availability: data.availability, // Assuming availability is handled elsewhere or not displayed on card
     subscriptionTier: data.subscriptionTier || 'free',
     websiteUrl: data.websiteUrl || undefined,
     introVideoUrl: data.introVideoUrl || undefined,
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
-    status: data.status || 'pending_approval', // Default to pending if not set
+    status: data.status || 'pending_approval',
     dataSource: 'Firestore',
   };
 };
@@ -40,17 +38,17 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
   const data = docData as Omit<FirestoreBlogPost, 'id'> & { createdAt: Timestamp, updatedAt?: Timestamp };
   return {
     id,
-    slug: data.slug || id,
+    slug: data.slug || id, // Fallback slug to id if not present
     title: data.title || 'Untitled Post',
     content: data.content || '',
-    excerpt: data.excerpt,
+    excerpt: data.excerpt || '', // Ensure excerpt is at least an empty string
     authorId: data.authorId || 'unknown_author',
     authorName: data.authorName || 'Unknown Author',
     createdAt: data.createdAt.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
     status: data.status || 'draft',
     tags: data.tags || [],
-    featuredImageUrl: data.featuredImageUrl,
+    featuredImageUrl: data.featuredImageUrl || undefined, // Ensure undefined if not present
     dataAiHint: data.dataAiHint,
   };
 };
@@ -58,7 +56,7 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
 
 export async function setUserProfile(userId: string, profileData: Partial<Omit<FirestoreUserProfile, 'id' | 'createdAt' | 'updatedAt'>>) {
   console.log(`[setUserProfile] Called for user: ${userId}`);
-  console.log("[setUserProfile] Incoming profileData (original):", JSON.stringify(profileData, null, 2));
+  console.log("[setUserProfile] Incoming profileData (original from auth.tsx or form):", JSON.stringify(profileData, null, 2));
 
   if (!userId) {
     console.error("[setUserProfile] CRITICAL: userId is undefined or null. Profile cannot be saved.");
@@ -71,54 +69,48 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     const userSnap = await getDoc(userDocRef);
     const isCreating = !userSnap.exists();
     
-    // Build the data object carefully
     const dataToSet: { [key: string]: any } = {};
 
-    // Core fields that should be in profileData for create, or can be updated
+    // Fields from profileData (what the client/form sends)
     if (profileData.name !== undefined) dataToSet.name = profileData.name;
-    if (profileData.email !== undefined) dataToSet.email = profileData.email; // Essential for create
-    if (profileData.role !== undefined) dataToSet.role = profileData.role;     // Essential for create
-
-    // Optional fields - only add if present in profileData
+    if (isCreating && profileData.email !== undefined) dataToSet.email = profileData.email; // Email only on create
+    if (isCreating && profileData.role !== undefined) dataToSet.role = profileData.role;       // Role only on create
+    
     if (profileData.bio !== undefined) dataToSet.bio = profileData.bio;
     if (profileData.specialties !== undefined) dataToSet.specialties = profileData.specialties;
     if (profileData.keywords !== undefined) dataToSet.keywords = profileData.keywords;
     
-    // Handle profileImageUrl: set to null if explicitly passed as null or undefined, otherwise use value
+    // Handle profileImageUrl: set to null if explicitly passed as null or an empty string from form, otherwise use value
+    // For create, auth.tsx sends null if no photoURL. For update, form sends URL or null.
     if (profileData.hasOwnProperty('profileImageUrl')) {
-      dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? null : profileData.profileImageUrl;
+      dataToSet.profileImageUrl = profileData.profileImageUrl || null;
     } else if (isCreating) {
-      dataToSet.profileImageUrl = null; // Ensure it's set to null on create if not provided
+      dataToSet.profileImageUrl = null; // Default to null on create if not provided by auth.tsx
     }
     
     if (profileData.certifications !== undefined) dataToSet.certifications = profileData.certifications;
-    if (profileData.location !== undefined) dataToSet.location = profileData.location;
-    if (profileData.websiteUrl !== undefined) dataToSet.websiteUrl = profileData.websiteUrl;
-    if (profileData.introVideoUrl !== undefined) dataToSet.introVideoUrl = profileData.introVideoUrl;
+    if (profileData.location !== undefined) dataToSet.location = profileData.location || null;
+    if (profileData.websiteUrl !== undefined) dataToSet.websiteUrl = profileData.websiteUrl || null;
+    if (profileData.introVideoUrl !== undefined) dataToSet.introVideoUrl = profileData.introVideoUrl || null;
     if (profileData.socialLinks !== undefined) dataToSet.socialLinks = profileData.socialLinks;
     
-    // Handle subscriptionTier and status (especially for coaches)
-    if (profileData.role === 'coach') {
-      if (isCreating) {
-        dataToSet.subscriptionTier = profileData.subscriptionTier || 'free';
-        dataToSet.status = profileData.status || 'pending_approval';
-      } else { // For updates
-        if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier; // Allow admin to update
-        if (profileData.status !== undefined) dataToSet.status = profileData.status; // Allow admin to update
-      }
-    } else { // For 'user' or 'admin' roles, these fields might not be applicable or sent
-        if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier; // Could be for admin editing another admin
-        if (profileData.status !== undefined) dataToSet.status = profileData.status; // For admin changing status
-    }
-
-
+    if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier;
+    if (profileData.status !== undefined) dataToSet.status = profileData.status;
+    
+    // Timestamps
     dataToSet.updatedAt = serverTimestamp();
     if (isCreating) {
       dataToSet.createdAt = serverTimestamp();
+      // Set initial status and subscriptionTier for new coaches if not explicitly in profileData (though auth.tsx should send them)
+      if (dataToSet.role === 'coach') {
+        if (dataToSet.subscriptionTier === undefined) dataToSet.subscriptionTier = 'free';
+        if (dataToSet.status === undefined) dataToSet.status = 'pending_approval';
+      }
     }
     
     console.log(`[setUserProfile] FINAL data object for ${isCreating ? 'setDoc (new)' : 'setDoc (merge)'} on /users/${userId}:`, JSON.stringify(dataToSet, null, 2));
     
+    // Use setDoc with merge: true for updates, and setDoc without merge for creation (to ensure all fields are set initially)
     await setDoc(userDocRef, dataToSet, { merge: !isCreating }); 
     
     console.log(`[setUserProfile] User profile data written successfully for user: ${userId}. Operation: ${isCreating ? 'CREATE' : 'UPDATE'}`);
@@ -129,6 +121,7 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     throw error;
   }
 }
+
 
 export async function getUserProfile(userId: string): Promise<(FirestoreUserProfile & { id: string }) | null> {
   console.log(`[getUserProfile] Fetching profile for user: ${userId}`);
@@ -153,19 +146,20 @@ export async function getUserProfile(userId: string): Promise<(FirestoreUserProf
   }
 }
 
-// ... create/update/get blog post functions remain the same ...
 
 export async function createFirestoreBlogPost(postData: Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'updatedAt' | 'slug'> & { slug?: string }): Promise<string> {
   try {
     const blogsCollection = collection(db, "blogs");
     const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
     
-    const dataWithTimestampsAndSlug: FirestoreBlogPost = {
+    const dataWithTimestampsAndSlug = {
       ...postData,
       slug: slug,
       createdAt: serverTimestamp(), 
       updatedAt: serverTimestamp(),
       tags: postData.tags || [],
+      featuredImageUrl: postData.featuredImageUrl || null, // Store null if empty/undefined
+      excerpt: postData.excerpt || '',
     };
     
     console.log("[createFirestoreBlogPost] Attempting to create blog post with data:", JSON.stringify(dataWithTimestampsAndSlug, null, 2));
@@ -181,18 +175,27 @@ export async function createFirestoreBlogPost(postData: Omit<FirestoreBlogPost, 
 export async function updateFirestoreBlogPost(postId: string, postData: Partial<Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'authorId' | 'authorName' | 'slug'>>) {
   try {
     const postDocRef = doc(db, "blogs", postId);
-    const dataWithTimestamp: Partial<FirestoreBlogPost> & {updatedAt: any} = { 
+    const dataToUpdate: Partial<FirestoreBlogPost> & {updatedAt: any} = { 
       ...postData,
       updatedAt: serverTimestamp()
     };
      if (postData.tags && typeof postData.tags === 'string') {
-        dataWithTimestamp.tags = (postData.tags as string).split(',').map(tag => tag.trim()).filter(Boolean);
-    } else if (postData.tags === undefined) { // ensure tags field is not sent as undefined
-        delete dataWithTimestamp.tags;
+        dataToUpdate.tags = (postData.tags as string).split(',').map(tag => tag.trim()).filter(Boolean);
+    } else if (Array.isArray(postData.tags)) {
+        dataToUpdate.tags = postData.tags.map(tag => tag.trim()).filter(Boolean);
+    } else if (postData.tags === undefined) {
+        delete dataToUpdate.tags;
     }
 
-    console.log(`[updateFirestoreBlogPost] Attempting to update blog post ${postId} with data:`, JSON.stringify(dataWithTimestamp, null, 2));
-    await updateDoc(postDocRef, dataWithTimestamp);
+    if (postData.featuredImageUrl === undefined) delete dataToUpdate.featuredImageUrl;
+    else dataToUpdate.featuredImageUrl = postData.featuredImageUrl || null;
+
+    if (postData.excerpt === undefined) delete dataToUpdate.excerpt;
+    else dataToUpdate.excerpt = postData.excerpt || '';
+
+
+    console.log(`[updateFirestoreBlogPost] Attempting to update blog post ${postId} with data:`, JSON.stringify(dataToUpdate, null, 2));
+    await updateDoc(postDocRef, dataToUpdate);
     console.log(`[updateFirestoreBlogPost] Blog post updated successfully: ${postId}`);
   } catch (error) {
     console.error(`[updateFirestoreBlogPost] Error updating blog post ${postId}:`, error);
@@ -265,7 +268,7 @@ export async function getBlogPostsByAuthor(authorId: string, count = 10): Promis
     const q = query(
       blogsCollection,
       where("authorId", "==", authorId),
-      where("status", "==", "published"),
+      where("status", "==", "published"), // Only fetch published posts for public display
       orderBy("createdAt", "desc"),
       firestoreLimit(count)
     );
@@ -281,20 +284,24 @@ export async function getBlogPostsByAuthor(authorId: string, count = 10): Promis
   }
 }
 
-export async function getAllCoaches(filters?: { searchTerm?: string }): Promise<Coach[]> {
+export async function getAllCoaches(filters?: { searchTerm?: string, includeAllStatuses?: boolean }): Promise<Coach[]> {
   console.log("[getAllCoaches] Fetching coaches. Filters:", JSON.stringify(filters) || "None");
   try {
-    const coachesQuery = query(
+    let coachesCollQuery = query(
       collection(db, "users"),
-      where("role", "==", "coach"),
-      where("status", "==", "approved"), // Only fetch approved coaches for public display
-      orderBy("name", "asc"), 
-      firestoreLimit(50) 
+      where("role", "==", "coach")
     );
 
-    console.log("[getAllCoaches] Executing query to Firestore for approved coaches.");
-    const querySnapshot = await getDocs(coachesQuery);
-    console.log(`[getAllCoaches] Firestore query returned ${querySnapshot.docs.length} approved coaches.`);
+    if (!filters?.includeAllStatuses) {
+      coachesCollQuery = query(coachesCollQuery, where("status", "==", "approved"));
+    }
+    
+    coachesCollQuery = query(coachesCollQuery, orderBy("name", "asc"), firestoreLimit(50));
+
+
+    console.log("[getAllCoaches] Executing query to Firestore for coaches.");
+    const querySnapshot = await getDocs(coachesCollQuery);
+    console.log(`[getAllCoaches] Firestore query returned ${querySnapshot.docs.length} coaches matching role (and status if applicable).`);
     
     let allCoaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
 
@@ -314,7 +321,7 @@ export async function getAllCoaches(filters?: { searchTerm?: string }): Promise<
   } catch (error: any) {
     console.error("[getAllCoaches] Error getting all coaches:", error.code, error.message, error);
     if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
-      console.error("[getAllCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index (users: role ASC, status ASC, name ASC).");
+      console.error("[getAllCoaches] This is likely a Firestore Security Rule issue or a missing/incorrect index.");
     }
     return [];
   }
@@ -332,12 +339,6 @@ export async function getCoachById(coachId: string): Promise<Coach | null> {
 
     if (coachDoc.exists() && coachDoc.data().role === 'coach') {
       console.log(`[getCoachById] Document found for ${coachId}:`, coachDoc.data());
-      // For public profile, only show if approved, unless fetched by admin/owner (handled by rules)
-      // This client-side check is an additional layer or for contexts where rules might not apply directly before fetch
-      if (coachDoc.data().status !== 'approved') {
-        console.warn(`[getCoachById] Coach ${coachId} is not approved. Status: ${coachDoc.data().status}`);
-        // Depending on desired behavior, you might return null or the coach data anyway and let rules handle public visibility
-      }
       return mapCoachFromFirestore(coachDoc.data(), coachDoc.id);
     } else {
       console.warn(`[getCoachById] Document ${coachId} does not exist or is not a coach.`);
@@ -385,7 +386,7 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
       collection(db, "users"),
       where("role", "==", "coach"),
       where("status", "==", "approved"), // Only show approved coaches
-      orderBy("name", "asc"), // Or some other criteria for "featured"
+      orderBy("name", "asc"), 
       firestoreLimit(count)
     );
     console.log("[getFeaturedCoaches] Executing query to fetch featured coaches.");
@@ -464,7 +465,7 @@ export async function deleteFirestoreBlogPost(postId: string): Promise<void> {
 }
 
 export async function getAllBlogPostsForAdmin(count = 50): Promise<BlogPost[]> {
-  console.log(`[getAllBlogPostsForAdmin] Fetching up to ${count} blog posts for admin view.`);
+  console.log(`[getAllBlogPostsForAdmin] Fetching up to ${count} blog posts for admin view (all statuses).`);
   try {
     const blogsCollection = collection(db, "blogs");
     const q = query(
@@ -501,4 +502,114 @@ export async function getMyBlogPosts(authorId: string, count = 50): Promise<Blog
     }
     return [];
   }
+}
+
+// Firestore function to get messages for a user
+// A more complex implementation would involve listening for real-time updates
+export async function getMessagesForUser(userId: string): Promise<any[]> { // Using 'any' for now for message type
+  console.log(`[getMessagesForUser] Fetching messages for user: ${userId}`);
+  if (!userId) return [];
+  try {
+    const messagesRef = collection(db, "messages");
+    // Query for messages where the user is either the sender or receiver
+    const qSender = query(messagesRef, where("senderId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(20));
+    const qReceiver = query(messagesRef, where("receiverId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(20));
+
+    const [senderSnapshot, receiverSnapshot] = await Promise.all([
+      getDocs(qSender),
+      getDocs(qReceiver)
+    ]);
+
+    const messages: any[] = [];
+    senderSnapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+    receiverSnapshot.forEach(doc => {
+      // Avoid duplicates if user sent message to themselves (edge case)
+      if (!messages.find(m => m.id === doc.id)) {
+        messages.push({ id: doc.id, ...doc.data() });
+      }
+    });
+
+    // Sort all messages by timestamp
+    messages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    // In a real app, you'd map this to your Message type, converting Firestore timestamps
+    console.log(`[getMessagesForUser] Fetched ${messages.length} messages for user ${userId}`);
+    return messages.map(msg => ({
+      ...msg,
+      timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate().toISOString() : new Date(msg.timestamp).toISOString() // Handle both Timestamp and string
+    }));
+  } catch (error) {
+    console.error(`[getMessagesForUser] Error fetching messages for user ${userId}:`, error);
+    return [];
+  }
+}
+
+
+// Functions for Admin Dashboard Stats (Basic Implementations)
+export async function getPendingCoachCount(): Promise<number> {
+  try {
+    const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "pending_approval"));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (e) { console.error("Error getPendingCoachCount: ", e); return 0; }
+}
+
+export async function getPendingBlogPostCount(): Promise<number> {
+  try {
+    const q = query(collection(db, "blogs"), where("status", "==", "pending_approval"));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (e) { console.error("Error getPendingBlogPostCount: ", e); return 0; }
+}
+
+export async function getTotalUserCount(): Promise<number> {
+ try {
+    const q = query(collection(db, "users")); // Counts all documents in users
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (e) { console.error("Error getTotalUserCount: ", e); return 0; }
+}
+
+export async function getTotalCoachCount(): Promise<number> {
+  try {
+    const q = query(collection(db, "users"), where("role", "==", "coach"));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (e) { console.error("Error getTotalCoachCount: ", e); return 0; }
+}
+
+
+// Functions for Coach Dashboard Stats
+export async function getCoachBlogStats(authorId: string): Promise<{ pending: number, published: number }> {
+    if (!authorId) return { pending: 0, published: 0};
+    try {
+        const blogsCollection = collection(db, "blogs");
+        const pendingQuery = query(blogsCollection, where("authorId", "==", authorId), where("status", "in", ["draft", "pending_approval"]));
+        const publishedQuery = query(blogsCollection, where("authorId", "==", authorId), where("status", "==", "published"));
+
+        const [pendingSnapshot, publishedSnapshot] = await Promise.all([
+            getCountFromServer(pendingQuery),
+            getCountFromServer(publishedQuery)
+        ]);
+        return {
+            pending: pendingSnapshot.data().count,
+            published: publishedSnapshot.data().count
+        };
+    } catch (error) {
+        console.error(`Error getting blog stats for coach ${authorId}:`, error);
+        return { pending: 0, published: 0 };
+    }
+}
+
+export async function getCoachUnreadMessageCount(coachId: string): Promise<number> {
+    if (!coachId) return 0;
+    try {
+        const messagesCollection = collection(db, "messages");
+        const q = query(messagesCollection, where("receiverId", "==", coachId), where("read", "==", false));
+        const snapshot = await getCountFromServer(q);
+        return snapshot.data().count;
+    } catch (error) {
+        console.error(`Error getting unread message count for coach ${coachId}:`, error);
+        return 0;
+    }
 }
