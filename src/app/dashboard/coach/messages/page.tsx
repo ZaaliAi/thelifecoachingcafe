@@ -5,11 +5,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Loader2, AlertCircle, Info, RefreshCw } from "lucide-react";
-import type { Message as MessageType } from "@/types";
+import type { Message as MessageType, FirestoreUserProfile, Coach } from "@/types"; // Ensure Coach type is imported
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState, useCallback } from "react";
-import { getMessagesForUser, getUserProfile, getCoachById } from "@/lib/firestore";
+import { getMessagesForUser, getUserProfile, getCoachById } from "@/lib/firestore"; // getUserProfile for other party
 import { useRouter } from "next/navigation";
 
 export default function CoachMessagesPage() {
@@ -20,53 +20,60 @@ export default function CoachMessagesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
+    if (authLoading) {
+      console.log("[CoachMessagesPage] Auth is still loading, waiting to fetch messages.");
+      return;
+    }
     if (!user || !user.id || user.role !== 'coach') {
-      if (!authLoading) { // Only set error if auth is not loading
-        setError("Please log in as a coach to view your messages.");
-        setIsLoadingMessages(false);
-        console.warn("[CoachMessagesPage] User not authenticated or not a coach. User:", user, "AuthLoading:", authLoading);
-      }
+      setError("Please log in as a coach to view your messages.");
+      setIsLoadingMessages(false);
+      console.warn("[CoachMessagesPage] User not authenticated or not a coach. User:", JSON.stringify(user), "AuthLoading:", authLoading);
       return;
     }
 
     setIsLoadingMessages(true);
     setError(null);
-    console.log(`[CoachMessagesPage] Attempting to fetch messages for coach UID: ${user.id}`);
+    console.log(`[CoachMessagesPage] Attempting to fetch messages for coach UID: ${user.id}. User object:`, JSON.stringify(user));
     try {
       const fetchedMessages = await getMessagesForUser(user.id);
       console.log(`[CoachMessagesPage] Fetched ${fetchedMessages.length} raw messages for coach ${user.id}`);
       
       const convosMap = new Map<string, MessageType>();
-      for (const msg of fetchedMessages) {
-        const otherPartyId = msg.otherPartyId;
-        if (!otherPartyId) {
-            console.warn("[CoachMessagesPage] Message missing otherPartyId:", msg.id);
-            continue;
-        }
-        
+      const enrichedMessagesPromises = fetchedMessages.map(async (msg) => {
         let enrichedMsg = { ...msg };
-        if (!msg.otherPartyName || !msg.otherPartyAvatar) {
-            // For coach, the other party is likely a 'user'
-            const userProfile = await getUserProfile(otherPartyId); 
-            if (userProfile) {
-              enrichedMsg.otherPartyName = userProfile.name || msg.otherPartyName || 'Unknown User';
-              enrichedMsg.otherPartyAvatar = userProfile.profileImageUrl || msg.otherPartyAvatar;
-              enrichedMsg.dataAiHint = userProfile.dataAiHint || "person avatar";
+        if (msg.otherPartyId && (!msg.otherPartyName || !msg.otherPartyAvatar)) {
+            // For coach, the other party is likely a 'user' (client)
+            const otherPartyProfile: FirestoreUserProfile | null = await getUserProfile(msg.otherPartyId);
+            if (otherPartyProfile) {
+              enrichedMsg.otherPartyName = otherPartyProfile.name || 'Client';
+              enrichedMsg.otherPartyAvatar = otherPartyProfile.profileImageUrl;
+              enrichedMsg.dataAiHint = otherPartyProfile.dataAiHint || "person avatar";
             } else {
-              enrichedMsg.otherPartyName = msg.otherPartyName || 'Unknown User';
+              enrichedMsg.otherPartyName = enrichedMsg.otherPartyName || 'Unknown Client'; // Fallback if profile not found
             }
         }
+        return enrichedMsg;
+      });
 
+      const resolvedEnrichedMessages = await Promise.all(enrichedMessagesPromises);
+
+      for (const enrichedMsg of resolvedEnrichedMessages) {
+        const otherPartyId = enrichedMsg.otherPartyId;
+        if (!otherPartyId) {
+            console.warn("[CoachMessagesPage] Message missing otherPartyId after enrichment:", enrichedMsg.id);
+            continue;
+        }
         if (!convosMap.has(otherPartyId) || new Date(enrichedMsg.timestamp) > new Date(convosMap.get(otherPartyId)!.timestamp)) {
           convosMap.set(otherPartyId, enrichedMsg);
         }
       }
+      
       const sortedConversations = Array.from(convosMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setConversations(sortedConversations);
       console.log(`[CoachMessagesPage] Processed into ${sortedConversations.length} conversations for coach ${user.id}`);
 
     } catch (err: any) {
-      console.error("[CoachMessagesPage] Error fetching coach messages:", err.code, err.message, err);
+      console.error("[CoachMessagesPage] Error in fetchMessages:", err.code, err.message, err);
       setError(`Failed to load messages. ${err.message || 'Please try again.'}`);
     } finally {
       setIsLoadingMessages(false);
@@ -74,16 +81,14 @@ export default function CoachMessagesPage() {
   }, [user, authLoading]);
 
   useEffect(() => {
-    console.log("[CoachMessagesPage] useEffect triggered. AuthLoading:", authLoading, "User:", user ? user.id + " (" + user.role + ")" : "null");
+    // This effect will run when authLoading changes or when user object changes.
     if (!authLoading && user && user.id && user.role === 'coach') {
-      console.log(`[CoachMessagesPage] User context available. Coach ID: ${user.id}. Triggering fetchMessages.`);
+      console.log(`[CoachMessagesPage] useEffect: User context available. Coach ID: ${user.id}. Triggering fetchMessages.`);
       fetchMessages();
     } else if (!authLoading && (!user || user.role !== 'coach')) {
-        console.log("[CoachMessagesPage] No coach in context after auth loading complete or user is not a coach.");
+        console.warn("[CoachMessagesPage] useEffect: No coach in context or user is not a coach. User:", JSON.stringify(user));
          setError("Please log in as a coach to view your messages.");
          setIsLoadingMessages(false);
-    } else if (authLoading) {
-        console.log("[CoachMessagesPage] Auth is loading, waiting to fetch messages.");
     }
   }, [user, authLoading, fetchMessages]);
 
@@ -95,7 +100,6 @@ export default function CoachMessagesPage() {
       </div>
     );
   }
-
 
   return (
     <div className="space-y-8">
@@ -131,7 +135,10 @@ export default function CoachMessagesPage() {
         <div className="space-y-4">
           {conversations.map((message) => {
             const otherPartyId = message.otherPartyId;
-            if (!otherPartyId) return null;
+            if (!otherPartyId) {
+                console.warn("[CoachMessagesPage] Skipping message render due to missing otherPartyId:", message.id);
+                return null; // Should ideally not happen
+            }
 
             return (
               <Card 
@@ -142,23 +149,23 @@ export default function CoachMessagesPage() {
                   {(message.otherPartyAvatar) ? (
                     <Avatar className="h-10 w-10 border">
                       <AvatarImage src={message.otherPartyAvatar} alt={message.otherPartyName || 'User'} data-ai-hint={message.dataAiHint as string || 'person avatar'} />
-                      <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+                      <AvatarFallback>{message.otherPartyName?.charAt(0)?.toUpperCase() || 'C'}</AvatarFallback>
                     </Avatar>
                   ) : (
                       <Avatar className="h-10 w-10 border bg-muted">
-                          <AvatarFallback className="text-muted-foreground">{message.otherPartyName?.charAt(0)?.toUpperCase() || 'U'}</AvatarFallback>
+                          <AvatarFallback className="text-muted-foreground">{message.otherPartyName?.charAt(0)?.toUpperCase() || 'C'}</AvatarFallback>
                       </Avatar>
                   )}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
-                      <h3 className="font-semibold">{message.otherPartyName || (message.senderId === user?.id ? "To Client" : "From Client")}</h3>
-                      <span className="text-xs text-muted-foreground">{format(new Date(message.timestamp), 'PP p')}</span>
+                      <h3 className="font-semibold truncate">{message.otherPartyName || (message.senderId === user?.id ? "To Client" : "From Client")}</h3>
+                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">{format(new Date(message.timestamp), 'PP p')}</span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1 truncate">
                       {message.senderId === user?.id ? <span className="font-medium text-foreground/80">You: </span> : ''}{message.content}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end space-y-1">
+                  <div className="flex flex-col items-end space-y-1 flex-shrink-0">
                       {!message.read && message.senderId !== user?.id && <Badge className="bg-primary text-primary-foreground hover:bg-primary/90">New</Badge>}
                       <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/messages/${otherPartyId}`)} >View Thread</Button>
                   </div>
