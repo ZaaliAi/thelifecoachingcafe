@@ -14,7 +14,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Loader2, LogIn } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import type { FirebaseError } from 'firebase/app';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address.'),
@@ -34,9 +33,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      // User is logged in, redirect to their dashboard
-      console.log(`[LoginPage] User already logged in as ${user.role}, redirecting to /dashboard/${user.role}`);
-      router.push(`/dashboard/${user.role}`);
+      console.log(`[LoginPage] User logged in. Role: ${user.role}. Redirecting...`);
+      if (user.role === 'admin') {
+        router.push('/dashboard/admin');
+      } else if (user.role === 'coach') {
+        // Check if coach profile is complete (e.g., bio might be a good indicator)
+        // This logic might need to be more robust based on your actual profile completion markers
+        // For now, we assume if role is coach, they go to coach dashboard.
+        // If profile completion is strictly enforced by redirecting to /register-coach, that logic
+        // should ideally live in the AuthProvider or a higher-order component.
+        router.push('/dashboard/coach');
+      } else {
+        router.push('/dashboard/user');
+      }
     }
   }, [user, authLoading, router]);
 
@@ -46,17 +55,15 @@ export default function LoginPage() {
       await login(data.email, data.password);
       // Successful login is handled by onAuthStateChanged in AuthProvider,
       // which then updates the user context. The useEffect above will redirect.
-      // No immediate redirect here to allow AuthContext to update first.
-      // If we reach here, it means login in auth.tsx didn't throw an error immediately,
-      // but actual user state update and redirection rely on onAuthStateChanged.
-      // A small delay or loading state might be good here before redirection.
+      // setIsLoading(false) will be handled by the loading state in AuthContext or useEffect redirect.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Login failed. Please check your credentials.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         errorMessage = "Invalid email or password. Please try again.";
       } else if (error.code) {
-        errorMessage = `Login error: ${error.message}`;
+        // errorMessage = `Login error: ${error.message}`; // Firebase messages can be verbose
+        console.error("Login Page Firebase Error:", error.code, error.message);
       }
       toast({
         title: "Login Failed",
@@ -64,11 +71,8 @@ export default function LoginPage() {
         variant: "destructive",
       });
     }
-    // Do not set setIsLoading(false) here if login might still be in progress via onAuthStateChanged
-    // It's better to let the loading state persist until redirection or a definitive error.
   };
   
-  // Prevent rendering form if already logged in and redirecting, or initial auth check is happening
   if (authLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -86,7 +90,6 @@ export default function LoginPage() {
       </div>
     );
   }
-
 
   return (
     <div className="flex items-center justify-center py-12">
