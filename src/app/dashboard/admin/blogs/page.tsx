@@ -149,7 +149,12 @@ export default function AdminManageBlogsPage() {
               {blogSubmissions.map((post) => (
                 <TableRow key={post.id}>
                   <TableCell className="font-medium max-w-xs truncate">
-                    <Link href={`/blog/${post.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                    <Link
+                      href={`/blog/${post.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                      legacyBehavior>
                         {post.title}
                     </Link>
                   </TableCell>
@@ -164,7 +169,11 @@ export default function AdminManageBlogsPage() {
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" asChild title="Preview Post">
-                      <Link href={`/blog/${post.slug}`} target="_blank" rel="noopener noreferrer">
+                      <Link
+                        href={`/blog/${post.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        legacyBehavior>
                         <Eye className="h-4 w-4" />
                       </Link>
                     </Button>

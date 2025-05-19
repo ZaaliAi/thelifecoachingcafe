@@ -18,7 +18,10 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
       {post.featuredImageUrl && (
         <CardHeader className="p-0 relative">
-          <Link href={`/blog/${post.slug}`} aria-label={`Read more about ${post.title}`}>
+          <Link
+            href={`/blog/${post.slug}`}
+            aria-label={`Read more about ${post.title}`}
+            legacyBehavior>
             <Image
               src={post.featuredImageUrl}
               alt={post.title}
@@ -37,7 +40,10 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           ))}
         </div>
         <CardTitle className="text-xl font-semibold mb-2">
-          <Link href={`/blog/${post.slug}`} className="hover:text-primary transition-colors">
+          <Link
+            href={`/blog/${post.slug}`}
+            className="hover:text-primary transition-colors"
+            legacyBehavior>
             {post.title}
           </Link>
         </CardTitle>
@@ -66,13 +72,13 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
       <CardFooter className="p-6 border-t">
         <div className="flex justify-between w-full items-center">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/blog/${post.slug}`}>
+            <Link href={`/blog/${post.slug}`} legacyBehavior>
               <Eye className="mr-2 h-4 w-4" /> Read More
             </Link>
           </Button>
           {showEditButton && (
              <Button asChild variant="ghost" size="sm">
-                <Link href={`/dashboard/coach/blog/edit/${post.id}`}>
+                <Link href={`/dashboard/coach/blog/edit/${post.id}`} legacyBehavior>
                   <Edit3 className="mr-2 h-4 w-4" /> Edit
                 </Link>
             </Button>

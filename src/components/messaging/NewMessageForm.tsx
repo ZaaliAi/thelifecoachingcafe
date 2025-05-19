@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react'; // Added Suspense here for nested use if any
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,7 +22,7 @@ const messageSchema = z.object({
 
 type MessageFormData = z.infer<typeof messageSchema>;
 
-export default function NewMessagePage() {
+export default function NewMessageForm() {
   const [isSending, setIsSending] = useState(false);
   const [recipientCoach, setRecipientCoach] = useState<Coach | null>(null);
   const [isLoadingCoach, setIsLoadingCoach] = useState(true);
@@ -93,10 +92,9 @@ export default function NewMessagePage() {
       });
       toast({
         title: "Message Sent!",
-        description: `Your message to ${recipientCoach.name} has been sent successfully.`,
+        description: `Your message to ${recipientCoach.name} has been sent successfully.`
       });
       reset(); // Clear the form
-      // Redirect to messages overview or conversation thread
       router.push(user.role === 'user' ? '/dashboard/user/messages' : `/dashboard/coach/messages`);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -115,7 +113,7 @@ export default function NewMessagePage() {
     );
   }
 
-  if (!user) { // Should be caught by useEffect, but as a fallback
+  if (!user) {
     return (
         <Card className="max-w-xl mx-auto text-center py-12">
             <CardHeader><CardTitle>Please Log In</CardTitle></CardHeader>
@@ -124,7 +122,7 @@ export default function NewMessagePage() {
     );
   }
   
-  if (!recipientCoach) { // Should be caught by useEffect, but as a fallback
+  if (!recipientCoach) {
       return (
           <Card className="max-w-xl mx-auto text-center py-12">
             <CardHeader>
@@ -138,7 +136,6 @@ export default function NewMessagePage() {
           </Card>
       )
   }
-
 
   return (
     <Card className="max-w-xl mx-auto shadow-lg">

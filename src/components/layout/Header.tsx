@@ -125,7 +125,7 @@ export function Header() {
                   </a>
                 </Link>
                 {navLinks.map(link => ( // Use all navLinks for mobile, including Home
-                    <NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />
+                    (<NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />)
                 ))}
                 <hr className="my-2 border-border" />
                 {!loading && (

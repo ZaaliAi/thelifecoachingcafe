@@ -128,7 +128,7 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-2">
-          <Link href="/forgot-password">
+          <Link href="/forgot-password" legacyBehavior>
             <Button variant="link" className="text-sm text-muted-foreground">Forgot password?</Button>
           </Link>
           <p className="text-sm text-muted-foreground">

@@ -371,7 +371,7 @@ export default function CoachProfilePage() {
                 <h3 className="text-lg font-semibold">Premium Features</h3>
                 {!isPremium && (
                     <Button variant="outline" size="sm" asChild className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700">
-                        <Link href="/pricing"><Crown className="mr-2 h-4 w-4 text-yellow-500" /> Upgrade to Premium</Link>
+                        <Link href="/pricing" legacyBehavior><Crown className="mr-2 h-4 w-4 text-yellow-500" /> Upgrade to Premium</Link>
                     </Button>
                 )}
             </div>

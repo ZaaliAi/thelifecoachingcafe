@@ -84,7 +84,10 @@ export default function UserMessagesPage() {
         <ul className="space-y-3">
           {validConversationList.map((latestMessage) => (
             <li key={latestMessage.id}> 
-              <Link href={`/dashboard/messages/${latestMessage.conversationId}`} className="block p-4 border rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow">
+              <Link
+                href={`/dashboard/messages/${latestMessage.conversationId}`}
+                className="block p-4 border rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow"
+                legacyBehavior>
                 <div className="flex justify-between items-center mb-1">
                   <p className="text-sm text-gray-700">
                     <strong>From:</strong> {latestMessage.senderName || latestMessage.senderId}

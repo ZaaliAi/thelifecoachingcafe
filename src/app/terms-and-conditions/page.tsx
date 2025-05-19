@@ -91,8 +91,16 @@ export default function TermsAndConditionsPage() {
             </p>
             <p>
               {companyName}<br />
-              Email: <Link href={`mailto:${companyEmail}`} className="text-primary hover:underline">{companyEmail}</Link><br />
-              Website: <Link href={`https://${companyUrl}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{companyUrl}</Link>
+              Email: <Link
+              href={`mailto:${companyEmail}`}
+              className="text-primary hover:underline"
+              legacyBehavior>{companyEmail}</Link><br />
+              Website: <Link
+              href={`https://${companyUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+              legacyBehavior>{companyUrl}</Link>
             </p>
           </section>
         </CardContent>

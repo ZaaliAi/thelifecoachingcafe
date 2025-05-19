@@ -33,7 +33,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
     <article className="max-w-3xl mx-auto py-8 space-y-8">
       <header className="space-y-4">
         <Button variant="outline" asChild className="mb-4">
-          <Link href="/blog"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Life Coaching Blog Articles</Link>
+          <Link href="/blog" legacyBehavior><ArrowLeft className="mr-2 h-4 w-4" /> Back to Life Coaching Blog Articles</Link>
         </Button>
         
         {post.featuredImageUrl && (
@@ -71,7 +71,6 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
           </div>
         </div>
       </header>
-
       <div className="prose prose-lg dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
         {/* In a real app, use a Markdown renderer here for post.content */}
         <p>{post.content}</p>
@@ -85,7 +84,6 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </figure>
         <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
       </div>
-
       <footer className="pt-8 border-t">
         <h3 className="text-xl font-semibold mb-4">About the Author: {author?.name || post.authorName}</h3>
         {author ? (

@@ -61,14 +61,13 @@ export default async function HomePage() {
               aria-label="Search for a life coach by specialty or need"
             />
             <Button asChild size="lg" className="h-12 text-base bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Link href="/find-a-coach">
+              <Link href="/find-a-coach" legacyBehavior>
                 <Search className="mr-2 h-5 w-5" /> CoachMatch AI
               </Link>
             </Button>
           </div>
         </div>
       </section>
-
       {/* Featured Coaches Section */}
       <section>
         <div className="flex items-center mb-8">
@@ -90,7 +89,6 @@ export default async function HomePage() {
           </Button>
         </div>
       </section>
-
       {/* How it works / Platform Intro */}
       <section className="py-12 bg-muted/50 rounded-lg shadow-sm">
         <div className="container mx-auto px-4">
@@ -114,8 +112,6 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
-
       {/* Testimonials Section */}
       <section>
         <h2 className="text-3xl font-semibold text-center mb-8">What Our Users Say About Finding Their Coach</h2>
@@ -125,7 +121,6 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
-
       {/* Call to Action Section */}
       <section className="py-12 bg-primary/10 rounded-lg shadow-sm">
         <div className="container mx-auto px-4 text-center">
@@ -135,7 +130,7 @@ export default async function HomePage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Link href="/signup">
+              <Link href="/signup" legacyBehavior>
                 <UserPlus className="mr-2 h-5 w-5" /> Sign Up as a User
               </Link>
             </Button>

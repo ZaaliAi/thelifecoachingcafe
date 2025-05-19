@@ -75,12 +75,11 @@ export default function CoachBlogManagementPage() {
           <p className="text-muted-foreground">Manage your articles, drafts, and published content.</p>
         </div>
         <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <Link href="/dashboard/coach/blog/create">
+          <Link href="/dashboard/coach/blog/create" legacyBehavior>
             <PlusCircle className="mr-2 h-5 w-5" /> Create New Post
           </Link>
         </Button>
       </div>
-
       {coachPosts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {coachPosts.map((post) => (
@@ -95,7 +94,7 @@ export default function CoachBlogManagementPage() {
           </CardHeader>
           <CardContent>
              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Link href="/dashboard/coach/blog/create">
+                <Link href="/dashboard/coach/blog/create" legacyBehavior>
                     <PlusCircle className="mr-2 h-5 w-5" /> Create Your First Post
                 </Link>
             </Button>

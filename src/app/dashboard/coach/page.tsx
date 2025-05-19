@@ -53,7 +53,6 @@ export default function CoachDashboardPage() {
           <CardDescription>Manage your profile, blog posts, and client interactions.</CardDescription>
         </CardHeader>
       </Card>
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -82,7 +81,7 @@ export default function CoachDashboardPage() {
                     <Link href="/dashboard/coach/blog">Manage Posts</Link>
                 </Button>
                 <Button asChild className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href="/dashboard/coach/blog/create"><PlusCircle className="mr-2 h-4 w-4"/>New Post</Link>
+                    <Link href="/dashboard/coach/blog/create" legacyBehavior><PlusCircle className="mr-2 h-4 w-4"/>New Post</Link>
                 </Button>
             </div>
           </CardContent>
@@ -102,7 +101,6 @@ export default function CoachDashboardPage() {
           </CardContent>
         </Card>
       </div>
-      
       <Card>
         <CardHeader>
             <CardTitle className="flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary"/>Performance Overview</CardTitle>

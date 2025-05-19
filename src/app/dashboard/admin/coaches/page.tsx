@@ -178,7 +178,11 @@ export default function AdminManageCoachesPage() {
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/coach/${coach.id}`} target="_blank" rel="noopener noreferrer">
+                    <Link
+                      href={`/coach/${coach.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      legacyBehavior>
                       <Eye className="mr-1 h-4 w-4" /> View Profile
                     </Link>
                   </Button>

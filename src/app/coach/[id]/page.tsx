@@ -27,9 +27,9 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12">
-        <Button variant="outline" asChild className="mb-4">
-          <Link href="/browse-coaches"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Coaches</Link>
-        </Button>
+      <Button variant="outline" asChild className="mb-4">
+        <Link href="/browse-coaches" legacyBehavior><ArrowLeft className="mr-2 h-4 w-4" /> Back to Coaches</Link>
+      </Button>
       {/* Coach Header */}
       <section className="flex flex-col md:flex-row items-center md:items-start gap-8 p-6 bg-card rounded-lg shadow-xl">
         {coach.profileImageUrl && (
@@ -88,13 +88,12 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
             </Button>
           )}
           <Button asChild size="sm" className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground sm:w-auto">
-            <Link href={`/messages/new?coachId=${coach.id}`}>
+            <Link href={`/messages/new?coachId=${coach.id}`} legacyBehavior>
               <MessageSquare className="mr-2 h-5 w-5" /> Message {coach.name.split(' ')[0]}
             </Link>
           </Button>
         </div>
       </section>
-
       {/* About Section */}
       <Card>
         <CardHeader>
@@ -104,7 +103,6 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
           <p>{coach.bio}</p>
         </CardContent>
       </Card>
-
       {/* Specialties & Keywords */}
       <div className="grid md:grid-cols-2 gap-8">
         <Card>
@@ -128,7 +126,6 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
           </CardContent>
         </Card>
       </div>
-      
       {/* Credentials & Social Links */}
       <Card>
         <CardHeader>
@@ -165,7 +162,6 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
            )}
         </CardContent>
       </Card>
-
       {/* Recent Blog Posts by Coach */}
       {coachBlogPosts.length > 0 && (
         <section>
@@ -177,7 +173,6 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
           </div>
         </section>
       )}
-
     </div>
   );
 }
