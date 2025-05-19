@@ -60,8 +60,10 @@ export default async function HomePage() {
               aria-label="Search for a life coach by specialty or need"
             />
             <Button asChild size="lg" className="h-12 text-base bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Link href="/find-a-coach" legacyBehavior>
-                <Search className="mr-2 h-5 w-5" /> CoachMatch AI
+              <Link href="/find-a-coach">
+                <>
+                  <Search className="mr-2 h-5 w-5" /> CoachMatch AI
+                </>
               </Link>
             </Button>
           </div>
