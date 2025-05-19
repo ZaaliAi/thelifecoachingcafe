@@ -141,30 +141,28 @@ export default function CoachMessagesPage() {
           <ul className="divide-y divide-gray-200">
             {displayedConversations.map((conv) => (
               <li key={conv.conversationId} className="hover:bg-gray-50 transition-colors">
-                <Link href={`/dashboard/messages/${conv.conversationId}`} legacyBehavior>
-                  <a className="block p-4 sm:p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center min-w-0">
-                        <Avatar className="h-10 w-10 sm:h-12 sm:w-12 mr-3 sm:mr-4">
-                          {/* Placeholder for avatar - you'd fetch this if available */}
-                          <AvatarFallback>{conv.otherPartyName.substring(0, 1).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm sm:text-base font-semibold text-primary truncate">{conv.otherPartyName}</p>
-                          <p className="text-xs sm:text-sm text-gray-500 truncate">{conv.lastMessageContent}</p>
-                        </div>
-                      </div>
-                      <div className="text-right ml-2 flex-shrink-0">
-                        <p className="text-xs text-gray-400 mb-1">{new Date(conv.lastMessageTimestamp).toLocaleDateString([], { month: 'short', day: 'numeric'})}</p>
-                        {conv.unreadCount > 0 && 
-                          <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                            {conv.unreadCount}
-                          </span>
-                        }
-                        <ChevronRight className="h-5 w-5 text-gray-400 hidden sm:inline-block ml-auto mt-1" />
+                <Link href={`/dashboard/messages/${conv.conversationId}`} className="block p-4 sm:p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center min-w-0">
+                      <Avatar className="h-10 w-10 sm:h-12 sm:w-12 mr-3 sm:mr-4">
+                        {/* Placeholder for avatar - you'd fetch this if available */}
+                        <AvatarFallback>{conv.otherPartyName.substring(0, 1).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm sm:text-base font-semibold text-primary truncate">{conv.otherPartyName}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">{conv.lastMessageContent}</p>
                       </div>
                     </div>
-                  </a>
+                    <div className="text-right ml-2 flex-shrink-0">
+                      <p className="text-xs text-gray-400 mb-1">{new Date(conv.lastMessageTimestamp).toLocaleDateString([], { month: 'short', day: 'numeric'})}</p>
+                      {conv.unreadCount > 0 && 
+                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                          {conv.unreadCount}
+                        </span>
+                      }
+                      <ChevronRight className="h-5 w-5 text-gray-400 hidden sm:inline-block ml-auto mt-1" />
+                    </div>
+                  </div>
                 </Link>
               </li>
             ))}

@@ -70,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
                   pathname === item.href && 'bg-primary/10 text-primary font-medium'
                 )}
-                legacyBehavior>
+              >
                 <item.icon className="h-5 w-5" />
                 {item.label}
               </Link>
@@ -78,7 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
               <LogOut className="h-5 w-5" />
               Logout
-            </Button>
+          </Button>
           </nav>
         </ScrollArea>
       </aside>

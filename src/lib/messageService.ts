@@ -14,7 +14,7 @@ import {
   setDoc,
   getDoc,
   limit,
-  writeBatch // Added for markMessagesAsRead
+  writeBatch
 } from "firebase/firestore";
 import { db, auth } from "./firebase"; 
 import { getUserProfile } from "./firestore";
@@ -27,7 +27,7 @@ const mapMessageFromFirestore = (
   defaultSenderName?: string | null, 
   defaultRecipientName?: string | null
 ): Message => {
-  const data = docData as Omit<FirestoreMessage, 'id' | 'timestamp'> & { timestamp: Timestamp }; 
+  const data = docData as Omit<FirestoreMessage, 'id' | 'timestamp'> & { timestamp: Timestamp; conversationId?: string }; 
   return {
     id,
     senderId: data.senderId,
@@ -37,6 +37,7 @@ const mapMessageFromFirestore = (
     read: data.read || false,
     senderName: defaultSenderName || data.senderName || data.senderId,
     recipientName: defaultRecipientName || data.recipientName || data.recipientId,
+    conversationId: data.conversationId || "",
   };
 };
 
@@ -48,8 +49,9 @@ export const sendMessageToFirestore = async (
   recipientName: string
 ): Promise<string> => {
   try {
+    const conversationId = await getOrCreateConversation(senderId, recipientId);
     const messagesColRef = collection(db, "messages"); 
-    const messageDoc: Omit<FirestoreMessage, 'id'> = {
+    const messageDoc: Omit<FirestoreMessage, 'id'> & { conversationId: string } = { 
       senderId,
       recipientId,
       content,
@@ -57,8 +59,15 @@ export const sendMessageToFirestore = async (
       senderName,
       recipientName,
       read: false,
+      conversationId,
     };
     const messageDocRef = await addDoc(messagesColRef, messageDoc);
+    const conversationDocRef = doc(db, "conversations", conversationId);
+    await updateDoc(conversationDocRef, {
+      lastMessage: content,
+      lastMessageSenderId: senderId,
+      updatedAt: serverTimestamp(),
+    });
     return messageDocRef.id;
   } catch (error) {
     console.error("Error sending message:", error);
@@ -67,8 +76,17 @@ export const sendMessageToFirestore = async (
 };
 
 export const fetchConversationMessages = async (conversationId: string): Promise<Message[]> => {
-  console.warn("fetchConversationMessages is a placeholder and may need implementation based on your DB structure for conversations.");
-  return [];
+  if (!conversationId) {
+    console.warn("[fetchConversationMessages] No conversationId provided.");
+    return [];
+  }
+  const messagesRef = collection(db, "messages");
+  const q = query(messagesRef, where("conversationId", "==", conversationId), orderBy("timestamp", "asc"));
+  const snapshot = await getDocs(q);
+  return Promise.all(snapshot.docs.map(async (doc) => {
+    const data = doc.data(); 
+    return mapMessageFromFirestore(data, doc.id, data.senderName, data.recipientName);
+  }));
 };
 
 export const getOrCreateConversation = async (userId1: string, userId2: string): Promise<string> => {
@@ -97,7 +115,7 @@ export const getOrCreateConversation = async (userId1: string, userId2: string):
     }
   } catch (error) {
     console.error("Error in getOrCreateConversation:", error);
-    const docSnapRetry = await getDoc(conversationDocRef);
+    const docSnapRetry = await getDoc(conversationDocRef); 
     if (docSnapRetry.exists()) return conversationId;
     throw new Error("Failed to get or create conversation.");
   }
@@ -133,13 +151,13 @@ export const fetchReceivedMessages = async (): Promise<Message[]> => {
   const q = query(messagesRef, where("recipientId", "==", auth.currentUser.uid), orderBy("timestamp", "desc"));
   const snapshot = await getDocs(q);
   return Promise.all(snapshot.docs.map(async (doc) => {
-    const data = doc.data() as FirestoreMessage;
+    const data = doc.data(); 
     let senderName = data.senderName;
-    if (data.senderId && (senderName === data.senderId || !senderName)) {
+    if (data.senderId && (senderName === data.senderId || !senderName)) { // Corrected here
       const profile = await getUserProfile(data.senderId);
       senderName = profile?.name || profile?.displayName || data.senderId;
     }
-    return mapMessageFromFirestore(data, doc.id, senderName, data.recipientName);
+    return mapMessageFromFirestore(data, doc.id, senderName, data.recipientName); 
   }));
 };
 
@@ -155,7 +173,7 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
     const [sentSnapshot, receivedSnapshot] = await Promise.all([getDocs(sentMessagesQuery),getDocs(receivedMessagesQuery)]);
     const allMessagesMap = new Map<string, Message>();
     for (const docSnap of sentSnapshot.docs) {
-      const data = docSnap.data() as FirestoreMessage;
+      const data = docSnap.data();
       let recipientName = data.recipientName;
       if (data.recipientId && (recipientName === data.recipientId || !recipientName)) {
         const profile = await getUserProfile(data.recipientId);
@@ -164,9 +182,9 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
       allMessagesMap.set(docSnap.id, mapMessageFromFirestore(data, docSnap.id, data.senderName, recipientName));
     }
     for (const docSnap of receivedSnapshot.docs) {
-      const data = docSnap.data() as FirestoreMessage;
+      const data = docSnap.data();
       let senderName = data.senderName;
-      if (data.senderId && (senderName === data.senderId || !senderName)) {
+      if (data.senderId && (senderName === data.senderId || !senderName)) { // Corrected from sender_name to senderName
         const profile = await getUserProfile(data.senderId);
         senderName = profile?.name || profile?.displayName || data.senderId;
       }
@@ -183,66 +201,32 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
   }
 };
 
-// Function to get messages specifically between two users
 export const getSpecificConversationMessages = async (userId1: string, userId2: string, messageLimit: number = 50): Promise<Message[]> => {
   if (!userId1 || !userId2) {
     console.warn("[getSpecificConversationMessages] Both user IDs must be provided.");
     return [];
   }
-
+  const conversationId = [userId1, userId2].sort().join('_');
   const messagesRef = collection(db, "messages");
-  // Query for messages where (sender is userId1 AND recipient is userId2)
-  const q1 = query(
+  const q = query(
     messagesRef,
-    where("senderId", "==", userId1),
-    where("recipientId", "==", userId2),
-    orderBy("timestamp", "desc"), // Get newest first for limit, then reverse on client for display
+    where("conversationId", "==", conversationId),
+    orderBy("timestamp", "asc"),
     limit(messageLimit)
   );
-  // Query for messages where (sender is userId2 AND recipient is userId1)
-  const q2 = query(
-    messagesRef,
-    where("senderId", "==", userId2),
-    where("recipientId", "==", userId1),
-    orderBy("timestamp", "desc"),
-    limit(messageLimit)
-  );
-
   try {
-    const [snapshot1, snapshot2] = await Promise.all([
-      getDocs(q1),
-      getDocs(q2)
-    ]);
-
-    const conversationMessagesMap = new Map<string, Message>();
-
-    // Process messages from query 1 (userId1 to userId2)
-    for (const docSnap of snapshot1.docs) {
-      const data = docSnap.data() as FirestoreMessage;
-      // Names should be on FirestoreMessage, but enrich if necessary (though less critical here than in a list view)
-      conversationMessagesMap.set(docSnap.id, mapMessageFromFirestore(data, docSnap.id, data.senderName, data.recipientName));
-    }
-    // Process messages from query 2 (userId2 to userId1)
-    for (const docSnap of snapshot2.docs) {
-      const data = docSnap.data() as FirestoreMessage;
-      if (!conversationMessagesMap.has(docSnap.id)) { // Avoid duplicates if a message somehow matched both (shouldn't happen)
-         conversationMessagesMap.set(docSnap.id, mapMessageFromFirestore(data, docSnap.id, data.senderName, data.recipientName));
-      }
-    }
-    
-    const combinedMessages = Array.from(conversationMessagesMap.values());
-    // Sort oldest to newest for chat display
-    combinedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()); 
-    
-    return combinedMessages.slice(-messageLimit); // Ensure overall limit after merge, taking the most recent ones if total > limit
-
+    const snapshot = await getDocs(q);
+    const conversationMessages = await Promise.all(snapshot.docs.map(async (docSnap) => {
+      const data = docSnap.data();
+      return mapMessageFromFirestore(data, docSnap.id, data.senderName, data.recipientName);
+    }));
+    return conversationMessages;
   } catch (error) {
     console.error("[getSpecificConversationMessages] Error fetching specific conversation messages:", error);
     throw error;
   }
 };
 
-// Function to mark messages as read
 export const markMessagesAsRead = async (messageIdsToMark: string[], currentUserId: string): Promise<void> => {
   if (!messageIdsToMark || messageIdsToMark.length === 0) {
     return;
@@ -256,22 +240,19 @@ export const markMessagesAsRead = async (messageIdsToMark: string[], currentUser
   const batch = writeBatch(db);
   let actuallyMarkedCount = 0;
 
-  // Fetch each message to ensure current user is the recipient before marking as read
-  // This is a safety check, though the calling logic should also ensure this.
   for (const messageId of messageIdsToMark) {
     const messageRef = doc(db, "messages", messageId);
     try {
       const messageSnap = await getDoc(messageRef);
       if (messageSnap.exists()) {
         const messageData = messageSnap.data() as FirestoreMessage;
-        if (messageData.recipientId === currentUserId && !messageData.read) {
+        if (messageData.recipientId === currentUserId && !(messageData as any).read) {
           batch.update(messageRef, { read: true });
           actuallyMarkedCount++;
         }
       }
     } catch (error) {
       console.error(`[markMessagesAsRead] Error fetching message ${messageId} for verification:`, error);
-      // Decide if you want to continue or stop the batch on error
     }
   }
 
@@ -281,10 +262,9 @@ export const markMessagesAsRead = async (messageIdsToMark: string[], currentUser
       console.log(`[markMessagesAsRead] Successfully marked ${actuallyMarkedCount} messages as read.`);
     } catch (error) {
       console.error("[markMessagesAsRead] Error committing batch to mark messages as read:", error);
-      throw error; // Re-throw to allow UI to handle
+      throw error; 
     }
   } else {
     console.log("[markMessagesAsRead] No messages needed to be marked as read for this user.");
   }
 };
-

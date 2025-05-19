@@ -1,4 +1,3 @@
-
 "use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { 
   getPendingCoachCount, 
-  getPendingBlogPostCount, 
+  // getPendingBlogPostCount, 
   getTotalUserCount, 
   getTotalCoachCount 
 } from "@/lib/firestore";
@@ -17,7 +16,7 @@ export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     pendingCoaches: 0,
-    pendingBlogPosts: 0,
+    // pendingBlogPosts: 0, 
     totalUsers: 0,
     totalCoaches: 0,
   });
@@ -29,18 +28,18 @@ export default function AdminDashboardPage() {
         setIsLoadingStats(true);
         const [
           pendingCoachesCount,
-          pendingBlogPostsCount,
+          // pendingBlogPostsCount,
           totalUsersCount,
           totalCoachesCount
         ] = await Promise.all([
           getPendingCoachCount(),
-          getPendingBlogPostCount(),
+          // getPendingBlogPostCount(), 
           getTotalUserCount(),
           getTotalCoachCount()
         ]);
         setStats({
           pendingCoaches: pendingCoachesCount,
-          pendingBlogPosts: pendingBlogPostsCount,
+          // pendingBlogPosts: pendingBlogPostsCount, 
           totalUsers: totalUsersCount,
           totalCoaches: totalCoachesCount,
         });
@@ -96,7 +95,7 @@ export default function AdminDashboardPage() {
             <FileText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{stats.pendingBlogPosts} Pending</div>}
+             {isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">0 Pending</div>} {/* Placeholder */}
             <p className="text-xs text-muted-foreground">Review and publish coach blog posts.</p>
             <Button asChild variant="outline" className="mt-4 w-full">
               <Link href="/dashboard/admin/blogs">Manage Blogs</Link>

@@ -1,4 +1,3 @@
-
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,26 +12,26 @@ const mockTestimonials: Testimonial[] = [
   {
     id: '1',
     name: 'Sarah L.',
-    text: 'CoachConnect helped me find the perfect life coach who understood my needs. The AI matching was spot on!',
+    text: "CoachConnect helped me find the perfect life coach who understood my needs. The AI matching was spot on!",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'happy person',
-    // designation: 'User of CoachConnect', // Removed as per user request
+    // designation: 'User of CoachConnect',
   },
   {
     id: '2',
     name: 'John B.',
-    text: 'As a coach, registering on CoachConnect was easy, and I love the platform\'s modern design and features for finding clients seeking online life coaching.',
+    text: "As a coach, registering on CoachConnect was easy, and I love the platform's modern design and features for finding clients seeking online life coaching.",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'professional person',
-    // designation: 'Life Coach on CoachConnect', // Removed
+    // designation: 'Life Coach on CoachConnect',
   },
   {
     id: '3',
     name: 'Maria G.',
-    text: 'The blog section is full of insightful articles. It\'s a great resource for anyone interested in personal development and self-coaching techniques.',
+    text: "The blog section is full of insightful articles. It's a great resource for anyone interested in personal development and self-coaching techniques.",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'thoughtful person',
-    // designation: 'Reader & User', // Removed
+    // designation: 'Reader & User',
   },
 ];
 
@@ -41,12 +40,12 @@ export default async function HomePage() {
   const featuredCoaches = await getFeaturedCoaches(3);
   console.log('Featured Coaches Data (HomePage):', JSON.stringify(featuredCoaches, null, 2));
 
-  return (
+ return (
     <div className="space-y-16">
       {/* Hero Section */}
       <section className="text-center py-12 md:py-20 bg-gradient-to-br from-primary/10 via-background to-accent/10 rounded-lg shadow-sm">
         <div className="container mx-auto px-4">
-          
+
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
             Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI<sup className="text-sm md:text-base align-super">&trade;</sup></span>
           </h1>

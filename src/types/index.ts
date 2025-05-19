@@ -113,6 +113,7 @@ export interface Message {
   content: string;
   timestamp: string; // ISO date string
   read: boolean;
+  conversationId: string; // Added field
   // For UI display, not stored in Firestore directly on this object usually
   otherPartyName?: string;
   otherPartyAvatar?: string | null;
@@ -129,4 +130,5 @@ export interface FirestoreMessage {
   content: string;
   timestamp: FirebaseTimestampOrDate; // Firestore Server Timestamp
   read: boolean;
+  conversationId: string; // Added field
 }

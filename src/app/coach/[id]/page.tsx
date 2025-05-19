@@ -1,4 +1,3 @@
-
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +27,7 @@ export default async function CoachProfilePage({ params }: { params: { id: strin
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12">
       <Button variant="outline" asChild className="mb-4">
-        <Link href="/browse-coaches" legacyBehavior><ArrowLeft className="mr-2 h-4 w-4" /> Back to Coaches</Link>
+        <Link href="/browse-coaches"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Coaches</Link>
       </Button>
       {/* Coach Header */}
       <section className="flex flex-col md:flex-row items-center md:items-start gap-8 p-6 bg-card rounded-lg shadow-xl">

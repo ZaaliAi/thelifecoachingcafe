@@ -37,18 +37,17 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
 
 
   return (
-    <Link href={href} passHref legacyBehavior>
-      <a
-        onClick={onClick}
-        className={cn(
-          baseClasses,
-          isActive ? activeClasses : inactiveClasses,
-          variant === "primary" && inactiveClasses 
-        )}
-      >
-        <Icon className="h-5 w-5" />
-        <span>{label}</span>
-      </a>
+    <Link
+      href={href}
+      onClick={onClick}
+      className={cn(
+        baseClasses,
+        isActive ? activeClasses : inactiveClasses,
+        variant === "primary" && inactiveClasses
+      )}
+    >
+      <Icon className="h-5 w-5" />
+      <span>{label}</span>
     </Link>
   );
 };
@@ -93,10 +92,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" passHref legacyBehavior>
-          <a className="flex items-center" aria-label="The Life Coaching Cafe Home">
-            <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
-          </a>
+        <Link href="/" className="flex items-center" aria-label="The Life Coaching Cafe Home">
+          <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
         </Link>
         
         {/* Desktop Navigation */}
@@ -118,11 +115,9 @@ export function Header() {
               <SheetHeader>
                 <SheetTitle className="sr-only">Main Menu</SheetTitle>
               </SheetHeader>
-              <div className="flex flex-col space-y-4 mt-4"> {/* Added mt-4 to space from hidden header */}
-                <Link href="/" passHref legacyBehavior>
-                  <a className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
-                     <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
-                  </a>
+              <div className="flex flex-col space-y-4 mt-4">
+                <Link href="/" className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
+                  <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
                 </Link>
                 {navLinks.map(link => ( // Use all navLinks for mobile, including Home
                     (<NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />)

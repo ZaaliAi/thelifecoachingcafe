@@ -4,31 +4,25 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // USER PROFILES (/users/{userId})
-    // Users can read their own profile.
-    // Users can update their own profile (specific fields).
-    // Admins can read/write any profile for management.
-    // Coaches can be read by anyone if their status is 'approved'.
     match /users/{userId} {
       allow read: if request.auth.uid == userId ||
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
                    (resource.data.role == 'coach' && resource.data.status == 'approved') ||
-                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      
-      allow create: if request.auth.uid == userId && 
-                     request.resource.data.email == request.auth.token.email &&
-                     (request.resource.data.role == 'user' || request.resource.data.role == 'coach'); // Allow user or coach role on self-creation
+                   (request.auth != null && resource.data.role == 'user'); // Authenticated users can read 'user' profiles
 
-      allow update: if request.auth.uid == userId || 
+      allow create: if request.auth.uid == userId &&
+                     request.resource.data.email == request.auth.token.email &&
+                     (request.resource.data.role == 'user' || request.resource.data.role == 'coach');
+
+      allow update: if request.auth.uid == userId ||
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      // Deny delete by default to prevent accidental data loss
+
       allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // BLOGS (/blogs/{blogId})
-    // Published blogs are public.
-    // Authors can manage their own blogs.
-    // Admins can manage any blog.
     match /blogs/{blogId} {
-      allow read: if resource.data.status == 'published' || 
+      allow read: if resource.data.status == 'published' ||
                      request.auth.uid == resource.data.authorId ||
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow create: if request.auth.uid == request.resource.data.authorId &&
@@ -41,31 +35,25 @@ service cloud.firestore {
     }
 
     // MESSAGES (/messages/{messageId})
-    // Users can read messages they sent or received.
-    // Users can create messages where they are the sender.
-    // Users can update messages they received (e.g., to mark as read).
     match /messages/{messageId} {
-      allow read: if request.auth.uid == resource.data.senderId || 
+      allow read: if request.auth.uid == resource.data.senderId ||
                      request.auth.uid == resource.data.recipientId;
-      
+
       allow create: if request.auth.uid == request.resource.data.senderId &&
                        request.resource.data.senderId != null &&
                        request.resource.data.recipientId != null &&
                        request.resource.data.content != null &&
-                       request.resource.data.senderName != null && // From FirestoreMessage type
-                       request.resource.data.recipientName != null; // From FirestoreMessage type
-                       // timestamp and read status are set by server/logic
+                       request.resource.data.senderName != null &&
+                       request.resource.data.recipientName != null;
 
-      // Allow recipient to mark a message as read
       allow update: if request.auth.uid == resource.data.recipientId &&
                        request.resource.data.read == true &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      
-      allow delete: if false; // Generally, don't allow message deletion by users
+
+      allow delete: if false;
     }
 
-    // CONVERSATIONS (/conversations/{conversationId}) - If you use this collection structure
-    // Users can read/write conversations they are members of.
+    // CONVERSATIONS (/conversations/{conversationId})
     match /conversations/{conversationId} {
       allow read, write: if request.auth.uid in resource.data.members;
       // If messages are a subcollection of conversations:
@@ -73,8 +61,5 @@ service cloud.firestore {
       //   allow read, create: if request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.members;
       // }
     }
-
-    // Add other collection rules as needed (e.g., testimonials, etc.)
-
   }
 }

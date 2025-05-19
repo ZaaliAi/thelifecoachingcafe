@@ -1,4 +1,3 @@
-
 "use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import Link from "next/link";
 import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
+// import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
 
 export default function CoachDashboardPage() {
   const { user, loading } = useAuth();
@@ -22,10 +21,12 @@ export default function CoachDashboardPage() {
       const fetchStats = async () => {
         setIsLoadingStats(true);
         if (user.id) {
-          const fetchedBlogStats = await getCoachBlogStats(user.id);
-          const fetchedUnreadMessages = await getCoachUnreadMessageCount(user.id);
-          setBlogStats(fetchedBlogStats);
-          setNewMessages(fetchedUnreadMessages);
+          // const fetchedBlogStats = await getCoachBlogStats(user.id);
+          // const fetchedUnreadMessages = await getCoachUnreadMessageCount(user.id);
+          // setBlogStats(fetchedBlogStats);
+          // setNewMessages(fetchedUnreadMessages);
+          setBlogStats({ pending: 0, published: 0 }); // Placeholder
+          setNewMessages(0); // Placeholder
         }
         setIsLoadingStats(false);
       };
@@ -81,7 +82,9 @@ export default function CoachDashboardPage() {
                     <Link href="/dashboard/coach/blog">Manage Posts</Link>
                 </Button>
                 <Button asChild className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href="/dashboard/coach/blog/create" legacyBehavior><PlusCircle className="mr-2 h-4 w-4"/>New Post</Link>
+                    <Link href="/dashboard/coach/blog/create">
+                      <span><PlusCircle className="mr-2 h-4 w-4"/>New Post</span>
+                    </Link>
                 </Button>
             </div>
           </CardContent>
