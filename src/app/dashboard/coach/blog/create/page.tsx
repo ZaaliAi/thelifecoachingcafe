@@ -14,6 +14,7 @@ import { Loader2, PlusCircle, FileText, UploadCloud, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { createFirestoreBlogPost } from '@/lib/firestore'; // Added import
 
 const blogPostSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -50,21 +51,14 @@ export default function CreateBlogPostPage() {
         ...data, 
         authorId: user.id, 
         authorName: user.name || user.email,
-        // createdAt: new Date().toISOString(), // Consider adding this in your actual save function
-        // Potentially transform tags from comma-separated string to array in your actual save function
-        // tags: data.tags ? data.tags.split(',').map(tag => tag.trim()) : [], 
+        // The createFirestoreBlogPost function now handles tags string to array conversion
+        // and sets createdAt/updatedAt timestamps.
       };
       console.log('Attempting to save new blog post with payload:', blogPostPayload);
 
-      // TODO: Replace simulation with actual call to a function that saves to Firestore
-      // For example:
-      // import { createBlogPost } from '@/lib/firestore'; // Import this at the top of the file
-      // const postId = await createBlogPost(blogPostPayload);
-      // console.log('Blog post saved with ID:', postId);
-
-      // Simulate API call (REMOVE THIS LINE WHEN REAL FIRESTORE CALL IS IMPLEMENTED)
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-      console.warn("SIMULATING BLOG POST SAVE. Implement actual createBlogPost() in a service file (e.g., firestore.ts) and call it here.");
+      // Actual call to the function that saves to Firestore
+      const postId = await createFirestoreBlogPost(blogPostPayload);
+      console.log('Blog post saved with ID:', postId);
 
       toast({
         title: "Blog Post Submitted!",
