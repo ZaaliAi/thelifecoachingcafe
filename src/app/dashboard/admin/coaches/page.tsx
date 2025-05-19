@@ -182,8 +182,10 @@ export default function AdminManageCoachesPage() {
                       href={`/coach/${coach.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      legacyBehavior>
-                      <Eye className="mr-1 h-4 w-4" /> View Profile
+                    >
+                      <>
+                        <Eye className="mr-1 h-4 w-4" /> View Profile
+                      </>
                     </Link>
                   </Button>
                 </TableCell>
