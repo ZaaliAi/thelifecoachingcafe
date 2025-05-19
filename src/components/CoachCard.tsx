@@ -86,8 +86,10 @@ export function CoachCard({ coach }: CoachCardProps) {
             <Link href={`/coach/${coach.id}`}>View Profile</Link>
           </Button>
           <Button asChild className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href={`/messages/new?coachId=${coach.id}`} legacyBehavior>
-              <MessageSquare className="mr-2 h-4 w-4" /> Message
+            <Link href={`/messages/new?coachId=${coach.id}`}>
+              <>
+                <MessageSquare className="mr-2 h-4 w-4" /> Message
+              </>
             </Link>
           </Button>
         </div>
