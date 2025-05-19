@@ -97,13 +97,13 @@ export default function PrivacyPolicyPage() {
               Email: <Link
               href={`mailto:${companyEmail}`}
               className="text-primary hover:underline"
-              legacyBehavior>{companyEmail}</Link><br />
+              >{companyEmail}</Link><br />
               Website: <Link
               href={`https://${companyUrl}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
-              legacyBehavior>{companyUrl}</Link>
+              >{companyUrl}</Link>
             </p>
           </section>
         </CardContent>
