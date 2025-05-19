@@ -32,7 +32,7 @@ export default function CreateBlogPostPage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<BlogPostFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<BlogPostFormData>({
     resolver: zodResolver(blogPostSchema),
     defaultValues: {
       status: 'draft',
