@@ -43,25 +43,40 @@ export default function ConversationThreadPage() {
     }
     setIsLoadingMessages(true);
     setError(null);
-    console.log(`[ConversationThreadPage] Fetching details for conversationId: ${conversationId}, currentUserId: ${user.id}`);
+    // New Log 1: Log initial values
+    console.log(`[DEBUG_CONVO] START fetchConversationDetails. Raw conversationId from params: "${conversationId}", User ID from auth: "${user?.id}"`);
 
     try {
       const ids = conversationId.split('_');
-      const otherPartyId = ids.find(id => id !== user.id);
+      // New Log 2: Log the result of the split
+      console.log(`[DEBUG_CONVO] Result of conversationId.split('_') (variable 'ids'):`, JSON.stringify(ids));
 
-      if (!otherPartyId) {
+      const otherPartyId = ids.find(id => id !== user.id);
+      // New Log 3: Log the determined otherPartyId and how it was derived
+      console.log(`[DEBUG_CONVO] Determined otherPartyId: "${otherPartyId}" (derived from 'ids' array and user.id: "${user.id}")`);
+
+      if (!otherPartyId) { // This check is crucial
+        // New Log 4: If otherPartyId is falsy here, this is a major problem point
+        console.error(`[DEBUG_CONVO] CRITICAL ERROR: otherPartyId is undefined or empty immediately after derivation. ConversationId: "${conversationId}", User ID: "${user.id}"`);
         setError("Could not determine the other party in this conversation.");
-        console.error("[ConversationThreadPage] otherPartyId could not be determined from conversationId:", conversationId, "userId:", user.id);
+        console.error("[ConversationThreadPage] otherPartyId could not be determined from conversationId:", conversationId, "userId:", user.id); // Keeping original error log style too
         setIsLoadingMessages(false);
         return;
       }
-      console.log(`[ConversationThreadPage] Determined otherPartyId: ${otherPartyId}`);
 
       let fetchedProfile: FirestoreUserProfile | null = null;
       try {
+        // New Log 5: Log right before calling getUserProfile
+        console.log(`[DEBUG_CONVO] Attempting to call getUserProfile with otherPartyId: "${otherPartyId}"`);
         fetchedProfile = await getUserProfile(otherPartyId);
         setOtherPartyProfile(fetchedProfile);
-        console.log(`[ConversationThreadPage] Fetched otherPartyProfile: ${fetchedProfile?.name || 'Not found'}`);
+
+        if (!fetchedProfile) {
+            // This is the log you reported seeing. It confirms otherPartyId was indeed undefined when getUserProfile was called.
+            console.error(`[DEBUG_CONVO] getUserProfile call returned null. The otherPartyId passed to it was: "${otherPartyId}"`);
+        } else {
+            console.log(`[DEBUG_CONVO] getUserProfile call successfully returned a profile for ${otherPartyId}:`, fetchedProfile?.name);
+        }
       } catch (profileError: any) {
         console.error(`[ConversationThreadPage] Error fetching otherPartyProfile (${otherPartyId}):`, profileError.code, profileError.message, profileError);
         setError(`Failed to load other party's profile. Details: ${profileError.message || 'Please try again.'}`);
@@ -159,7 +174,7 @@ export default function ConversationThreadPage() {
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Messages
         </Button>
-      </div> // Corrected closing tag here
+      </div>
     );
   }
 

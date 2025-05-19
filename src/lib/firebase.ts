@@ -1,9 +1,8 @@
-
 // src/lib/firebase.ts
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"; // Import connectFirestoreEmulator
 import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth";
+import { getAuth, connectAuthEmulator } from "firebase/auth"; // Import connectAuthEmulator
 
 // Your web app's Firebase configuration (using environment variables)
 const firebaseConfig = {
@@ -31,7 +30,7 @@ if (!getApps().length) {
   } catch (error) {
     console.error("Firebase initializeApp FAILED even with embedded config.", error);
     console.error("Firebase config that was attempted:", firebaseConfig);
-    throw error; 
+    throw error;
   }
 } else {
   app = getApps()[0];
@@ -41,5 +40,21 @@ if (!getApps().length) {
 const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
+
+// Connect to Firebase Emulators in development
+if (process.env.NODE_ENV === 'development') {
+  try {
+    connectFirestoreEmulator(db, 'localhost', 8081); // Connect to Firestore emulator
+    console.log("Connected to Firestore emulator.");
+    // Assuming Auth emulator runs on default port 9099 based on common setups
+    connectAuthEmulator(auth, 'http://localhost:9099'); // Connect to Auth emulator
+    console.log("Connected to Auth emulator.");
+    // If you are using other emulators (like Functions on 5001), add them here:
+    // connectFunctionsEmulator(app, 'localhost', 5001);
+  } catch (e) {
+    console.error("Failed to connect to Firebase emulators:", e);
+  }
+}
+
 
 export { db, storage, auth, app, firebaseConfig }; // Added firebaseConfig to exports
