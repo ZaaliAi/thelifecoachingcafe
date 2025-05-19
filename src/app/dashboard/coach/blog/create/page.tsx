@@ -45,15 +45,42 @@ export default function CreateBlogPostPage() {
         return;
     }
     setIsLoading(true);
-    console.log('New blog post data:', { ...data, authorId: user.id, authorName: user.name || user.email });
-    // Simulate API call to save blog post
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
-    toast({
-      title: "Blog Post Saved!",
-      description: `Your post "${data.title}" has been saved as ${data.status === 'draft' ? 'a draft' : 'pending approval'}.`,
-    });
-    router.push('/dashboard/coach/blog'); 
+    try {
+      const blogPostPayload = { 
+        ...data, 
+        authorId: user.id, 
+        authorName: user.name || user.email,
+        // createdAt: new Date().toISOString(), // Consider adding this in your actual save function
+        // Potentially transform tags from comma-separated string to array in your actual save function
+        // tags: data.tags ? data.tags.split(',').map(tag => tag.trim()) : [], 
+      };
+      console.log('Attempting to save new blog post with payload:', blogPostPayload);
+
+      // TODO: Replace simulation with actual call to a function that saves to Firestore
+      // For example:
+      // import { createBlogPost } from '@/lib/firestore'; // Import this at the top of the file
+      // const postId = await createBlogPost(blogPostPayload);
+      // console.log('Blog post saved with ID:', postId);
+
+      // Simulate API call (REMOVE THIS LINE WHEN REAL FIRESTORE CALL IS IMPLEMENTED)
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      console.warn("SIMULATING BLOG POST SAVE. Implement actual createBlogPost() in a service file (e.g., firestore.ts) and call it here.");
+
+      toast({
+        title: "Blog Post Submitted!",
+        description: `Your post "${data.title}" has been ${data.status === 'draft' ? 'saved as a draft' : 'submitted for approval'}.`,
+      });
+      router.push('/dashboard/coach/blog'); 
+    } catch (error) {
+      console.error("Failed to submit blog post:", error);
+      toast({
+        title: "Submission Failed",
+        description: "There was an error submitting your blog post. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
