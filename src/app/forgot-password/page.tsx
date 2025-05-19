@@ -78,8 +78,10 @@ export default function ForgotPasswordPage() {
         </CardContent>
         <CardFooter className="text-center">
           <Button variant="link" asChild className="text-muted-foreground">
-            <Link href="/login" legacyBehavior>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Login
+            <Link href="/login">
+              <>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Login
+              </>
             </Link>
           </Button>
         </CardFooter>
