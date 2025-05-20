@@ -21,7 +21,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           <Link
             href={`/blog/${post.slug}`}
             aria-label={`Read more about ${post.title}`}
-            legacyBehavior>
+          >
             <Image
               src={post.featuredImageUrl}
               alt={post.title}
@@ -43,7 +43,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           <Link
             href={`/blog/${post.slug}`}
             className="hover:text-primary transition-colors"
-            legacyBehavior>
+          >
             {post.title}
           </Link>
         </CardTitle>
@@ -65,21 +65,25 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
               variant={post.status === 'pending_approval' ? 'secondary' : (post.status === 'draft' ? 'outline' : 'destructive')} 
               className="mt-3 text-xs"
             >
-              Status: {post.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              Status: {post.status.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}
             </Badge>
           )}
       </CardContent>
       <CardFooter className="p-6 border-t">
         <div className="flex justify-between w-full items-center">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/blog/${post.slug}`} legacyBehavior>
-              <Eye className="mr-2 h-4 w-4" /> Read More
+            <Link href={`/blog/${post.slug}`}>
+              <>
+                <Eye className="mr-2 h-4 w-4" /> Read More
+              </>
             </Link>
           </Button>
           {showEditButton && (
              <Button asChild variant="ghost" size="sm">
-                <Link href={`/dashboard/coach/blog/edit/${post.id}`} legacyBehavior>
-                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                <Link href={`/dashboard/coach/blog/edit/${post.id}`}>
+                  <>
+                    <Edit3 className="mr-2 h-4 w-4" /> Edit
+                  </>
                 </Link>
             </Button>
           )}
