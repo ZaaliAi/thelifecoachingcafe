@@ -21,7 +21,6 @@ const generateConversationId = (userId1: string, userId2: string): string => {
 
 // --- Helper Functions for Data Mapping ---
 const mapCoachFromFirestore = (docData: any, id: string): Coach => {
-  // console.log(`[mapCoachFromFirestore] Mapping data for coach ID: ${id}`, docData); // Existing log
   const data = docData as Omit<FirestoreUserProfile, 'id'> & { createdAt?: Timestamp, updatedAt?: Timestamp, status?: CoachStatus };
   return {
     id,
@@ -65,12 +64,10 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
 };
 
 const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
-  // Assuming FirestoreMessage type in @/types will be updated to include 'conversationId: string;'
   const data = docData as Partial<FirestoreMessage> & {
-    senderId: string; // Required for fallback
-    recipientId: string; // Required for fallback
-    timestamp: Timestamp; // Required
-    // other fields from FirestoreMessage like senderName, content etc.
+    senderId: string; 
+    recipientId: string; 
+    timestamp: Timestamp; 
   };
 
   let conversationId = data.conversationId;
@@ -83,8 +80,8 @@ const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
   }
 
   return {
-    id, // The document ID from Firestore
-    conversationId: conversationId!, // Asserting it's now defined (either from data or fallback)
+    id, 
+    conversationId: conversationId!, 
     senderId: data.senderId!,
     senderName: data.senderName || 'Unknown Sender',
     recipientId: data.recipientId!,
@@ -98,9 +95,6 @@ const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
 
 // --- User Profile Functions ---
 export async function setUserProfile(userId: string, profileData: Partial<Omit<FirestoreUserProfile, 'id'>>) {
-  // ... (existing setUserProfile function - no changes needed here for conversationId) ...
-  // For brevity, I'm not repeating the full function here, assume it's the same as in your current file.
-  // Make sure to keep your existing setUserProfile function as is.
   console.log(`[setUserProfile] Called for user: ${userId}. Initial profileData:`, JSON.stringify(profileData, null, 2));
 
   if (!userId) {
@@ -166,9 +160,6 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
 }
 
 export async function getUserProfile(userId: string): Promise<FirestoreUserProfile | null> {
-  // ... (existing getUserProfile function - no changes needed here for conversationId) ...
-  // For brevity, I'm not repeating the full function here, assume it's the same as in your current file.
-  // Make sure to keep your existing getUserProfile function as is.
   if (!userId) {
     console.warn("[getUserProfile] Attempted to fetch profile with no userId.");
     return null;
@@ -205,9 +196,6 @@ export async function getUserProfile(userId: string): Promise<FirestoreUserProfi
 }
 
 // --- Coach Fetching Functions ---
-// ... (All your existing coach fetching functions: getFeaturedCoaches, getAllCoaches, getCoachById, etc.)
-// For brevity, I'm not repeating these full functions here. Assume they are the same as in your current file.
-// Make sure to keep ALL your existing coach-related functions as they are.
 export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   console.log(`[getFeaturedCoaches] Fetching up to ${count} approved, featured coaches...`);
   try {
@@ -286,23 +274,42 @@ export async function updateCoachStatus(coachId: string, status: CoachStatus): P
 
 
 // --- Blog Post Functions ---
-// ... (All your existing blog post functions: createFirestoreBlogPost, updateFirestoreBlogPost, etc.)
-// For brevity, I'm not repeating these full functions here. Assume they are the same as in your current file.
-// Make sure to keep ALL your existing blog-related functions as they are.
-export async function createFirestoreBlogPost(postData: Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'updatedAt' | 'slug'> & { slug?: string }): Promise<string> {
-  const blogsCollection = collection(db, "blogs");
+export async function createFirestoreBlogPost(
+  postData: {
+    title: string;
+    content: string;
+    status: 'draft' | 'pending_approval';
+    authorId: string;
+    authorName: string;
+    excerpt?: string;
+    tags?: string; 
+    featuredImageUrl?: string;
+    slug?: string; 
+  }
+): Promise<string> {
+  const blogsCollection = collection(db, "blogs"); 
+  
   const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
-  const dataWithTimestampsAndSlug: Omit<FirestoreBlogPost, 'id'> = {
-    ...postData,
+  
+  const tagsArray = postData.tags ? postData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
+
+  const dataToSave: Omit<FirestoreBlogPost, 'id'> = {
+    title: postData.title,
+    content: postData.content,
+    status: postData.status,
+    authorId: postData.authorId,
+    authorName: postData.authorName,
     slug: slug,
+    excerpt: postData.excerpt || '', 
+    tags: tagsArray,
+    featuredImageUrl: postData.featuredImageUrl || null, 
     createdAt: serverTimestamp() as Timestamp, 
     updatedAt: serverTimestamp() as Timestamp,
-    tags: postData.tags || [],
-    featuredImageUrl: postData.featuredImageUrl || null, 
-    excerpt: postData.excerpt || '',
-    status: postData.status || 'draft',
   };
-  const newPostRef = await addDoc(blogsCollection, dataWithTimestampsAndSlug);
+
+  console.log("[createFirestoreBlogPost] Saving data:", JSON.stringify(dataToSave, null, 2));
+  const newPostRef = await addDoc(blogsCollection, dataToSave);
+  console.log("[createFirestoreBlogPost] Blog post created with ID:", newPostRef.id);
   return newPostRef.id;
 }
 
@@ -387,12 +394,10 @@ export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise
 
 // --- Messaging Functions ---
 export async function sendMessage(
-  // The input data should NOT include 'id', 'timestamp', 'read', or 'conversationId' as these are generated.
   messageData: Omit<FirestoreMessage, 'id' | 'timestamp' | 'read' | 'conversationId'>
 ): Promise<string> {
   console.log("[sendMessage] Attempting to send message. Data provided:", JSON.stringify(messageData, null, 2));
 
-  // Validate essential input fields
   if (!messageData.senderId || !messageData.recipientId || !messageData.content || !messageData.senderName || !messageData.recipientName) {
     const missingFields = ['senderId', 'recipientId', 'content', 'senderName', 'recipientName'].filter(key => !(messageData as any)[key]);
     console.error(`[sendMessage] Critical data missing for sending message. Missing: ${missingFields.join(', ')}. Full data:`, messageData);
@@ -403,7 +408,6 @@ export async function sendMessage(
     throw new Error("Sender and recipient cannot be the same person.");
   }
 
-  // Generate conversationId
   const conversationId = generateConversationId(messageData.senderId, messageData.recipientId);
   if (conversationId.startsWith('error_invalid_user_ids_for_conv_id')) {
       console.error(`[sendMessage] Could not generate a valid conversationId for sender: ${messageData.senderId}, recipient: ${messageData.recipientId}. Aborting send.`);
@@ -413,11 +417,9 @@ export async function sendMessage(
 
   try {
     const messagesCollection = collection(db, "messages");
-    // Prepare the full message object to be saved to Firestore
-    // FirestoreMessage type should be updated in @/types to include conversationId
     const messageToSend: Omit<FirestoreMessage, 'id'> = {
-      ...messageData, // Spread existing messageData (senderId, recipientId, content, etc.)
-      conversationId: conversationId, // Add the generated conversationId
+      ...messageData, 
+      conversationId: conversationId, 
       timestamp: serverTimestamp() as Timestamp,
       read: false,
     };
@@ -434,9 +436,6 @@ export async function sendMessage(
 }
 
 export async function markMessagesAsRead(messageIdsToMark: string[], currentUserId: string): Promise<void> {
-  // ... (existing markMessagesAsRead function - no changes needed here for conversationId) ...
-  // For brevity, I'm not repeating the full function here, assume it's the same as in your current file.
-  // Make sure to keep your existing markMessagesAsRead function as is.
   if (!messageIdsToMark || messageIdsToMark.length === 0) return;
   if (!currentUserId) return;
   const batch = writeBatch(db);
@@ -464,11 +463,6 @@ export async function getMessagesForUser(
   otherPartyId?: string | null,
   messageLimit: number = 30
 ): Promise<MessageType[]> {
-  // ... (existing getMessagesForUser function - no changes needed here for conversationId logic,
-  // as mapMessageFromFirestore will now handle it) ...
-  // For brevity, I'm not repeating the full function here, assume it's the same as in your current file.
-  // Make sure to keep your existing getMessagesForUser function as is.
-  // The key is that `mapMessageFromFirestore` (called inside this function) will now correctly provide the conversationId.
   console.log(`[getMessagesForUser] Fetching messages. User: ${userId}, OtherParty: ${otherPartyId || 'All'}, Limit: ${messageLimit}`);
   if (!userId) return [];
 
@@ -485,7 +479,7 @@ export async function getMessagesForUser(
   try {
     const sentSnapshot = await getDocs(qSent);
     sentSnapshot.forEach(docSnap => {
-      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); // mapMessageFromFirestore will add conversationId
+      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); 
       allMessagesMap.set(docSnap.id, msg);
     });
   } catch (error: any) { /* ... */ }
@@ -499,7 +493,7 @@ export async function getMessagesForUser(
   try {
     const receivedSnapshot = await getDocs(qReceived);
     receivedSnapshot.forEach(docSnap => {
-      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); // mapMessageFromFirestore will add conversationId
+      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); 
       if (!allMessagesMap.has(docSnap.id)) { 
         allMessagesMap.set(docSnap.id, msg);
       }
@@ -523,11 +517,26 @@ export async function getMessagesForUser(
   return combinedMessages.slice(0, otherPartyId ? undefined : 50);
 }
 
+// NEW FUNCTION for Admin Message Logs
+export async function getAllMessagesForAdmin(count = 50): Promise<MessageType[]> {
+  console.log(`[getAllMessagesForAdmin] Fetching up to ${count} messages for admin...`);
+  try {
+    const messagesCollection = collection(db, "messages");
+    const q = query(messagesCollection, orderBy("timestamp", "desc"), firestoreLimit(count));
+    const querySnapshot = await getDocs(q);
+    const messages = querySnapshot.docs.map(docSnapshot => 
+      mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id) 
+    );
+    console.log(`[getAllMessagesForAdmin] Successfully fetched and mapped ${messages.length} messages.`);
+    return messages;
+  } catch (error: any) {
+    console.error("[getAllMessagesForAdmin] Error getting messages for admin:", error.code, error.message, error);
+    return []; 
+  }
+}
+
 
 // --- Admin Dashboard Stats ---
-// ... (All your existing admin dashboard stat functions: getPendingCoachCount, etc.)
-// For brevity, I'm not repeating these full functions here. Assume they are the same as in your current file.
-// Make sure to keep ALL your existing admin stat functions as they are.
 export async function getPendingCoachCount(): Promise<number> {
   const coachesRef = collection(db, "users");
   const q = query(coachesRef, where("role", "==", "coach"), where("status", "==", "pending_approval"));
@@ -544,8 +553,6 @@ export async function getTotalCoachCount(): Promise<number> {
 
 export async function getTotalUserCount(): Promise<number> {
   const usersRef = collection(db, "users");
-  // This will count all documents in the 'users' collection, including coaches as they are also users.
-  // If you need to distinguish general users from coaches, you'd need a 'role' != 'coach' or similar.
   const snapshot = await getCountFromServer(usersRef);
   return snapshot.data().count;
 }
@@ -563,10 +570,8 @@ export async function getTotalBlogPostsCount(): Promise<number> {
 }
 
 export async function getActiveSubscriptionsCount(): Promise<number> {
-  // This is a simplified example. Real subscription management is more complex.
-  // Assumes 'premium' tier implies an active subscription.
   const usersRef = collection(db, "users");
-  const q = query(usersRef, where("role", "==", "coach"), where("subscriptionTier", "==", "premium"));
+  const q = query(usersRef, where("role", "==", "coach"), where("subscriptionTier", "===", "premium"));
   const snapshot = await getCountFromServer(q);
   return snapshot.data().count;
 }
