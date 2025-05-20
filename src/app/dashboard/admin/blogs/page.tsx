@@ -64,7 +64,7 @@ export default function AdminManageBlogsPage() {
     try {
       await updateBlogPostStatus(postId, newStatus);
       toast({
-        title: `Blog Post ${newStatus.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+        title: `Blog Post ${newStatus.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}`,
         description: `Blog post "${postToUpdate.title}" has been updated.`,
       });
     } catch (err) {
@@ -154,7 +154,7 @@ export default function AdminManageBlogsPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="hover:underline"
-                      legacyBehavior>
+                    >
                         {post.title}
                     </Link>
                   </TableCell>
@@ -164,7 +164,7 @@ export default function AdminManageBlogsPage() {
                     <Badge 
                       variant={post.status === 'published' ? 'default' : post.status === 'pending_approval' ? 'secondary' : (post.status === 'draft' ? 'outline' : 'destructive')}
                     >
-                      {post.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      {post.status.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-1">
@@ -173,7 +173,7 @@ export default function AdminManageBlogsPage() {
                         href={`/blog/${post.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        legacyBehavior>
+                      >
                         <Eye className="h-4 w-4" />
                       </Link>
                     </Button>
