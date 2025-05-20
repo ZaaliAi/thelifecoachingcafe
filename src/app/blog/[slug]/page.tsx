@@ -12,7 +12,10 @@ import { getFirestoreBlogPostBySlug, getAllPublishedBlogPostSlugs, getCoachById 
 
 async function getBlogPost(slug: string): Promise<BlogPost | undefined> {
   const post = await getFirestoreBlogPostBySlug(slug);
-  if (post && post.status !== 'published') return undefined; // Only show published posts
+  // For public view, only show published posts. 
+  // Admins trying to view non-published posts via this public route will be blocked by Firestore rules
+  // if the fetch from this server component is unauthenticated (which it typically is for client SDK).
+  if (post && post.status !== 'published') return undefined; 
   return post;
 }
 
@@ -33,7 +36,11 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
     <article className="max-w-3xl mx-auto py-8 space-y-8">
       <header className="space-y-4">
         <Button variant="outline" asChild className="mb-4">
-          <Link href="/blog" legacyBehavior><ArrowLeft className="mr-2 h-4 w-4" /> Back to Life Coaching Blog Articles</Link>
+          <Link href="/blog">
+            <>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Life Coaching Blog Articles
+            </>
+          </Link>
         </Button>
         
         {post.featuredImageUrl && (
