@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Lightbulb, Heart } from 'lucide-react';
 import Image from 'next/image';
@@ -61,7 +60,7 @@ export default function AboutUsPage() {
                 </p>
                  <div className="relative aspect-video rounded-lg overflow-hidden mt-4">
                     <Image 
-                        src="https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/Untitled%20design%20(10).png?alt=media&token=7f03d20f-784d-410b-a632-2607ef9f93ae" 
+                        src="https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/Untitled%20design%20(10).png?alt=media&token=6fc2b32f-cff0-4083-9329-30f1e7142a11" 
                         alt="Diverse group of people collaborating on personal development" 
                         fill
                         className="object-cover"
