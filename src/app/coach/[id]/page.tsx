@@ -1,182 +1,42 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, MapPin, MessageSquare, Star, Link as LinkIcon, CheckCircle2, BookOpen, ArrowLeft, Crown, Globe, Video } from 'lucide-react';
-import type { Coach } from '@/types';
+import { getUserProfile } from "@/lib/firestore";
+import { mockCoaches } from "@/data/mock";
+import CoachProfile from "@/components/CoachProfile"; // Import the new client component
+import type { Coach } from "@/types";
 import { notFound } from 'next/navigation';
-import { BlogPostCard } from '@/components/BlogPostCard';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getCoachById, getAllCoachIds, getBlogPostsByAuthor } from '@/lib/firestore';
 
-async function getCoachDetails(id: string): Promise<Coach | null> {
-  return getCoachById(id);
+// Function to generate static params
+export async function generateStaticParams() {
+  return mockCoaches.map((coach) => ({
+    id: coach.id,
+  }));
 }
 
-export default async function CoachProfilePage({ params }: { params: { id: string } }) {
-  const coach = await getCoachDetails(params.id);
+interface PageProps {
+  params: { id: string };
+}
 
-  if (!coach) {
-    notFound();
+export default async function Page({ params }: PageProps) {
+  const { id } = params;
+  let coachData: Coach | null | undefined = null;
+
+  try {
+    coachData = await getUserProfile(id);
+  } catch (error) {
+    console.error("Failed to fetch profile from Firestore:", error);
+    // Log error but proceed to try mock data
   }
 
-  const coachBlogPosts = await getBlogPostsByAuthor(coach.id, 2); // Fetch 2 most recent published posts
+  if (!coachData) {
+    // Fallback to mock data if live profile not found or fetch failed
+    coachData = mockCoaches.find(c => c.id === id) || null;
+  }
 
-  return (
-    <div className="max-w-4xl mx-auto py-8 space-y-12">
-      <Button variant="outline" asChild className="mb-4">
-        <Link href="/browse-coaches"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Coaches</Link>
-      </Button>
-      {/* Coach Header */}
-      <section className="flex flex-col md:flex-row items-center md:items-start gap-8 p-6 bg-card rounded-lg shadow-xl">
-        {coach.profileImageUrl && (
-          <div className="relative">
-            <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary">
-              <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "professional portrait"} />
-              <AvatarFallback className="text-4xl">{coach.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-            </Avatar>
-            {coach.subscriptionTier === 'premium' && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-full border-2 border-card shadow-md">
-                      <Crown className="h-5 w-5 text-yellow-300 fill-yellow-400" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Premium Coach</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        )}
-        <div className="flex-1 text-center md:text-left">
-          <div className="flex items-center justify-center md:justify-start space-x-2">
-            <h1 className="text-3xl md:text-4xl font-bold">{coach.name}</h1>
-            {coach.subscriptionTier === 'premium' && (
-              <Badge className="bg-yellow-500 text-white hover:bg-yellow-600 text-sm px-3 py-1">
-                Premium
-              </Badge>
-            )}
-          </div>
-          {coach.location && (
-            <p className="text-lg text-muted-foreground flex items-center justify-center md:justify-start mt-1">
-              <MapPin className="h-5 w-5 mr-2 text-primary" /> {coach.location}
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
-            {coach.specialties.map(specialty => (
-              <Badge key={specialty} variant="secondary" className="text-sm px-3 py-1">{specialty}</Badge>
-            ))}
-          </div>
-          {coach.subscriptionTier === 'premium' && coach.websiteUrl && (
-            <Button variant="outline" asChild size="sm" className="mt-3 mr-2">
-              <a href={coach.websiteUrl} target="_blank" rel="noopener noreferrer">
-                <Globe className="mr-2 h-4 w-4"/> Visit Website
-              </a>
-            </Button>
-          )}
-          {coach.subscriptionTier === 'premium' && coach.introVideoUrl && (
-             <Button variant="outline" asChild size="sm" className="mt-3 mr-2">
-              <a href={coach.introVideoUrl} target="_blank" rel="noopener noreferrer">
-                <Video className="mr-2 h-4 w-4"/> Watch Intro
-              </a>
-            </Button>
-          )}
-          <Button asChild size="sm" className="mt-6 bg-primary hover:bg-primary/90 text-primary-foreground sm:w-auto">
-            <Link href={`/messages/new?coachId=${coach.id}`} legacyBehavior>
-              <MessageSquare className="mr-2 h-5 w-5" /> Message {coach.name.split(' ')[0]}
-            </Link>
-          </Button>
-        </div>
-      </section>
-      {/* About Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">About {coach.name.split(' ')[0]}</CardTitle>
-        </CardHeader>
-        <CardContent className="prose dark:prose-invert max-w-none text-foreground/90">
-          <p>{coach.bio}</p>
-        </CardContent>
-      </Card>
-      {/* Specialties & Keywords */}
-      <div className="grid md:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center"><Briefcase className="mr-2 h-6 w-6 text-primary" /> Specialties</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-1 text-foreground/80">
-              {coach.specialties.map(s => <li key={s}>{s}</li>)}
-            </ul>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center"><Star className="mr-2 h-6 w-6 text-primary" /> Keywords</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {coach.keywords.map(k => <Badge key={k} variant="outline">{k}</Badge>)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      {/* Credentials & Social Links */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Credentials & Links</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {coach.certifications && coach.certifications.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-2 flex items-center"><CheckCircle2 className="mr-2 h-5 w-5 text-green-500"/>Certifications</h3>
-              <ul className="list-disc list-inside space-y-1 text-foreground/80">
-                {coach.certifications.map(cert => <li key={cert}>{cert}</li>)}
-              </ul>
-            </div>
-          )}
-          {coach.subscriptionTier === 'premium' && coach.socialLinks && coach.socialLinks.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-2 flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-blue-500"/>Social Media</h3>
-              <div className="flex flex-wrap gap-4">
-                {coach.socialLinks.map(link => (
-                  <Button key={link.platform} variant="link" asChild className="p-0 h-auto">
-                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="capitalize">
-                      {link.platform} Profile
-                    </a>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-           {coach.subscriptionTier === 'free' && (
-             <div>
-                <h3 className="text-lg font-semibold mb-2 flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-muted-foreground"/>Social Media</h3>
-                <p className="text-sm text-muted-foreground">Social media links are available for Premium coaches. <Link href="/pricing" className="text-primary hover:underline">Upgrade now</Link>.</p>
-             </div>
-           )}
-        </CardContent>
-      </Card>
-      {/* Recent Blog Posts by Coach */}
-      {coachBlogPosts.length > 0 && (
-        <section>
-          <h2 className="text-2xl font-semibold mb-6 flex items-center"><BookOpen className="mr-3 h-7 w-7 text-primary"/>Recent Articles by {coach.name.split(' ')[0]}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {coachBlogPosts.map(post => (
-              <BlogPostCard key={post.id} post={post} />
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+  if (!coachData) {
+    // If still no coach data (e.g., ID doesn't exist in mockCoaches either),
+    // return a 404 page or a custom not found component.
+    notFound(); // This will render the nearest not-found.tsx or a default Next.js 404 page
+    // return <div>Coach profile not found.</div>; // Or a simpler message
+  }
 
-export async function generateStaticParams() {
-  const coachIds = await getAllCoachIds();
-  return coachIds.map(id => ({ id }));
+  return <CoachProfile coachData={coachData} coachId={id} />;
 }

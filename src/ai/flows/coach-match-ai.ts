@@ -98,7 +98,7 @@ const coachMatchAiSearchFlow = ai.defineFlow(
     const allCoachesFromDb: Coach[] = await getAllCoaches();
 
     if (!allCoachesFromDb || allCoachesFromDb.length === 0) {
-        console.warn("CoachMatchAiSearchFlow: No coaches found in Firestore. Returning empty list.");
+        // console.warn("CoachMatchAiSearchFlow: No coaches found in Firestore. Returning empty list.");
         return { rankedCoachList: [] };
     }
 
@@ -106,9 +106,9 @@ const coachMatchAiSearchFlow = ai.defineFlow(
     const preparedCoaches = allCoachesFromDb.map(coach => ({
       id: coach.id,
       name: coach.name,
-      bioSummary: coach.bio.substring(0, 400) + (coach.bio.length > 400 ? "..." : ""), // Bio summary
-      specialtiesString: (coach.specialties || []).join(', ') || "Not specified",
-      keywordsString: (coach.keywords || []).join(', ') || "Not specified",
+      bioSummary: coach.bio ? coach.bio.substring(0, 400) + (coach.bio.length > 400 ? "..." : "") : "", // Added check for coach.bio
+      specialtiesString: (Array.isArray(coach.specialties) ? coach.specialties : []).join(', ') || "Not specified", // Ensured array
+      keywordsString: (Array.isArray(coach.keywords) ? coach.keywords : []).join(', ') || "Not specified", // Ensured array and fixed this line
     }));
 
     // 3. Construct the input for the AI prompt
@@ -118,15 +118,15 @@ const coachMatchAiSearchFlow = ai.defineFlow(
     };
 
     // 4. Call the AI prompt
-    console.log("CoachMatchAiSearchFlow: Calling AI with user input and prepared coaches list.");
+    // console.log("CoachMatchAiSearchFlow: Calling AI with user input and prepared coaches list.");
     const { output } = await coachMatchPrompt(promptInput);
     
     if (!output || !output.rankedCoachList) {
-        console.warn("CoachMatchAiSearchFlow: AI did not return the expected output structure. Returning empty list.");
+        // console.warn("CoachMatchAiSearchFlow: AI did not return the expected output structure. Returning empty list.");
         return { rankedCoachList: [] };
     }
     
-    console.log("CoachMatchAiSearchFlow: AI returned ranked list:", JSON.stringify(output.rankedCoachList, null, 2));
+    // console.log("CoachMatchAiSearchFlow: AI returned ranked list:", JSON.stringify(output.rankedCoachList, null, 2));
     return output;
   }
 );

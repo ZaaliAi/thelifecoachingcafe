@@ -1,8 +1,8 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"; // Import connectFirestoreEmulator
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAuth, connectAuthEmulator } from "firebase/auth"; // Import connectAuthEmulator
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Your web app's Firebase configuration (using environment variables)
 const firebaseConfig = {
@@ -18,7 +18,6 @@ const firebaseConfig = {
 console.log("--- Firebase Configuration: Using environment variables ---");
 console.log("Project ID:", firebaseConfig.projectId);
 console.log("API Key:", firebaseConfig.apiKey ? "Present" : "MISSING - Check NEXT_PUBLIC_FIREBASE_API_KEY");
-
 
 let app: FirebaseApp;
 
@@ -47,18 +46,19 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// Connect to Firebase Emulators in development
+// Connect to Firebase Emulators in development (uncomment to use)
 /*
 if (process.env.NODE_ENV === 'development') {
   try {
-    connectFirestoreEmulator(db, '127.0.0.1', 8094); // Connect to Firestore emulator on new port using 127.0.0.1
-    console.log("Attempting to connect to Firestore emulator on 127.0.0.1:8094.");
-    connectAuthEmulator(auth, 'http://127.0.0.1:9112'); // Connect to Auth emulator on new port using 127.0.0.1
-    console.log("Attempting to connect to Auth emulator on http://127.0.0.1:9112.");
+    connectFirestoreEmulator(db, '127.0.0.1', 8094);
+    console.log("Connected to Firestore emulator.");
+    connectAuthEmulator(auth, 'http://127.0.0.1:9112');
+    console.log("Connected to Auth emulator.");
   } catch (e) {
     console.error("Failed to connect to Firebase emulators:", e);
   }
 }
 */
 
-export { db, storage, auth, app, firebaseConfig }; // Added firebaseConfig to exports
+// Export with alias for clarity
+export { db, storage, auth, app as firebaseApp, firebaseConfig };

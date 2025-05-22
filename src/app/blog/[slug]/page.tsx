@@ -1,4 +1,3 @@
-
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -12,10 +11,7 @@ import { getFirestoreBlogPostBySlug, getAllPublishedBlogPostSlugs, getCoachById 
 
 async function getBlogPost(slug: string): Promise<BlogPost | undefined> {
   const post = await getFirestoreBlogPostBySlug(slug);
-  // For public view, only show published posts. 
-  // Admins trying to view non-published posts via this public route will be blocked by Firestore rules
-  // if the fetch from this server component is unauthenticated (which it typically is for client SDK).
-  if (post && post.status !== 'published') return undefined; 
+  if (post && post.status !== 'published') return undefined;
   return post;
 }
 
@@ -42,7 +38,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             </>
           </Link>
         </Button>
-        
+
         {post.featuredImageUrl && (
           <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-lg">
             <Image
@@ -63,7 +59,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">{post.title}</h1>
-        
+
         <div className="flex items-center space-x-4 text-muted-foreground">
           {author && author.profileImageUrl && (
             <Avatar className="h-8 w-8 mr-2">
@@ -78,19 +74,13 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
           </div>
         </div>
       </header>
+
       <div className="prose prose-lg dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
-        {/* In a real app, use a Markdown renderer here for post.content */}
-        <p>{post.content}</p>
-        {/* Example content below, remove if not needed */}
-        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-        <h2>A Subheading for More Detail</h2>
-        <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-        <figure>
-            <Image src="https://placehold.co/700x400.png" alt="Illustrative image for blog post" width={700} height={400} className="rounded-md shadow-md" data-ai-hint="concept illustration" />
-            <figcaption className="text-center text-sm text-muted-foreground mt-2">An illustrative image related to the topic on personal development.</figcaption>
-        </figure>
-        <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+        {post.content.split('\n').map((para, i) => (
+          <p key={i} className="mb-6">{para}</p>
+        ))}
       </div>
+
       <footer className="pt-8 border-t">
         <h3 className="text-xl font-semibold mb-4">About the Author: {author?.name || post.authorName}</h3>
         {author ? (

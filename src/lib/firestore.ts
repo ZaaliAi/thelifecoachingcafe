@@ -1,8 +1,9 @@
 // START OF CODE FOR src/lib/firestore.ts
-import type { Timestamp } from "firebase/firestore";
+// Removed: import type { Timestamp } from "firebase/firestore"; // No longer needed as Timestamp is imported as a value below
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
-  serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer
+  serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer,
+  Timestamp // Explicitly import Timestamp as a value
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage } from '@/types';
@@ -11,8 +12,6 @@ import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole
 const generateConversationId = (userId1: string, userId2: string): string => {
   if (!userId1 || !userId2) {
     console.error("[generateConversationId] One or both user IDs are undefined/empty. userId1:", userId1, "userId2:", userId2);
-    // Return a distinctly problematic ID to make it noticeable and traceable if this occurs.
-    // This should ideally not happen if senderId and recipientId are always valid.
     return `error_invalid_user_ids_for_conv_id_${String(userId1)}_vs_${String(userId2)}`;
   }
   const ids = [userId1, userId2].sort();
@@ -34,6 +33,7 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     certifications: data.certifications || [],
     socialLinks: data.socialLinks || [],
     location: data.location === undefined ? null : data.location,
+    availability: data.availability || [], // Ensure this defaults to an array if that's the new type
     subscriptionTier: data.subscriptionTier || 'free',
     status: data.status || 'pending_approval',
     websiteUrl: data.websiteUrl === undefined ? null : data.websiteUrl,
@@ -44,8 +44,39 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
   };
 };
 
+
 const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
-  const data = docData as Omit<FirestoreBlogPost, 'id'> & { createdAt: Timestamp, updatedAt?: Timestamp };
+  const data = docData as Partial<FirestoreBlogPost>;
+  let createdAtString: string;
+  if (data.createdAt && typeof (data.createdAt as any).toDate === 'function') {
+    createdAtString = (data.createdAt as Timestamp).toDate().toISOString();
+  } else if (data.createdAt instanceof Date) {
+    createdAtString = data.createdAt.toISOString();
+  } else if (typeof data.createdAt === 'string') {
+    const parsedDate = new Date(data.createdAt);
+    if (!isNaN(parsedDate.getTime())) {
+      createdAtString = parsedDate.toISOString();
+    } else {
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for createdAt for post ID ${id}: "${data.createdAt}". Using current date as fallback.`);
+      createdAtString = new Date().toISOString();
+    }
+  } else {
+    console.warn(`[mapBlogPostFromFirestore] createdAt is missing or invalid for post ID ${id}. Using current date as fallback.`);
+    createdAtString = new Date().toISOString();
+  }
+  let updatedAtString: string | undefined = undefined;
+  if (data.updatedAt && typeof (data.updatedAt as any).toDate === 'function') {
+    updatedAtString = (data.updatedAt as Timestamp).toDate().toISOString();
+  } else if (data.updatedAt instanceof Date) {
+    updatedAtString = data.updatedAt.toISOString();
+  } else if (typeof data.updatedAt === 'string') {
+    const parsedDate = new Date(data.updatedAt);
+    if (!isNaN(parsedDate.getTime())) {
+      updatedAtString = parsedDate.toISOString();
+    } else {
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for updatedAt for post ID ${id}: "${data.updatedAt}".`);
+    }
+  }
   return {
     id,
     slug: data.slug || id,
@@ -54,22 +85,17 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
     excerpt: data.excerpt || '',
     authorId: data.authorId || 'unknown_author',
     authorName: data.authorName || 'Unknown Author',
-    createdAt: data.createdAt.toDate().toISOString(),
-    updatedAt: data.updatedAt?.toDate().toISOString(),
+    createdAt: createdAtString,
+    updatedAt: updatedAtString,
     status: data.status || 'draft',
     tags: data.tags || [],
-    featuredImageUrl: data.featuredImageUrl === undefined ? undefined : (data.featuredImageUrl || undefined),
+    featuredImageUrl: data.featuredImageUrl === null ? undefined : (data.featuredImageUrl || undefined),
     dataAiHint: data.dataAiHint,
   };
 };
 
 const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
-  const data = docData as Partial<FirestoreMessage> & {
-    senderId: string; 
-    recipientId: string; 
-    timestamp: Timestamp; 
-  };
-
+  const data = docData as Partial<FirestoreMessage> & { senderId: string; recipientId: string; timestamp: Timestamp; };
   let conversationId = data.conversationId;
   if (!conversationId && data.senderId && data.recipientId) {
     console.warn(`[mapMessageFromFirestore] Message ID ${id} is missing conversationId in Firestore. Generating fallback.`);
@@ -78,10 +104,9 @@ const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
     console.error(`[mapMessageFromFirestore] Message ID ${id} is missing conversationId AND senderId/recipientId, cannot generate fallback. Assigning problematic ID.`);
     conversationId = `error_missing_conv_id_and_cannot_generate_${id}`;
   }
-
   return {
-    id, 
-    conversationId: conversationId!, 
+    id,
+    conversationId: conversationId!,
     senderId: data.senderId!,
     senderName: data.senderName || 'Unknown Sender',
     recipientId: data.recipientId!,
@@ -92,262 +117,147 @@ const mapMessageFromFirestore = (docData: any, id: string): MessageType => {
   };
 };
 
-
 // --- User Profile Functions ---
 export async function setUserProfile(userId: string, profileData: Partial<Omit<FirestoreUserProfile, 'id'>>) {
-  console.log(`[setUserProfile] Called for user: ${userId}. Initial profileData:`, JSON.stringify(profileData, null, 2));
-
-  if (!userId) {
-    console.error("[setUserProfile] CRITICAL: userId is undefined or null. Profile cannot be saved.");
-    throw new Error("User ID is required to set user profile.");
-  }
-
+  if (!userId) throw new Error("User ID is required to set user profile.");
   const userDocRef = doc(db, "users", userId);
-
-  try {
-    const userSnap = await getDoc(userDocRef);
-    const isCreating = !userSnap.exists();
-    console.log(`[setUserProfile] Is creating new document for ${userId}: ${isCreating}`);
-
-    const dataToSet: { [key: string]: any } = {};
-
-    if (profileData.name !== undefined) dataToSet.name = profileData.name;
-    
-    if (isCreating) {
-      if (profileData.email === undefined || profileData.role === undefined || profileData.name === undefined) {
-        console.error("[setUserProfile] CRITICAL: Missing essential fields (name, email, or role) for new user profile:", profileData);
-        throw new Error("Essential fields (name, email, role) missing for new user profile.");
-      }
-      dataToSet.email = profileData.email;
-      dataToSet.role = profileData.role;
-      dataToSet.createdAt = serverTimestamp();
-      if (profileData.role === 'coach') {
-        dataToSet.subscriptionTier = profileData.subscriptionTier !== undefined ? profileData.subscriptionTier : 'free';
-        dataToSet.status = profileData.status !== undefined ? profileData.status : 'pending_approval';
-      }
-      dataToSet.profileImageUrl = profileData.profileImageUrl !== undefined ? profileData.profileImageUrl : null;
-
-    } else { 
-      if (profileData.bio !== undefined) dataToSet.bio = profileData.bio;
-      if (profileData.specialties !== undefined) dataToSet.specialties = profileData.specialties;
-      if (profileData.keywords !== undefined) dataToSet.keywords = profileData.keywords;
-      
-      dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? userSnap.data()?.profileImageUrl : (profileData.profileImageUrl || null);
-      
-      if (profileData.certifications !== undefined) dataToSet.certifications = profileData.certifications;
-      dataToSet.location = profileData.location === undefined ? userSnap.data()?.location : (profileData.location || null);
-      dataToSet.websiteUrl = profileData.websiteUrl === undefined ? userSnap.data()?.websiteUrl : (profileData.websiteUrl || null);
-      dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? userSnap.data()?.introVideoUrl : (profileData.introVideoUrl || null);
-      if (profileData.socialLinks !== undefined) dataToSet.socialLinks = profileData.socialLinks;
-
-      if (profileData.subscriptionTier !== undefined) dataToSet.subscriptionTier = profileData.subscriptionTier;
-      if (profileData.status !== undefined) dataToSet.status = profileData.status;
+  const userSnap = await getDoc(userDocRef);
+  const isCreating = !userSnap.exists();
+  const dataToSet: { [key: string]: any } = { ...profileData };
+  if (isCreating) {
+    if (!dataToSet.email || !dataToSet.role || !dataToSet.name) throw new Error("Essential fields (name, email, role) missing for new user profile.");
+    dataToSet.createdAt = serverTimestamp();
+    if (dataToSet.role === 'coach') {
+      dataToSet.subscriptionTier = dataToSet.subscriptionTier ?? 'free';
+      dataToSet.status = dataToSet.status ?? 'pending_approval';
+      dataToSet.availability = dataToSet.availability ?? [];
     }
-    
-    dataToSet.updatedAt = serverTimestamp(); 
-
-    console.log(`[setUserProfile] FINAL data object for setDoc for user ${userId} (merge: ${!isCreating}):`, JSON.stringify(dataToSet, null, 2));
-    
-    await setDoc(userDocRef, dataToSet, { merge: !isCreating }); 
-    
-    console.log(`[setUserProfile] User profile data written successfully for user: ${userId}. Operation: ${isCreating ? 'CREATE' : 'UPDATE'}`);
-
-  } catch (error) {
-    console.error(`[setUserProfile] Error creating/updating user profile for ${userId}:`, error);
-    console.error("[setUserProfile] Data that was attempted (original profileData arg):", JSON.stringify(profileData, null, 2)); 
-    throw error;
+    dataToSet.profileImageUrl = dataToSet.profileImageUrl ?? null;
+  } else {
+    dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? userSnap.data()?.profileImageUrl : (profileData.profileImageUrl || null);
+    dataToSet.location = profileData.location === undefined ? userSnap.data()?.location : (profileData.location || null);
+    dataToSet.websiteUrl = profileData.websiteUrl === undefined ? userSnap.data()?.websiteUrl : (profileData.websiteUrl || null);
+    dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? userSnap.data()?.introVideoUrl : (profileData.introVideoUrl || null);
   }
+  dataToSet.updatedAt = serverTimestamp();
+  await setDoc(userDocRef, dataToSet, { merge: !isCreating });
 }
 
 export async function getUserProfile(userId: string): Promise<FirestoreUserProfile | null> {
-  if (!userId) {
-    console.warn("[getUserProfile] Attempted to fetch profile with no userId.");
-    return null;
-  }
+  if (!userId) return null;
   const userDocRef = doc(db, "users", userId);
-  console.log(`[getUserProfile] Fetching profile for userId: ${userId}`);
   const userSnap = await getDoc(userDocRef);
   if (userSnap.exists()) {
-    const profileData = userSnap.data();
-    console.log(`[getUserProfile] Profile found for userId: ${userId}. Data:`, JSON.stringify(profileData));
-    return { 
-      id: userSnap.id,
-      name: profileData.name || '',
-      email: profileData.email || '', 
-      role: profileData.role || 'user', 
-      createdAt: profileData.createdAt, 
-      updatedAt: profileData.updatedAt,
-      bio: profileData.bio,
-      specialties: profileData.specialties,
-      keywords: profileData.keywords,
-      profileImageUrl: profileData.profileImageUrl,
-      certifications: profileData.certifications,
-      location: profileData.location,
-      websiteUrl: profileData.websiteUrl,
-      introVideoUrl: profileData.introVideoUrl,
-      socialLinks: profileData.socialLinks,
-      subscriptionTier: profileData.subscriptionTier,
-      status: profileData.status,
-      dataAiHint: profileData.dataAiHint,
-    } as FirestoreUserProfile;
+    const data = userSnap.data();
+    return { id: userSnap.id, ...data, availability: data.availability || [] } as FirestoreUserProfile;
   }
-  console.log(`[getUserProfile] No profile found for userId: ${userId}`);
   return null;
+}
+
+export async function getAllUserProfilesForAdmin(): Promise<FirestoreUserProfile[]> {
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, orderBy('createdAt', 'desc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(docSnap => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
+      updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
+    } as FirestoreUserProfile;
+  });
 }
 
 // --- Coach Fetching Functions ---
 export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
-  console.log(`[getFeaturedCoaches] Fetching up to ${count} approved, featured coaches...`);
-  try {
-    const qConstraints: any[] = [
-      where("role", "==", "coach"),
-      where("status", "==", "approved"),
-      firestoreLimit(count)
-    ];
-    const q = query(collection(db, "users"), ...qConstraints);
-    const querySnapshot = await getDocs(q);
-    const coaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
-    console.log(`[getFeaturedCoaches] Successfully fetched and mapped ${coaches.length} featured coaches.`);
-    return coaches;
-  } catch (error: any) {
-    console.error("[getFeaturedCoaches] Error getting featured coaches:", error.code, error.message, error);
-    return []; 
-  }
+  const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "approved"), firestoreLimit(count));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
 }
 
 export async function getAllCoaches(filters?: { searchTerm?: string, includeAllStatuses?: boolean }): Promise<Coach[]> {
-  console.log("[getAllCoaches] Fetching coaches. Filters:", JSON.stringify(filters) || "None");
-  try {
-    const qConstraints: any[] = [where("role", "==", "coach")];
-    if (!filters?.includeAllStatuses) {
-      qConstraints.push(where("status", "==", "approved"));
-    }
-    qConstraints.push(firestoreLimit(50)); 
-    const coachesQuery = query(collection(db, "users"), ...qConstraints);
-    const querySnapshot = await getDocs(coachesQuery);
-    let allCoaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
-    if (filters?.searchTerm) {
-      const lowerSearchTerm = filters.searchTerm.toLowerCase();
-      allCoaches = allCoaches.filter(coach =>
-        coach.name.toLowerCase().includes(lowerSearchTerm) ||
-        (coach.bio && coach.bio.toLowerCase().includes(lowerSearchTerm)) ||
-        coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm)) ||
-        (coach.keywords && coach.keywords.some(k => k.toLowerCase().includes(lowerSearchTerm)))
-      );
-    }
-    console.log(`[getAllCoaches] Returning ${allCoaches.length} coaches after client-side filtering (if any).`);
-    return allCoaches;
-  } catch (error: any) {
-    console.error("[getAllCoaches] Error getting all coaches:", error.code, error.message, error);
-    return [];
+  const qConstraints = [where("role", "==", "coach")];
+  if (!filters?.includeAllStatuses) qConstraints.push(where("status", "==", "approved"));
+  qConstraints.push(firestoreLimit(50));
+  const coachesQuery = query(collection(db, "users"), ...qConstraints);
+  const querySnapshot = await getDocs(coachesQuery);
+  let allCoaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
+  if (filters?.searchTerm) {
+    const lowerSearchTerm = filters.searchTerm.toLowerCase();
+    allCoaches = allCoaches.filter(coach =>
+      coach.name.toLowerCase().includes(lowerSearchTerm) ||
+      (coach.bio && coach.bio.toLowerCase().includes(lowerSearchTerm)) ||
+      coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm)) ||
+      (coach.keywords && coach.keywords.some(k => k.toLowerCase().includes(lowerSearchTerm)))
+    );
   }
+  return allCoaches;
 }
 
 export async function getCoachById(coachId: string): Promise<Coach | null> {
   if (!coachId) return null;
-  try {
-    const userProfile = await getUserProfile(coachId);
-    if (userProfile && userProfile.role === 'coach') {
-      return mapCoachFromFirestore(userProfile, userProfile.id);
-    }
-    return null;
-  } catch (error: any) { return null; }
+  const userProfile = await getUserProfile(coachId);
+  if (userProfile && userProfile.role === 'coach') return mapCoachFromFirestore(userProfile, userProfile.id);
+  return null;
 }
 
 export async function getAllCoachIds(): Promise<string[]> {
-  try {
-    const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "approved"));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docSnapshot => docSnapshot.id);
-  } catch (error) { return []; }
+  const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "approved"));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(docSnapshot => docSnapshot.id);
 }
 
 export async function updateCoachSubscriptionTier(coachId: string, tier: 'free' | 'premium'): Promise<void> {
-  const coachDocRef = doc(db, "users", coachId);
-  await updateDoc(coachDocRef, { subscriptionTier: tier, updatedAt: serverTimestamp() });
+  await updateDoc(doc(db, "users", coachId), { subscriptionTier: tier, updatedAt: serverTimestamp() });
 }
 
 export async function updateCoachStatus(coachId: string, status: CoachStatus): Promise<void> {
-  const coachDocRef = doc(db, "users", coachId);
-  await updateDoc(coachDocRef, { status: status, updatedAt: serverTimestamp() });
+  await updateDoc(doc(db, "users", coachId), { status: status, updatedAt: serverTimestamp() });
 }
 
-
 // --- Blog Post Functions ---
-export async function createFirestoreBlogPost(
-  postData: {
-    title: string;
-    content: string;
-    status: 'draft' | 'pending_approval';
-    authorId: string;
-    authorName: string;
-    excerpt?: string;
-    tags?: string; 
-    featuredImageUrl?: string;
-    slug?: string; 
-  }
-): Promise<string> {
-  const blogsCollection = collection(db, "blogs"); 
-  
+export async function createFirestoreBlogPost(postData: { title: string; content: string; status: 'draft' | 'pending_approval'; authorId: string; authorName: string; excerpt?: string; tags?: string; featuredImageUrl?: string; slug?: string; }): Promise<string> {
+  const blogsCollection = collection(db, "blogs");
   const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
-  
   const tagsArray = postData.tags ? postData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
-
   const dataToSave: Omit<FirestoreBlogPost, 'id'> = {
-    title: postData.title,
-    content: postData.content,
-    status: postData.status,
-    authorId: postData.authorId,
-    authorName: postData.authorName,
-    slug: slug,
-    excerpt: postData.excerpt || '', 
+    ...postData,
+    slug,
     tags: tagsArray,
-    featuredImageUrl: postData.featuredImageUrl || null, 
-    createdAt: serverTimestamp() as Timestamp, 
+    featuredImageUrl: postData.featuredImageUrl || null,
+    createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
   };
-
-  console.log("[createFirestoreBlogPost] Saving data:", JSON.stringify(dataToSave, null, 2));
   const newPostRef = await addDoc(blogsCollection, dataToSave);
-  console.log("[createFirestoreBlogPost] Blog post created with ID:", newPostRef.id);
   return newPostRef.id;
 }
 
 export async function updateFirestoreBlogPost(postId: string, postData: Partial<Omit<FirestoreBlogPost, 'id' | 'createdAt' | 'authorId' | 'authorName' | 'slug'>>) {
-  const postDocRef = doc(db, "blogs", postId);
-  const dataToUpdate: any = { updatedAt: serverTimestamp() };
-  if (postData.title !== undefined) dataToUpdate.title = postData.title;
-  if (postData.content !== undefined) dataToUpdate.content = postData.content;
-  if (postData.excerpt !== undefined) dataToUpdate.excerpt = postData.excerpt;
+  const dataToUpdate: any = { ...postData, updatedAt: serverTimestamp() };
   if (postData.tags !== undefined) {
-     dataToUpdate.tags = Array.isArray(postData.tags) ? postData.tags.map(tag => tag.trim()).filter(Boolean) : [];
+    dataToUpdate.tags = Array.isArray(postData.tags) ? postData.tags.map(tag => tag.trim()).filter(Boolean) : [];
   }
-  if (postData.hasOwnProperty('featuredImageUrl')) { 
+  if (postData.hasOwnProperty('featuredImageUrl')) {
     dataToUpdate.featuredImageUrl = postData.featuredImageUrl || null;
   }
-  if (postData.status !== undefined) dataToUpdate.status = postData.status;
-  await updateDoc(postDocRef, dataToUpdate);
+  await updateDoc(doc(db, "blogs", postId), dataToUpdate);
 }
 
 export async function getFirestoreBlogPost(postId: string): Promise<BlogPost | null> {
-  const postDocRef = doc(db, "blogs", postId);
-  const postDoc = await getDoc(postDocRef);
+  const postDoc = await getDoc(doc(db, "blogs", postId));
   return postDoc.exists() ? mapBlogPostFromFirestore(postDoc.data(), postDoc.id) : null;
 }
 
 export async function getFirestoreBlogPostBySlug(slug: string): Promise<BlogPost | null> {
-  const blogsCollection = collection(db, "blogs");
-  const q = query(blogsCollection, where("slug", "==", slug), firestoreLimit(1));
+  const q = query(collection(db, "blogs"), where("slug", "==", slug), firestoreLimit(1));
   const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    return mapBlogPostFromFirestore(querySnapshot.docs[0].data(), querySnapshot.docs[0].id);
-  }
+  if (!querySnapshot.empty) return mapBlogPostFromFirestore(querySnapshot.docs[0].data(), querySnapshot.docs[0].id);
   return null;
 }
 
 export async function getPublishedBlogPosts(count = 10): Promise<BlogPost[]> {
-  const blogsCollection = collection(db, "blogs");
-  const q = query(blogsCollection, where("status", "==", "published"), orderBy("createdAt", "desc"), firestoreLimit(count));
+  const q = query(collection(db, "blogs"), where("status", "==", "published"), orderBy("createdAt", "desc"), firestoreLimit(count));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
 }
@@ -359,85 +269,51 @@ export async function getAllPublishedBlogPostSlugs(): Promise<string[]> {
 }
 
 export async function updateBlogPostStatus(postId: string, status: FirestoreBlogPost['status']): Promise<void> {
-  const postDocRef = doc(db, "blogs", postId);
-  await updateDoc(postDocRef, { status: status, updatedAt: serverTimestamp() });
+  await updateDoc(doc(db, "blogs", postId), { status: status, updatedAt: serverTimestamp() });
 }
 
 export async function deleteFirestoreBlogPost(postId: string): Promise<void> {
-  const postDocRef = doc(db, "blogs", postId);
-  await deleteDoc(postDocRef);
+  await deleteDoc(doc(db, "blogs", postId));
 }
 
 export async function getAllBlogPostsForAdmin(count = 50): Promise<BlogPost[]> {
-  const blogsCollection = collection(db, "blogs");
-  const q = query(blogsCollection, orderBy("createdAt", "desc"), firestoreLimit(count));
+  const q = query(collection(db, "blogs"), orderBy("createdAt", "desc"), firestoreLimit(count));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
 }
 
 export async function getMyBlogPosts(authorId: string, count = 50): Promise<BlogPost[]> {
   if (!authorId) return [];
-  const blogsCollection = collection(db, "blogs");
-  const q = query(blogsCollection, where("authorId", "==", authorId), orderBy("createdAt", "desc"), firestoreLimit(count));
+  const q = query(collection(db, "blogs"), where("authorId", "==", authorId), orderBy("createdAt", "desc"), firestoreLimit(count));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
 }
 
 export async function getBlogPostsByAuthor(authorId: string, count = 2): Promise<BlogPost[]> {
   if (!authorId) return [];
-  const blogsCollection = collection(db, "blogs");
-  const q = query(blogsCollection, where("authorId", "==", authorId), where("status", "==", "published"), orderBy("createdAt", "desc"), firestoreLimit(count));
+  const q = query(collection(db, "blogs"), where("authorId", "==", authorId), where("status", "==", "published"), orderBy("createdAt", "desc"), firestoreLimit(count));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
 }
 
-
 // --- Messaging Functions ---
-export async function sendMessage(
-  messageData: Omit<FirestoreMessage, 'id' | 'timestamp' | 'read' | 'conversationId'>
-): Promise<string> {
-  console.log("[sendMessage] Attempting to send message. Data provided:", JSON.stringify(messageData, null, 2));
-
+export async function sendMessage(messageData: Omit<FirestoreMessage, 'id' | 'timestamp' | 'read' | 'conversationId'>): Promise<string> {
   if (!messageData.senderId || !messageData.recipientId || !messageData.content || !messageData.senderName || !messageData.recipientName) {
-    const missingFields = ['senderId', 'recipientId', 'content', 'senderName', 'recipientName'].filter(key => !(messageData as any)[key]);
-    console.error(`[sendMessage] Critical data missing for sending message. Missing: ${missingFields.join(', ')}. Full data:`, messageData);
-    throw new Error(`Sender ID, Recipient ID, content, sender name, and recipient name are required. Missing: ${missingFields.join(', ')}`);
+    throw new Error("Sender ID, Recipient ID, content, sender name, and recipient name are required.");
   }
-  if (messageData.senderId === messageData.recipientId) {
-    console.error("[sendMessage] Sender and recipient cannot be the same.");
-    throw new Error("Sender and recipient cannot be the same person.");
-  }
-
+  if (messageData.senderId === messageData.recipientId) throw new Error("Sender and recipient cannot be the same person.");
   const conversationId = generateConversationId(messageData.senderId, messageData.recipientId);
   if (conversationId.startsWith('error_invalid_user_ids_for_conv_id')) {
-      console.error(`[sendMessage] Could not generate a valid conversationId for sender: ${messageData.senderId}, recipient: ${messageData.recipientId}. Aborting send.`);
-      throw new Error("Failed to send message due to invalid user IDs for conversation ID generation.");
+    throw new Error("Failed to send message due to invalid user IDs for conversation ID generation.");
   }
-  console.log(`[sendMessage] Generated conversationId: ${conversationId}`);
-
-  try {
-    const messagesCollection = collection(db, "messages");
-    const messageToSend: Omit<FirestoreMessage, 'id'> = {
-      ...messageData, 
-      conversationId: conversationId, 
-      timestamp: serverTimestamp() as Timestamp,
-      read: false,
-    };
-
-    console.log("[sendMessage] Data to be sent to Firestore:", JSON.stringify(messageToSend, null, 2));
-    const newMessageRef = await addDoc(messagesCollection, messageToSend);
-    console.log(`[sendMessage] Message sent with ID: ${newMessageRef.id}`);
-    return newMessageRef.id;
-  } catch (error: any) {
-    console.error("[sendMessage] Error sending message to Firestore:", error.code, error.message, error);
-    console.error("[sendMessage] Data that was attempted for addDoc:", JSON.stringify(messageData, null, 2), "with generated conversationId:", conversationId);
-    throw error;
-  }
+  const messagesCollection = collection(db, "messages");
+  const messageToSend: Omit<FirestoreMessage, 'id'> = { ...messageData, conversationId, timestamp: serverTimestamp() as Timestamp, read: false };
+  const newMessageRef = await addDoc(messagesCollection, messageToSend);
+  return newMessageRef.id;
 }
 
 export async function markMessagesAsRead(messageIdsToMark: string[], currentUserId: string): Promise<void> {
-  if (!messageIdsToMark || messageIdsToMark.length === 0) return;
-  if (!currentUserId) return;
+  if (!messageIdsToMark || messageIdsToMark.length === 0 || !currentUserId) return;
   const batch = writeBatch(db);
   let actuallyMarkedCount = 0;
   for (const messageId of messageIdsToMark) {
@@ -451,90 +327,48 @@ export async function markMessagesAsRead(messageIdsToMark: string[], currentUser
           actuallyMarkedCount++;
         }
       }
-    } catch (error: any) { /* ... */ }
+    } catch (error) { console.error("[markMessagesAsRead] Error processing message ID:", messageId, error); }
   }
-  if (actuallyMarkedCount > 0) {
-    await batch.commit();
-  }
+  if (actuallyMarkedCount > 0) await batch.commit();
 }
 
-export async function getMessagesForUser(
-  userId: string,
-  otherPartyId?: string | null,
-  messageLimit: number = 30
-): Promise<MessageType[]> {
-  console.log(`[getMessagesForUser] Fetching messages. User: ${userId}, OtherParty: ${otherPartyId || 'All'}, Limit: ${messageLimit}`);
+export async function getMessagesForUser(userId: string, otherPartyId?: string | null, messageLimit = 30): Promise<MessageType[]> {
   if (!userId) return [];
-
   const messagesRef = collection(db, "messages");
   const allMessagesMap = new Map<string, MessageType>();
   const messageIdsToMarkReadClientSide: string[] = [];
+  const commonQueryParts = [orderBy("timestamp", "desc"), firestoreLimit(messageLimit)];
 
-  const sentQueryConstraints: any[] = [where("senderId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(messageLimit)];
-  if (otherPartyId) {
-    sentQueryConstraints.splice(1, 0, where("recipientId", "==", otherPartyId)); 
-  }
+  const sentQueryConstraints = [where("senderId", "==", userId), ...commonQueryParts];
+  if (otherPartyId) sentQueryConstraints.splice(1, 0, where("recipientId", "==", otherPartyId));
   const qSent = query(messagesRef, ...sentQueryConstraints);
+  const sentSnapshot = await getDocs(qSent);
+  sentSnapshot.forEach(docSnap => allMessagesMap.set(docSnap.id, mapMessageFromFirestore(docSnap.data(), docSnap.id)));
 
-  try {
-    const sentSnapshot = await getDocs(qSent);
-    sentSnapshot.forEach(docSnap => {
-      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); 
-      allMessagesMap.set(docSnap.id, msg);
-    });
-  } catch (error: any) { /* ... */ }
-
-  const receivedQueryConstraints: any[] = [where("recipientId", "==", userId), orderBy("timestamp", "desc"), firestoreLimit(messageLimit)];
-  if (otherPartyId) {
-    receivedQueryConstraints.splice(1, 0, where("senderId", "==", otherPartyId)); 
-  }
+  const receivedQueryConstraints = [where("recipientId", "==", userId), ...commonQueryParts];
+  if (otherPartyId) receivedQueryConstraints.splice(1, 0, where("senderId", "==", otherPartyId));
   const qReceived = query(messagesRef, ...receivedQueryConstraints);
+  const receivedSnapshot = await getDocs(qReceived);
+  receivedSnapshot.forEach(docSnap => {
+    const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id);
+    if (!allMessagesMap.has(docSnap.id)) allMessagesMap.set(docSnap.id, msg);
+    if (otherPartyId && !msg.read && msg.recipientId === userId) messageIdsToMarkReadClientSide.push(msg.id);
+  });
 
-  try {
-    const receivedSnapshot = await getDocs(qReceived);
-    receivedSnapshot.forEach(docSnap => {
-      const msg = mapMessageFromFirestore(docSnap.data(), docSnap.id); 
-      if (!allMessagesMap.has(docSnap.id)) { 
-        allMessagesMap.set(docSnap.id, msg);
-      }
-      if (otherPartyId && !msg.read && msg.recipientId === userId) {
-        messageIdsToMarkReadClientSide.push(msg.id);
-      }
-    });
-  } catch (error: any) { /* ... */ }
-  
   if (otherPartyId && messageIdsToMarkReadClientSide.length > 0) {
     markMessagesAsRead(messageIdsToMarkReadClientSide, userId).catch(err => console.error("[getMessagesForUser] Background markMessagesAsRead failed:", err));
   }
-  
   const combinedMessages = Array.from(allMessagesMap.values());
-  combinedMessages.sort((a, b) => 
-    otherPartyId 
-      ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-  
+  combinedMessages.sort((a, b) => otherPartyId ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime() : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   return combinedMessages.slice(0, otherPartyId ? undefined : 50);
 }
 
-// NEW FUNCTION for Admin Message Logs
 export async function getAllMessagesForAdmin(count = 50): Promise<MessageType[]> {
-  console.log(`[getAllMessagesForAdmin] Fetching up to ${count} messages for admin...`);
-  try {
-    const messagesCollection = collection(db, "messages");
-    const q = query(messagesCollection, orderBy("timestamp", "desc"), firestoreLimit(count));
-    const querySnapshot = await getDocs(q);
-    const messages = querySnapshot.docs.map(docSnapshot => 
-      mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id) 
-    );
-    console.log(`[getAllMessagesForAdmin] Successfully fetched and mapped ${messages.length} messages.`);
-    return messages;
-  } catch (error: any) {
-    console.error("[getAllMessagesForAdmin] Error getting messages for admin:", error.code, error.message, error);
-    return []; 
-  }
+  const messagesCollection = collection(db, "messages");
+  const q = query(messagesCollection, orderBy("timestamp", "desc"), firestoreLimit(count));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(docSnapshot => mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id));
 }
-
 
 // --- Admin Dashboard Stats ---
 export async function getPendingCoachCount(): Promise<number> {
@@ -569,9 +403,42 @@ export async function getTotalBlogPostsCount(): Promise<number> {
   return snapshot.data().count;
 }
 
+// ADDING THE NEW FUNCTION HERE
+export async function getPendingBlogPostCount(): Promise<number> {
+  try {
+    const blogsRef = collection(db, "blogs"); // Assumes your collection is named "blogs"
+    const q = query(blogsRef, where("status", "==", "pending_approval"));
+    const snapshot = await getCountFromServer(q);
+    console.log(`[getPendingBlogPostCount] Found ${snapshot.data().count} posts pending approval.`);
+    return snapshot.data().count;
+  } catch (error) {
+    console.error("[getPendingBlogPostCount] Error fetching count of pending blog posts:", error);
+    return 0; // Return 0 in case of an error to prevent breaking the dashboard
+  }
+}
+
 export async function getActiveSubscriptionsCount(): Promise<number> {
   const usersRef = collection(db, "users");
   const q = query(usersRef, where("role", "==", "coach"), where("subscriptionTier", "===", "premium"));
   const snapshot = await getCountFromServer(q);
   return snapshot.data().count;
+}
+
+// ADDED/UPDATED FUNCTIONS FOR COACH DASHBOARD STATS:
+export async function getCoachUnreadMessageCount(coachId: string): Promise<number> {
+  if (!coachId) return 0;
+  const messagesRef = collection(db, "messages");
+  const q = query(messagesRef, where("recipientId", "==", coachId), where("read", "==", false));
+  const snapshot = await getCountFromServer(q);
+  return snapshot.data().count;
+}
+
+export async function getCoachBlogStats(coachId: string): Promise<{ pending: number, published: number }> {
+  if (!coachId) return { pending: 0, published: 0 };
+  const blogsRef = collection(db, "blogs");
+  const pendingQuery = query(blogsRef, where("authorId", "==", coachId), where("status", "in", ["draft", "pending_approval"]));
+  const pendingSnapshot = await getCountFromServer(pendingQuery);
+  const publishedQuery = query(blogsRef, where("authorId", "==", coachId), where("status", "==", "published"));
+  const publishedSnapshot = await getCountFromServer(publishedQuery);
+  return { pending: pendingSnapshot.data().count, published: publishedSnapshot.data().count };
 }

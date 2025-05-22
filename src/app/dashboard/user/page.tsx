@@ -1,4 +1,3 @@
-
 "use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,19 +5,41 @@ import Link from "next/link";
 import { MessageSquare, UserCircle, Search, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
+import { getMessagesForUserOrCoach } from "@/lib/messageService"; // Import the message service function
 
 export default function UserDashboardPage() {
   const { user, loading } = useAuth();
   const [userName, setUserName] = useState("Valued User");
-  // Message count would require a specific query, placeholder for now
-  const [recentMessagesCount, setRecentMessagesCount] = useState(0); 
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0); // Renamed for clarity
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
 
   useEffect(() => {
     if (user) {
       setUserName(user.name || user.email?.split('@')[0] || "User");
-      // In a real app, fetch recentMessagesCount here
+
+      const fetchUnreadMessages = async () => {
+        setIsLoadingMessages(true);
+        try {
+          // Fetch all messages for the user (sent and received)
+          const allMessages = await getMessagesForUserOrCoach(user.id);
+          
+          // Calculate the number of unread messages where the current user is the recipient
+          const unreadCount = allMessages.filter(
+            (msg) => msg.recipientId === user.id && !msg.read
+          ).length;
+          
+          setUnreadMessageCount(unreadCount);
+        } catch (error) {
+          console.error("Failed to fetch unread messages for dashboard:", error);
+          setUnreadMessageCount(0); // Set to 0 on error
+        } finally {
+          setIsLoadingMessages(false);
+        }
+      };
+
+      fetchUnreadMessages();
     }
-  }, [user]);
+  }, [user]); // Rerun effect when user changes
 
   if (loading) {
     return (
@@ -50,36 +71,44 @@ export default function UserDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">View & Edit</div>
-            <p className="text-xs text-muted-foreground">Keep your information up to date.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            <p className="text-xs text-muted-foreground">Keep your information up to date and update your profile.</p>
+            <Button asChild className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600">
               <Link href="/dashboard/user/settings">Go to Profile</Link>
             </Button>
           </CardContent>
         </Card>
 
+        {/* Messages Card */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Messages</CardTitle>
             <MessageSquare className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{recentMessagesCount} New Messages</div>
+            {isLoadingMessages ? (
+              <div className="text-xl font-bold flex items-center">
+                 <Loader2 className="mr-2 h-5 w-5 animate-spin text-muted-foreground" /> Loading...
+              </div>
+            ) : (
+              <div className="text-2xl font-bold">{unreadMessageCount} New Messages</div>
+            )}
             <p className="text-xs text-muted-foreground">Connect with coaches and review your conversations.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            <Button asChild className="mt-4 w-full bg-green-500 text-white hover:bg-green-600">
               <Link href="/dashboard/user/messages">View Messages</Link>
             </Button>
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-lg transition-shadow bg-primary/10">
+        {/* Find a New Coach Card - Styling adjusted previously */}
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-primary-foreground">Find a New Coach</CardTitle>
-            <Search className="h-5 w-5 text-primary-foreground/70" />
+            <CardTitle className="text-sm font-medium">Find a New Coach</CardTitle>
+            <Search className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary-foreground">Explore Coaches</div>
-            <p className="text-xs text-primary-foreground/70">Use CoachMatch AI to find your perfect match.</p>
-             <Button asChild className="mt-4 w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            <div className="text-2xl font-bold">Explore Coaches</div>
+            <p className="text-xs text-muted-foreground">Use CoachMatch AI to find your perfect match.</p>
+             <Button asChild className="mt-4 w-full">
               <Link href="/find-a-coach">Search Coaches</Link>
             </Button>
           </CardContent>

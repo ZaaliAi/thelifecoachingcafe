@@ -1,4 +1,4 @@
-"use client";
+// "use client"; // <-- REMOVED THIS LINE
 
 import {
   collection,
@@ -48,10 +48,16 @@ export const sendMessageToFirestore = async (
   senderName: string, 
   recipientName: string
 ): Promise<string> => {
+  // --- DEBUG LOGGING AT TOP ---
+  console.log("sendMessageToFirestore called!");
+  console.log("auth.currentUser.uid:", auth.currentUser?.uid);
+  console.log("Arguments:", { senderId, recipientId, content, senderName, recipientName });
   try {
+    // getOrCreateConversation will handle logic to find or create the conversation document
     const conversationId = await getOrCreateConversation(senderId, recipientId);
+
     const messagesColRef = collection(db, "messages"); 
-    const messageDoc: Omit<FirestoreMessage, 'id'> & { conversationId: string } = { 
+    const messageDoc: Omit<FirestoreMessage, 'id'> & { conversationId: string } = {
       senderId,
       recipientId,
       content,
@@ -61,6 +67,12 @@ export const sendMessageToFirestore = async (
       read: false,
       conversationId,
     };
+
+    // --- ADDED LOGGING HERE ---
+    console.log("auth.currentUser.uid (inside try):", auth.currentUser?.uid);
+    console.log("Message doc:", messageDoc);
+    // --- END LOGGING ---
+
     const messageDocRef = await addDoc(messagesColRef, messageDoc);
     const conversationDocRef = doc(db, "conversations", conversationId);
     await updateDoc(conversationDocRef, {
@@ -71,22 +83,56 @@ export const sendMessageToFirestore = async (
     return messageDocRef.id;
   } catch (error) {
     console.error("Error sending message:", error);
-    throw new Error("Failed to send message.");
+    throw error;
   }
 };
 
-export const fetchConversationMessages = async (conversationId: string): Promise<Message[]> => {
-  if (!conversationId) {
-    console.warn("[fetchConversationMessages] No conversationId provided.");
+export const fetchConversationMessages = async (
+  conversationId: string,
+  userId: string
+): Promise<Message[]> => {
+  if (!conversationId || !userId) {
+    console.warn("[fetchConversationMessages] No conversationId or userId provided.");
     return [];
   }
   const messagesRef = collection(db, "messages");
-  const q = query(messagesRef, where("conversationId", "==", conversationId), orderBy("timestamp", "asc"));
-  const snapshot = await getDocs(q);
-  return Promise.all(snapshot.docs.map(async (doc) => {
-    const data = doc.data(); 
-    return mapMessageFromFirestore(data, doc.id, data.senderName, data.recipientName);
-  }));
+
+  // Messages where the user is the sender
+  const sentQuery = query(
+    messagesRef,
+    where("conversationId", "==", conversationId),
+    where("senderId", "==", userId),
+    orderBy("timestamp", "asc")
+  );
+
+  // Messages where the user is the recipient
+  const receivedQuery = query(
+    messagesRef,
+    where("conversationId", "==", conversationId),
+    where("recipientId", "==", userId),
+    orderBy("timestamp", "asc")
+  );
+
+  // Fetch both in parallel
+  const [sentSnap, receivedSnap] = await Promise.all([
+    getDocs(sentQuery),
+    getDocs(receivedQuery)
+  ]);
+
+  // Combine and deduplicate by message id
+  const allMessagesMap = new Map<string, Message>();
+  const processSnap = async (snap: any) => {
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      allMessagesMap.set(doc.id, mapMessageFromFirestore(data, doc.id, data.senderName, data.recipientName));
+    }
+  };
+  await Promise.all([processSnap(sentSnap), processSnap(receivedSnap)]);
+
+  // Sort by timestamp ascending
+  return Array.from(allMessagesMap.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 };
 
 export const getOrCreateConversation = async (userId1: string, userId2: string): Promise<string> => {
@@ -96,6 +142,7 @@ export const getOrCreateConversation = async (userId1: string, userId2: string):
   const members = [userId1, userId2].sort();
   const conversationId = members.join('_'); 
   const conversationDocRef = doc(db, "conversations", conversationId);
+
   try {
     const docSnap = await getDoc(conversationDocRef);
     if (docSnap.exists()) {
@@ -153,7 +200,7 @@ export const fetchReceivedMessages = async (): Promise<Message[]> => {
   return Promise.all(snapshot.docs.map(async (doc) => {
     const data = doc.data(); 
     let senderName = data.senderName;
-    if (data.senderId && (senderName === data.senderId || !senderName)) { // Corrected here
+    if (data.senderId && (senderName === data.senderId || !senderName)) {
       const profile = await getUserProfile(data.senderId);
       senderName = profile?.name || profile?.displayName || data.senderId;
     }
@@ -168,7 +215,7 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
   }
   const messagesRef = collection(db, "messages");
   const sentMessagesQuery = query(messagesRef, where("senderId", "==", userId),orderBy("timestamp", "desc"),limit(messageLimit));
-  const receivedMessagesQuery = query( messagesRef, where("recipientId", "==", userId),orderBy("timestamp", "desc"),limit(messageLimit));
+  const receivedMessagesQuery = query(messagesRef, where("recipientId", "==", userId),orderBy("timestamp", "desc"),limit(messageLimit));
   try {
     const [sentSnapshot, receivedSnapshot] = await Promise.all([getDocs(sentMessagesQuery),getDocs(receivedMessagesQuery)]);
     const allMessagesMap = new Map<string, Message>();
@@ -184,7 +231,7 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
     for (const docSnap of receivedSnapshot.docs) {
       const data = docSnap.data();
       let senderName = data.senderName;
-      if (data.senderId && (senderName === data.senderId || !senderName)) { // Corrected from sender_name to senderName
+      if (data.senderId && (senderName === data.senderId || !senderName)) {
         const profile = await getUserProfile(data.senderId);
         senderName = profile?.name || profile?.displayName || data.senderId;
       }
@@ -207,24 +254,8 @@ export const getSpecificConversationMessages = async (userId1: string, userId2: 
     return [];
   }
   const conversationId = [userId1, userId2].sort().join('_');
-  const messagesRef = collection(db, "messages");
-  const q = query(
-    messagesRef,
-    where("conversationId", "==", conversationId),
-    orderBy("timestamp", "asc"),
-    limit(messageLimit)
-  );
-  try {
-    const snapshot = await getDocs(q);
-    const conversationMessages = await Promise.all(snapshot.docs.map(async (docSnap) => {
-      const data = docSnap.data();
-      return mapMessageFromFirestore(data, docSnap.id, data.senderName, data.recipientName);
-    }));
-    return conversationMessages;
-  } catch (error) {
-    console.error("[getSpecificConversationMessages] Error fetching specific conversation messages:", error);
-    throw error;
-  }
+  // This now uses the safer fetchConversationMessages to avoid permission errors
+  return fetchConversationMessages(conversationId, userId1);
 };
 
 export const markMessagesAsRead = async (messageIdsToMark: string[], currentUserId: string): Promise<void> => {
@@ -235,8 +266,6 @@ export const markMessagesAsRead = async (messageIdsToMark: string[], currentUser
     console.warn("[markMessagesAsRead] currentUserId not provided.");
     return;
   }
-  console.log(`[markMessagesAsRead] Attempting to mark ${messageIdsToMark.length} messages as read for user ${currentUserId}.`);
-
   const batch = writeBatch(db);
   let actuallyMarkedCount = 0;
 
@@ -259,12 +288,9 @@ export const markMessagesAsRead = async (messageIdsToMark: string[], currentUser
   if (actuallyMarkedCount > 0) {
     try {
       await batch.commit();
-      console.log(`[markMessagesAsRead] Successfully marked ${actuallyMarkedCount} messages as read.`);
     } catch (error) {
       console.error("[markMessagesAsRead] Error committing batch to mark messages as read:", error);
       throw error; 
     }
-  } else {
-    console.log("[markMessagesAsRead] No messages needed to be marked as read for this user.");
   }
 };

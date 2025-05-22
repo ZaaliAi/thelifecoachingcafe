@@ -5,7 +5,8 @@ import Link from "next/link";
 import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
-// import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
+// Assuming these functions exist or will be created in your firestore.ts:
+import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore"; 
 
 export default function CoachDashboardPage() {
   const { user, loading } = useAuth();
@@ -21,12 +22,26 @@ export default function CoachDashboardPage() {
       const fetchStats = async () => {
         setIsLoadingStats(true);
         if (user.id) {
-          // const fetchedBlogStats = await getCoachBlogStats(user.id);
-          // const fetchedUnreadMessages = await getCoachUnreadMessageCount(user.id);
-          // setBlogStats(fetchedBlogStats);
-          // setNewMessages(fetchedUnreadMessages);
-          setBlogStats({ pending: 0, published: 0 }); // Placeholder
-          setNewMessages(0); // Placeholder
+          try {
+            // Use Promise.all to fetch stats concurrently
+            const [fetchedBlogStats, fetchedUnreadMessages] = await Promise.all([
+              getCoachBlogStats ? getCoachBlogStats(user.id) : Promise.resolve({ pending: 0, published: 0 }), // Conditional call
+              getCoachUnreadMessageCount(user.id)
+            ]);
+            
+            if (getCoachBlogStats) { // Only set if the function was called
+                setBlogStats(fetchedBlogStats || { pending: 0, published: 0 });
+            } else {
+                setBlogStats({ pending: 0, published: 0 }); // Default if getCoachBlogStats is not available
+            }
+            setNewMessages(fetchedUnreadMessages || 0);
+
+          } catch (error) {
+            console.error("Error fetching coach dashboard stats:", error);
+            // Set to default values on error
+            setBlogStats({ pending: 0, published: 0 });
+            setNewMessages(0);
+          }
         }
         setIsLoadingStats(false);
       };
@@ -63,7 +78,7 @@ export default function CoachDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">Edit & View</div>
             <p className="text-xs text-muted-foreground">Keep your profile engaging and up to date.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            <Button asChild className="mt-4 w-full bg-green-500 hover:bg-green-700 text-white">
               <Link href="/dashboard/coach/profile">Manage Profile</Link>
             </Button>
           </CardContent>
@@ -78,7 +93,7 @@ export default function CoachDashboardPage() {
             {isLoadingStats ? <Loader2 className="h-5 w-5 animate-spin" /> : <div className="text-2xl font-bold">{blogStats.pending} Pending/Drafts</div>}
             <p className="text-xs text-muted-foreground">{isLoadingStats ? "Loading..." : `${blogStats.published} Published.`} Share your expertise.</p>
              <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                <Button asChild variant="outline" className="flex-1">
+                <Button asChild className="flex-1 bg-orange-500 hover:bg-orange-700 text-white">
                     <Link href="/dashboard/coach/blog">Manage Posts</Link>
                 </Button>
                 <Button asChild className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -97,8 +112,8 @@ export default function CoachDashboardPage() {
           </CardHeader>
           <CardContent>
             {isLoadingStats ? <Loader2 className="h-5 w-5 animate-spin" /> : <div className="text-2xl font-bold">{newMessages} New Messages</div> }
-            <p className="text-xs text-muted-foreground">Respond to inquiries and connect with clients.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            <p className="text-xs text-muted-foreground">Respond to client inquiries</p>
+            <Button asChild className="mt-4 w-full bg-blue-500 hover:bg-blue-700 text-white">
               <Link href="/dashboard/coach/messages">View Messages</Link>
             </Button>
           </CardContent>

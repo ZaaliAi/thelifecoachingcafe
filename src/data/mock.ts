@@ -23,7 +23,7 @@ export const mockCoaches: Coach[] = [
     bio: 'Helping entrepreneurs and leaders build resilience and achieve peak performance. Over 10 years of experience in executive coaching.',
     specialties: ['Executive Coaching', 'Leadership', 'Business Strategy'],
     keywords: ['entrepreneurship', 'performance', 'resilience'],
-    profileImageUrl: 'https://placehold.co/300x300.png',
+    profileImageUrl: null, // Free tier coaches do not have a profile image
     dataAiHint: 'confident man',
     certifications: ['Maxwell Leadership Certified Coach'],
     location: 'San Francisco, CA',
@@ -67,7 +67,7 @@ export const mockBlogPosts: BlogPost[] = [
     slug: 'finding-balance-in-a-hectic-world',
     title: 'Finding Balance in a Hectic World',
     content: 'Tips and techniques for achieving work-life balance...',
-    excerpt: 'Learn practical tips and techniques to achieve a healthier work-life balance in today\'s fast-paced environment.',
+    excerpt: "Learn practical tips and techniques to achieve a healthier work-life balance in today's fast-paced environment.",
     authorId: '3',
     authorName: 'Aisha Khan',
     createdAt: new Date().toISOString(),
@@ -106,7 +106,7 @@ export const mockTestimonials: Testimonial[] = [
   {
     id: '2',
     name: 'John B.',
-    text: 'As a coach, registering on CoachConnect was easy, and I love the platform\'s modern design and features.',
+    text: "As a coach, registering on CoachConnect was easy, and I love the platform's modern design and features.",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'professional person',
     designation: 'Life Coach on CoachConnect',
@@ -114,7 +114,7 @@ export const mockTestimonials: Testimonial[] = [
   {
     id: '3',
     name: 'Maria G.',
-    text: 'The blog section is full of insightful articles. It\'s a great resource for anyone interested in personal development.',
+    text: "The blog section is full of insightful articles. It's a great resource for anyone interested in personal development.",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'thoughtful person',
     designation: 'Reader & User',

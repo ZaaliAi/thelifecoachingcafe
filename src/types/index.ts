@@ -10,6 +10,12 @@ export interface User {
   profileImageUrl?: string | null; // Explicitly allow null
 }
 
+// Updated Availability Structure
+export type CoachAvailability = Array<{
+  day: string;
+  time: string;
+}>;
+
 // Firestore specific user profile structure
 export type CoachStatus = 'pending_approval' | 'approved' | 'rejected';
 
@@ -32,6 +38,7 @@ export interface FirestoreUserProfile {
   subscriptionTier?: 'free' | 'premium';
   status?: CoachStatus; // For coach approval by admin
   dataAiHint?: string;
+  availability?: CoachAvailability; // Uses the new array-based type
 }
 
 // This type represents the detailed Coach profile for frontend display,
@@ -48,7 +55,7 @@ export interface Coach {
   certifications?: string[];
   socialLinks?: { platform: string; url: string }[];
   location?: string | null;
-  availability?: string;
+  availability?: CoachAvailability; // Uses the new array-based type
   subscriptionTier: 'free' | 'premium';
   websiteUrl?: string | null;
   introVideoUrl?: string | null;

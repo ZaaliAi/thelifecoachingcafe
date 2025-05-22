@@ -1,4 +1,5 @@
 "use client";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { 
   getPendingCoachCount, 
-  // getPendingBlogPostCount, 
+  getPendingBlogPostCount, 
   getTotalUserCount, 
   getTotalCoachCount 
 } from "@/lib/firestore";
@@ -16,7 +17,7 @@ export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     pendingCoaches: 0,
-    // pendingBlogPosts: 0, 
+    pendingBlogPosts: 0,
     totalUsers: 0,
     totalCoaches: 0,
   });
@@ -28,18 +29,18 @@ export default function AdminDashboardPage() {
         setIsLoadingStats(true);
         const [
           pendingCoachesCount,
-          // pendingBlogPostsCount,
+          pendingBlogPostsCount,
           totalUsersCount,
           totalCoachesCount
         ] = await Promise.all([
           getPendingCoachCount(),
-          // getPendingBlogPostCount(), 
+          getPendingBlogPostCount(),
           getTotalUserCount(),
           getTotalCoachCount()
         ]);
         setStats({
           pendingCoaches: pendingCoachesCount,
-          // pendingBlogPosts: pendingBlogPostsCount, 
+          pendingBlogPosts: pendingBlogPostsCount,
           totalUsers: totalUsersCount,
           totalCoaches: totalCoachesCount,
         });
@@ -48,7 +49,6 @@ export default function AdminDashboardPage() {
       fetchStats();
     }
   }, [user]);
-
 
   if (authLoading) {
     return (
@@ -81,9 +81,12 @@ export default function AdminDashboardPage() {
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{stats.pendingCoaches} Pending</div>}
+            {isLoadingStats 
+              ? <Loader2 className="h-6 w-6 animate-spin"/> 
+              : <div className="text-2xl font-bold">{stats.pendingCoaches} Pending</div>}
             <p className="text-xs text-muted-foreground">Review and approve new coach applications.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            {/* Changed variant to destructive */}
+            <Button asChild variant="destructive" className="mt-4 w-full">
               <Link href="/dashboard/admin/coaches">Manage Coaches</Link>
             </Button>
           </CardContent>
@@ -95,9 +98,15 @@ export default function AdminDashboardPage() {
             <FileText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">0 Pending</div>} {/* Placeholder */}
+             {isLoadingStats 
+               ? <Loader2 className="h-6 w-6 animate-spin"/> 
+               : <div className="text-2xl font-bold">{stats.pendingBlogPosts} Pending</div>}
             <p className="text-xs text-muted-foreground">Review and publish coach blog posts.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            {/* Apply custom orange styling */}
+            <Button 
+              asChild 
+              className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-orange-400"
+            >
               <Link href="/dashboard/admin/blogs">Manage Blogs</Link>
             </Button>
           </CardContent>
@@ -111,7 +120,11 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">View Activity</div>
             <p className="text-xs text-muted-foreground">Monitor messaging for moderation purposes.</p>
-            <Button asChild variant="outline" className="mt-4 w-full">
+            {/* Apply custom blue styling using primary color */}
+            <Button 
+              asChild 
+              className="mt-4 w-full bg-primary text-white hover:bg-primary/90 focus-visible:ring-primary"
+            >
               <Link href="/dashboard/admin/messages">Access Logs</Link>
             </Button>
           </CardContent>

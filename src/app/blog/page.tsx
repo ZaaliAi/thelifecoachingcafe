@@ -35,11 +35,13 @@ async function getAllCategories(): Promise<string[]> {
 
 
 export default async function BlogPage({ searchParams }: { searchParams?: { category?: string, search?: string } }) {
-  const rawCategory = searchParams?.category;
-  const searchTerm = searchParams?.search;
-  const effectiveCategory = (rawCategory === ALL_CATEGORIES_VALUE || !rawCategory) ? undefined : rawCategory;
+  // Safely access category and searchterm
+  // Await searchParams before accessing its properties
+  const awaitedSearchParams = await searchParams;
+  const { category, search: searchTerm } = awaitedSearchParams || {}; // Destructure with default empty object
 
-  const posts = await getBlogPostsWithFilter({ category: effectiveCategory, searchTerm });
+  const effectiveCategory = category === ALL_CATEGORIES_VALUE ? undefined : category; // Determine the effective category for filtering
+  const posts = await getBlogPostsWithFilter({ category: effectiveCategory, searchTerm }); // Fetch blog posts using the getBlogPostsWithFilter function
   const categories = await getAllCategories();
 
   return (
@@ -67,9 +69,9 @@ export default async function BlogPage({ searchParams }: { searchParams?: { cate
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             </div>
           </div>
-          <div>
+          <div className="relative"> {/* Added relative positioning for the select */}
             <label htmlFor="category" className="block text-sm font-medium text-foreground mb-1">Filter by Coaching Specialty</label>
-            <Select name="category" defaultValue={rawCategory || ALL_CATEGORIES_VALUE}>
+            <Select name="category" defaultValue={category || ALL_CATEGORIES_VALUE}>
               <SelectTrigger id="category" className="w-full">
                 <SelectValue placeholder="All Coaching Specialties" />
               </SelectTrigger>

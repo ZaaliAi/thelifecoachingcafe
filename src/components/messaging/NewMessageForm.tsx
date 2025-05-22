@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react'; // Added Suspense here for nested use if any
+import { useState, useEffect } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -73,6 +73,8 @@ export default function NewMessageForm() {
   });
 
   const onSubmit: SubmitHandler<MessageFormData> = async (data) => {
+    // DEBUG LOGS
+    console.log("onSubmit called");
     if (!user || !recipientCoach) {
       toast({ title: "Error", description: "Cannot send message. User or Recipient missing.", variant: "destructive" });
       return;
@@ -81,9 +83,16 @@ export default function NewMessageForm() {
       toast({ title: "Error", description: "You cannot send a message to yourself.", variant: "destructive" });
       return;
     }
+    console.log("About to call sendFirestoreMessage with:", {
+      senderId: user.id,
+      senderName: user.name || user.email || 'Unknown User',
+      recipientId: recipientCoach.id,
+      recipientName: recipientCoach.name,
+      content: data.content,
+    });
     setIsSending(true);
     try {
-      await sendFirestoreMessage({
+      const messageDocId = await sendFirestoreMessage({
         senderId: user.id,
         senderName: user.name || user.email || 'Unknown User',
         recipientId: recipientCoach.id,
@@ -95,7 +104,11 @@ export default function NewMessageForm() {
         description: `Your message to ${recipientCoach.name} has been sent successfully.`
       });
       reset(); // Clear the form
-      router.push(user.role === 'user' ? '/dashboard/user/messages' : `/dashboard/coach/messages`);
+      
+      // Navigate to the specific conversation page
+      const conversationId = [user.id, recipientCoach.id].sort().join('_');
+      router.push(`/dashboard/messages/${conversationId}`);
+
     } catch (error) {
       console.error("Error sending message:", error);
       toast({ title: "Send Error", description: "Could not send your message. Please try again.", variant: "destructive" });
@@ -140,8 +153,9 @@ export default function NewMessageForm() {
   return (
     <Card className="max-w-xl mx-auto shadow-lg">
       <CardHeader>
+          {/* Updated Link usage */}
           <Button variant="outline" size="sm" asChild className="w-fit mb-4">
-              <Link href={coachId ? `/coach/${coachId}` : '/browse-coaches'} legacyBehavior>
+              <Link href={coachId ? `/coach/${coachId}` : '/browse-coaches'}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back to {recipientCoach.name ? `${recipientCoach.name.split(' ')[0]}'s Profile` : 'Coaches'}
               </Link>
           </Button>

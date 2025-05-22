@@ -1,18 +1,17 @@
-
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
+import { useState, useEffect, useCallback, type ChangeEvent } from 'react'; 
+import { useForm, Controller, type SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox'; 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2, Image as ImageIcon, UploadCloud, Trash2, CalendarDays } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import type { FirestoreUserProfile } from '@/types';
@@ -22,10 +21,16 @@ import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { getUserProfile, setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
+import { uploadProfileImage } from '@/services/imageUpload'; 
+
+const availabilitySlotSchema = z.object({
+  day: z.string().min(1, 'Day is required.').max(50, 'Day seems too long.'),
+  time: z.string().min(1, 'Time is required.').max(50, 'Time seems too long.'),
+});
 
 const coachProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.').optional(), // Display only
+  email: z.string().email('Invalid email address.').optional(), 
   bio: z.string().min(50, 'Bio must be at least 50 characters to trigger AI suggestions.'),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
   customSpecialty: z.string().optional(),
@@ -33,10 +38,11 @@ const coachProfileSchema = z.object({
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   certifications: z.string().optional(),
   location: z.string().optional(),
-  websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
-  introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
+  websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')).nullable(),
+  introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')).nullable(),
   socialLinkPlatform: z.string().optional(),
-  socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
+  socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')).nullable(),
+  availability: z.array(availabilitySlotSchema).optional().default([]),
 });
 
 type CoachProfileFormData = z.infer<typeof coachProfileSchema>;
@@ -54,10 +60,16 @@ export default function CoachProfilePage() {
   const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
   const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
+  const [newSlotDay, setNewSlotDay] = useState(''); 
+  const [newSlotTime, setNewSlotTime] = useState(''); 
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
-  
   const { toast } = useToast();
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
   const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachProfileFormData>({
     resolver: zodResolver(coachProfileSchema),
     defaultValues: {
@@ -73,7 +85,13 @@ export default function CoachProfilePage() {
       introVideoUrl: '',
       socialLinkPlatform: '',
       socialLinkUrl: '',
+      availability: [], 
     }
+  });
+
+  const { fields: availabilityFields, append: appendAvailability, remove: removeAvailability } = useFieldArray({
+    control,
+    name: "availability",
   });
 
   const bioValue = watch('bio');
@@ -83,43 +101,80 @@ export default function CoachProfilePage() {
     if (authLoading || !user) return;
 
     const fetchCoachData = async () => {
-      setIsSubmitting(true);
+      setIsSubmitting(true); 
       const coachData = await getUserProfile(user.id);
       if (coachData && coachData.role === 'coach') {
         setCurrentCoach(coachData);
         reset({
-          name: coachData.name,
+          name: coachData.name || '',
           email: coachData.email || user?.email || '',
           bio: coachData.bio || '',
-          selectedSpecialties: coachData.specialties || [],
-          keywords: coachData.keywords?.join(', ') || '',
+          selectedSpecialties: Array.isArray(coachData.specialties) ? coachData.specialties : [],
           profileImageUrl: coachData.profileImageUrl || '',
-          certifications: coachData.certifications?.join(', ') || '',
           location: coachData.location || '',
           websiteUrl: coachData.websiteUrl || '',
           introVideoUrl: coachData.introVideoUrl || '',
           socialLinkPlatform: coachData.socialLinks?.[0]?.platform || '',
           socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
+          availability: Array.isArray(coachData.availability) ? coachData.availability : [], 
         });
+        if (coachData.profileImageUrl) {
+          setValue('keywords', Array.isArray(coachData.keywords) ? coachData.keywords.join(', ') : (coachData.keywords || ''));
+          setValue('certifications', Array.isArray(coachData.certifications) ? coachData.certifications.join(', ') : (coachData.certifications || ''));
+          setImagePreviewUrl(coachData.profileImageUrl);
+        }
         const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
         setAvailableSpecialties(Array.from(allSpecs));
       } else if(coachData && coachData.role !== 'coach'){
+        console.warn(`[CoachProfilePage] User ${user.id} is not a coach.`);
         toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
-        // router.push('/dashboard/user'); // Consider redirecting if not a coach
       } else if (!coachData && user.role === 'coach') {
-        // User is authenticated as a coach, but no Firestore profile exists yet.
-        // This might happen if the initial profile creation in auth.tsx failed or was interrupted.
-        // Pre-fill with whatever we have from auth.
         console.warn(`[CoachProfilePage] No existing Firestore profile for coach ${user.id}. Pre-filling from auth context.`);
         reset({
           name: user.name || '',
           email: user.email || '',
+          availability: [], 
+          selectedSpecialties: [],
         });
       }
       setIsSubmitting(false);
     };
+
     fetchCoachData();
-  }, [reset, user, authLoading, toast]);
+  }, [reset, user, authLoading, toast, setValue]);
+
+  const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setImagePreviewUrl(URL.createObjectURL(file));
+      setValue('profileImageUrl', '');
+    } else {
+      setSelectedFile(null);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!user || !currentCoach || !currentCoach.profileImageUrl) return;
+    setIsSubmitting(true); 
+    setIsUploadingImage(true);
+    try {
+      if (currentCoach.profileImageUrl.includes('firebasestorage.googleapis.com')) {
+        await uploadProfileImage(undefined as any, user.id, currentCoach.profileImageUrl);
+      } 
+      await setUserProfile(user.id, { profileImageUrl: null });
+      setValue('profileImageUrl', '');
+      setSelectedFile(null);
+      setImagePreviewUrl(null);
+      setCurrentCoach(prev => prev ? { ...prev, profileImageUrl: null } : null);
+      toast({ title: "Image Removed", description: "Your profile image has been removed." });
+    } catch (error: any) {
+      console.error("Error removing image:", error);
+      toast({ title: "Error Removing Image", description: error.message || "Could not remove image.", variant: "destructive"});
+    }
+    setIsUploadingImage(false);
+    setIsSubmitting(false);
+  };
 
   const fetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
@@ -129,20 +184,17 @@ export default function CoachProfilePage() {
         setSuggestedSpecialtiesState([]);
         try {
           const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          console.log("Calling AI suggestCoachSpecialties with bio (first 100 chars):", bioText.substring(0,100));
           const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
-          console.log("AI suggestCoachSpecialties response:", response);
           setSuggestedSpecialtiesState(response.specialties || []);
           setSuggestedKeywordsState(response.keywords || []);
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
-          toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
         } finally {
           setIsAiLoading(false);
         }
       }
     }, 1000),
-    [toast]
+    []
   );
 
   useEffect(() => {
@@ -151,32 +203,53 @@ export default function CoachProfilePage() {
     }
   }, [bioValue, fetchSuggestions]);
 
+  const isPremium = currentCoach?.subscriptionTier === 'premium';
+
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
-    if (!user || !currentCoach) { // currentCoach check ensures we are updating an existing profile
+    if (!user || !currentCoach) {
         toast({ title: "Error", description: "User not authenticated or coach data missing.", variant: "destructive" });
         return;
     }
     setIsSubmitting(true);
+    let finalImageUrl = data.profileImageUrl; 
 
-    const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
-    const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
+    if (selectedFile && isPremium) {
+      setIsUploadingImage(true);
+      try {
+        toast({ title: "Uploading Image...", description: "Please wait while your new profile image is uploaded." });
+        const newImageUrl = await uploadProfileImage(selectedFile, user.id, currentCoach.profileImageUrl || null);
+        finalImageUrl = newImageUrl;
+        setValue('profileImageUrl', newImageUrl);
+        setImagePreviewUrl(newImageUrl);
+        setSelectedFile(null);
+      } catch (error: any) {
+        console.error('Error uploading image during submit:', error);
+        toast({ title: "Image Upload Failed", description: error.message || "Could not upload new image. Profile saved without image update.", variant: "destructive" });
+      } finally {
+        setIsUploadingImage(false);
+      }
+    } 
+
+    const keywordsArray = (data.keywords?.split(',').map(k => k.trim()).filter(Boolean)) || [];
+    const certificationsArray = (data.certifications?.split(',').map(c => c.trim()).filter(Boolean)) || [];
 
     const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'subscriptionTier' | 'status'>> = { 
         name: data.name,
         bio: data.bio,
         specialties: data.selectedSpecialties,
         keywords: keywordsArray,
-        profileImageUrl: data.profileImageUrl || null,
+        profileImageUrl: isPremium ? (finalImageUrl || null) : null, 
         certifications: certificationsArray,
         location: data.location || null,
         websiteUrl: data.websiteUrl || null,
         introVideoUrl: data.introVideoUrl || null,
         socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-        // updatedAt is handled by setUserProfile
+        availability: data.availability || [], 
     };
 
     try {
         await setUserProfile(user.id, profileToSave);
+        setCurrentCoach(prev => prev ? { ...prev, ...profileToSave, profileImageUrl: finalImageUrl } : null); 
         toast({
           title: "Profile Updated!",
           description: "Your profile changes have been saved successfully.",
@@ -217,11 +290,27 @@ export default function CoachProfilePage() {
     }
   };
 
-  if (authLoading || (!user && !currentCoach)) { // Show loader if auth is loading or if no user and no currentCoach (initial state)
+  const handleAddAvailabilitySlot = () => {
+    if (newSlotDay.trim() && newSlotTime.trim()) {
+      appendAvailability({ day: newSlotDay.trim(), time: newSlotTime.trim() });
+      setNewSlotDay(''); 
+      setNewSlotTime(''); 
+    } else {
+      toast({
+        title: "Missing Information",
+        description: "Please enter both day and time for the availability slot.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRemoveAvailabilitySlot = (index: number) => {
+    removeAvailability(index);
+  };
+
+  if (authLoading || (!user && !currentCoach && !isSubmitting)) {
     return <div className="flex justify-center items-center h-full min-h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading profile...</div>;
   }
-
-  const isPremium = currentCoach?.subscriptionTier === 'premium';
 
   return (
     <Card className="shadow-lg">
@@ -252,20 +341,54 @@ export default function CoachProfilePage() {
                 <Label htmlFor="email">Email Address (Display Only)</Label>
                 <Input id="email" type="email" {...register('email')} readOnly className="bg-muted/50" />
               </div>
-               <div className="space-y-2">
-                <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
-                 <div className="flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                    <Input id="profileImageUrl" type="url" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''}/>
-                </div>
-                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
-                <p className="text-xs text-muted-foreground">Don’t have an image URL? Send us your photo via email and we’ll handle the upload.</p>
-                {profileImageUrlValue && z.string().url().safeParse(profileImageUrlValue).success && (
-                  <div className="mt-2 relative w-32 h-32">
-                    <NextImage src={profileImageUrlValue} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
+              {isPremium ? (
+                <div className="space-y-2">
+                  <Label htmlFor="profileImageFile">Profile Image</Label>
+                  <div className="flex items-center gap-4">
+                    {imagePreviewUrl ? (
+                      <div className="relative w-32 h-32">
+                        <NextImage src={imagePreviewUrl} alt="Profile preview" fill sizes="128px" className="rounded-md object-cover border" />
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 bg-muted rounded-md flex items-center justify-center">
+                        <ImageIcon className="w-16 h-16 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <Input 
+                        id="profileImageFile" 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/webp" 
+                        onChange={handleImageFileChange} 
+                        className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        disabled={isUploadingImage || isSubmitting}
+                      />
+                      <p className="text-xs text-muted-foreground">Upload a PNG, JPG, or WEBP file (max 2MB recommended).</p>
+                      {profileImageUrlValue && !selectedFile && (
+                         <Button variant="outline" size="sm" onClick={handleRemoveImage} disabled={isUploadingImage || isSubmitting} className="text-destructive hover:text-destructive/90 border-destructive/50 hover:border-destructive/70">
+                           <Trash2 className="mr-2 h-4 w-4"/> Remove Current Image
+                         </Button>
+                      )}
+                      {selectedFile && (
+                        <Button variant="outline" size="sm" onClick={() => { setSelectedFile(null); setImagePreviewUrl(profileImageUrlValue || null); (document.getElementById('profileImageFile') as HTMLInputElement).value = ''}} disabled={isUploadingImage || isSubmitting}>
+                           Cancel Selection
+                         </Button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                  {isUploadingImage && <p className="text-sm text-primary flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Uploading image...</p>}
+                  <input type="hidden" {...register('profileImageUrl')} /> 
+                  {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
+                </div>
+              ) : (
+                <div className="space-y-2 p-4 bg-muted/50 rounded-md">
+                  <Label className="text-muted-foreground">Profile Image</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Add a professional profile picture to enhance your listing. This feature is available for Premium coaches. 
+                    <Link href="/pricing" className="text-primary hover:underline ml-1">Upgrade to Premium</Link>.
+                  </p>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
                 <Textarea id="bio" {...register('bio')} rows={6} className={errors.bio ? 'border-destructive' : ''} />
@@ -371,7 +494,7 @@ export default function CoachProfilePage() {
                 <h3 className="text-lg font-semibold">Premium Features</h3>
                 {!isPremium && (
                     <Button variant="outline" size="sm" asChild className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700">
-                        <Link href="/pricing" legacyBehavior><Crown className="mr-2 h-4 w-4 text-yellow-500" /> Upgrade to Premium</Link>
+                        <Link href="/pricing"><span><Crown className="mr-2 h-4 w-4 text-yellow-500" /> Upgrade to Premium</span></Link>
                     </Button>
                 )}
             </div>
@@ -412,11 +535,98 @@ export default function CoachProfilePage() {
             </div>
           </section>
           
-          <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isSubmitting || authLoading ? (
+          <section>
+             <h3 className="text-lg font-semibold mb-4 border-b pb-2 flex items-center">
+               <CalendarDays className="mr-2 h-5 w-5 text-primary"/>Availability Slots
+             </h3>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Specify the days and time frames you are generally available. E.g., Day: Monday, Time: 10am - 1pm.
+              </p>
+              
+              <div className="space-y-3">
+                {availabilityFields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30 shadow-sm">
+                    <Input
+                      {...register(`availability.${index}.day`)}
+                      placeholder="Day (e.g., Monday)"
+                      className="flex-1 py-2.5 bg-background"
+                      defaultValue={field.day} 
+                    />
+                    <Input
+                      {...register(`availability.${index}.time`)}
+                      placeholder="Time (e.g., 9am - 5pm)"
+                      className="flex-1 py-2.5 bg-background"
+                      defaultValue={field.time} 
+                    />
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      onClick={() => removeAvailability(index)} 
+                      size="icon" 
+                      className="text-destructive hover:text-destructive/80 shrink-0"
+                      aria-label="Remove slot"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-end gap-3 pt-4 border-t mt-4">
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor="newSlotDayInput" className="text-sm font-medium">New Day</Label>
+                  <Input 
+                    id="newSlotDayInput" 
+                    placeholder="e.g., Wednesday" 
+                    value={newSlotDay} 
+                    onChange={(e) => setNewSlotDay(e.target.value)} 
+                    className="py-2.5"
+                  />
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor="newSlotTimeInput" className="text-sm font-medium">New Time Frame</Label>
+                  <Input 
+                    id="newSlotTimeInput" 
+                    placeholder="e.g., 2pm - 5pm" 
+                    value={newSlotTime} 
+                    onChange={(e) => setNewSlotTime(e.target.value)} 
+                    className="py-2.5"
+                  />
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleAddAvailabilitySlot} 
+                  className="shrink-0"
+                  disabled={!newSlotDay.trim() || !newSlotTime.trim()}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Slot
+                </Button>
+              </div>
+
+              {errors.availability && !Array.isArray(errors.availability) && errors.availability.root && (
+                 <p className="text-sm text-destructive mt-1">{errors.availability.root.message}</p>
+              )}
+               {Array.isArray(errors.availability) && errors.availability.map((err, i) => (
+                (err?.day || err?.time) && (
+                  <div key={i} className="text-sm text-destructive mt-1">
+                    {err.day && <p>Slot {i+1} Day: {err.day.message}</p>}
+                    {err.time && <p>Slot {i+1} Time: {err.time.message}</p>}
+                  </div>
+                )
+              ))}
+              {errors.availability && typeof errors.availability.message === 'string' && (
+                 <p className="text-sm text-destructive mt-1">{errors.availability.message}</p>
+              )}
+            </div>
+          </section>
+
+          <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading || isUploadingImage} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isSubmitting || authLoading || isUploadingImage ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Saving Changes...
+                {isUploadingImage ? 'Uploading Image...' : (isSubmitting ? 'Saving Changes...' : 'Loading...')}
               </>
             ) : (
               <><Save className="mr-2 h-5 w-5" /> Save Profile Changes</>

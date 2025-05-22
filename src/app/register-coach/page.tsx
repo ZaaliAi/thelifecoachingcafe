@@ -1,35 +1,40 @@
-
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
+import { useState, useEffect, useCallback, type ChangeEvent, useRef } from 'react';
+import { useForm, Controller, type SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserPlus, Lightbulb, CheckCircle2, Link as LinkIcon, Crown, Globe, Video, MapPin, Tag, PlusCircle, Image as ImageIcon } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
+// Checkbox no longer needed for availability
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, UserPlus, Lightbulb, X, Crown, CalendarDays, Sparkles, PlusCircle, Image as ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { suggestCoachSpecialties, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { setUserProfile, getUserProfile } from '@/lib/firestore';
-import type { FirestoreUserProfile } from '@/types';
+import { setUserProfile } from '@/lib/firestore';
+import { uploadProfileImage } from '@/services/imageUpload';
+import type { FirestoreUserProfile } from '@/types'; // CoachAvailability removed as it will be redefined locally by the schema
 import { Badge } from '@/components/ui/badge';
+import { cn } from "@/lib/utils";
+
+// New availability slot schema
+const availabilitySlotSchema = z.object({
+  day: z.string().min(1, 'Day is required.').max(50, 'Day seems too long.'),
+  time: z.string().min(1, 'Time is required.').max(50, 'Time seems too long.'),
+});
 
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
-  email: z.string().email('Invalid email address.'), // Will be read-only, populated from auth
+  email: z.string().email('Invalid email address.'),
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.'),
-  selectedSpecialties: z.array(z.string()).min(1, 'Please select at least one specialty.'),
-  customSpecialty: z.string().optional(),
+  selectedSpecialties: z.array(z.string()).min(1, 'Please select or add at least one specialty.'),
   keywords: z.string().optional(),
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   certifications: z.string().optional(),
@@ -38,29 +43,36 @@ const coachRegistrationSchema = z.object({
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
   socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
+  // Updated availability schema
+  availability: z.array(availabilitySlotSchema).optional().default([]),
+  status: z.string().optional(),
 });
 
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
-const allSpecialtiesList = [
-  'Career Coaching', 'Personal Development', 'Mindfulness Coaching', 'Executive Coaching',
-  'Leadership Coaching', 'Business Strategy Coaching', 'Wellness Coaching', 'Relationship Coaching',
-  'Stress Management Coaching', 'Health and Fitness Coaching', 'Spiritual Coaching',
-  'Financial Coaching', 'Parenting Coaching', 'Academic Coaching', 'Performance Coaching',
-];
-
-export default function CoachRegistrationPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [suggestedSpecialtiesState, setSuggestedSpecialtiesState] = useState<string[]>([]);
-  const [suggestedKeywordsState, setSuggestedKeywordsState] = useState<string[]>([]);
-  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>(allSpecialtiesList);
-  
-  const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+export default function RegisterCoachPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
+  const [customSpecialtyInput, setCustomSpecialtyInput] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachRegistrationFormData>({
+  // State for new availability slot input
+  const [newSlotDay, setNewSlotDay] = useState('');
+  const [newSlotTime, setNewSlotTime] = useState('');
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    getValues,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
       name: '',
@@ -68,386 +80,439 @@ export default function CoachRegistrationPage() {
       bio: '',
       selectedSpecialties: [],
       keywords: '',
-      profileImageUrl: '',
-      location: '',
       certifications: '',
+      location: '',
+      profileImageUrl: null,
       websiteUrl: '',
       introVideoUrl: '',
       socialLinkPlatform: '',
       socialLinkUrl: '',
-    }
+      availability: [], // Default to empty array for the new structure
+      status: 'pending_approval',
+    },
   });
 
-  const profileImageUrlValue = watch('profileImageUrl'); 
+  const { fields: availabilityFields, append: appendAvailability, remove: removeAvailability } = useFieldArray({
+    control,
+    name: "availability",
+  });
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      toast({ title: "Authentication Required", description: "Please sign up or log in first.", variant: "destructive" });
-      router.push('/signup?role=coach'); // Ensure role is passed for correct signup flow
-      return;
-    }
-    if (user && user.role !== 'coach') {
-      toast({ title: "Access Denied", description: "This page is for coach profile completion.", variant: "destructive" });
-      router.push('/dashboard/user'); // Or a generic dashboard
-      return;
-    }
     if (user) {
-      const fetchProfile = async () => {
-        setIsSubmitting(true); // Show loading while fetching
-        const existingProfile = await getUserProfile(user.id);
-        if (existingProfile) {
-          reset({
-            name: existingProfile.name || user.name || '',
-            email: existingProfile.email || user.email || '', // Should always use user.email from auth
-            bio: existingProfile.bio || '',
-            selectedSpecialties: existingProfile.specialties || [],
-            keywords: existingProfile.keywords?.join(', ') || '',
-            profileImageUrl: existingProfile.profileImageUrl || '',
-            certifications: existingProfile.certifications?.join(', ') || '',
-            location: existingProfile.location || '',
-            websiteUrl: existingProfile.websiteUrl || '',
-            introVideoUrl: existingProfile.introVideoUrl || '',
-            socialLinkPlatform: existingProfile.socialLinks?.[0]?.platform || '',
-            socialLinkUrl: existingProfile.socialLinks?.[0]?.url || '',
-          });
-          const allSpecs = new Set([...allSpecialtiesList, ...(existingProfile.specialties || [])]);
-          setAvailableSpecialties(Array.from(allSpecs));
-        } else {
-           // This case means auth.tsx didn't create the initial profile, which it should have.
-           // For robustness, pre-fill from auth user.
-           console.warn(`[RegisterCoachPage] No existing Firestore profile for coach ${user.id}. Pre-filling from auth context.`);
-           reset({
-            name: user.name || '',
-            email: user.email || '',
-          });
-        }
-        setIsSubmitting(false);
-      };
-      fetchProfile();
+      reset({
+        name: user.displayName || '',
+        email: user.email || '',
+        bio: '',
+        selectedSpecialties: [],
+        keywords: '',
+        certifications: '',
+        location: '',
+        profileImageUrl: null,
+        websiteUrl: '',
+        introVideoUrl: '',
+        socialLinkPlatform: '',
+        socialLinkUrl: '',
+        availability: [], // Reset to empty array
+        status: 'pending_approval',
+      });
     }
-  }, [user, authLoading, router, toast, reset]);
+  }, [user, reset]);
 
   const bioValue = watch('bio');
+  const currentSelectedSpecialties = watch('selectedSpecialties') || [];
 
-  const fetchSuggestions = useCallback(
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setImagePreviewUrl(URL.createObjectURL(file));
+      setValue('profileImageUrl', '', { shouldValidate: false });
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedFile(null);
+    setImagePreviewUrl(null);
+    setValue('profileImageUrl', '', { shouldValidate: false });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const debouncedFetchSuggestions = useCallback(
     debounce(async (bioText: string) => {
-      if (bioText && bioText.length >= 50) {
+      if (bioText.length >= 50) {
         setIsAiLoading(true);
-        setSuggestedKeywordsState([]);
-        setSuggestedSpecialtiesState([]);
+        setAiSuggestions(null);
         try {
-          const input: SuggestCoachSpecialtiesInput = { bio: bioText };
-          const response: SuggestCoachSpecialtiesOutput = await suggestCoachSpecialties(input);
-          setSuggestedSpecialtiesState(response.specialties || []);
-          setSuggestedKeywordsState(response.keywords || []);
+          const suggestions = await suggestCoachSpecialties({ bio: bioText });
+          setAiSuggestions(suggestions);
         } catch (error) {
           console.error('Error fetching AI suggestions:', error);
-          toast({ title: "AI Suggestion Error", description: "Could not fetch suggestions from AI.", variant: "destructive" });
-        } finally {
-          setIsAiLoading(false);
         }
+        setIsAiLoading(false);
       }
     }, 1000),
-    [toast]
+    [setIsAiLoading, setAiSuggestions]
   );
 
   useEffect(() => {
     if (bioValue) {
-      fetchSuggestions(bioValue);
+      debouncedFetchSuggestions(bioValue);
     }
-  }, [bioValue, fetchSuggestions]);
+  }, [bioValue, debouncedFetchSuggestions]);
 
   const onSubmit: SubmitHandler<CoachRegistrationFormData> = async (data) => {
-    if (!user || user.role !== 'coach') {
-      toast({ title: "Authorization Error", description: "You must be logged in as a coach.", variant: "destructive" });
+    if (!user || !user.id) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to register as a coach.",
+        variant: "destructive",
+      });
       return;
     }
-    setIsSubmitting(true);
 
-    const keywordsArray = data.keywords?.split(',').map(k => k.trim()).filter(Boolean) || [];
-    const certificationsArray = data.certifications?.split(',').map(c => c.trim()).filter(Boolean) || [];
-    
-    const profileToSave: Partial<Omit<FirestoreUserProfile, 'id' | 'email' | 'role' | 'createdAt' | 'updatedAt' | 'status' | 'subscriptionTier'>> = {
-        name: data.name,
-        bio: data.bio,
-        specialties: data.selectedSpecialties,
-        keywords: keywordsArray,
-        profileImageUrl: data.profileImageUrl || null,
-        certifications: certificationsArray,
-        location: data.location || null,
-        websiteUrl: data.websiteUrl || null,
-        introVideoUrl: data.introVideoUrl || null,
-        socialLinks: data.socialLinkPlatform && data.socialLinkUrl ? [{ platform: data.socialLinkPlatform, url: data.socialLinkUrl }] : [],
-    };
+    let finalProfileImageUrl = data.profileImageUrl || null;
 
     try {
-        console.log("[RegisterCoachPage] Calling setUserProfile with data (this is an update):", JSON.stringify(profileToSave, null, 2));
-        await setUserProfile(user.id, profileToSave); 
-        toast({
-          title: "Coach Profile Saved!",
-          description: "Your coach profile details have been updated successfully.",
-          action: <CheckCircle2 className="text-green-500" />,
-        });
-        router.push('/dashboard/coach');
-    } catch (error: any) {
-        console.error('[RegisterCoachPage] Error saving coach profile to Firestore:', error);
-        toast({ title: "Profile Save Error", 
-        description: `Could not save your profile. ${error.message || 'Please try again.'}`, 
-        variant: "destructive" });
-    } finally {
-        setIsSubmitting(false);
+      if (selectedFile) {
+        toast({ title: 'Uploading profile image...', description: 'Please wait.' });
+        finalProfileImageUrl = await uploadProfileImage(selectedFile, user.id, data.profileImageUrl || null);
+      }
+
+      const profileDataToSave = {
+        ...data,
+        profileImageUrl: finalProfileImageUrl,
+        status: 'pending_approval',
+        userId: user.id,
+        // Ensure availability is an array, even if undefined from form data
+        availability: data.availability || [], 
+      };
+
+      await setUserProfile(user.id, profileDataToSave as unknown as FirestoreUserProfile);
+      
+      toast({
+        title: 'Registration Submitted!',
+        description: 'Your profile is pending approval. We will notify you once it is reviewed.',
+        variant: 'success',
+      });
+      reset(); 
+      setSelectedFile(null);
+      setImagePreviewUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error during coach registration:', error);
+      toast({
+        title: 'Registration Failed',
+        description: (error as Error).message || 'There was an error submitting your profile. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const addSuggestedKeyword = (keyword: string) => {
+    const currentKeywords = getValues('keywords') || '';
+    const keywordsArray = currentKeywords.split(',').map(k => k.trim()).filter(k => k);
+    if (!keywordsArray.includes(keyword)) {
+      setValue('keywords', [...keywordsArray, keyword].join(', '), { shouldValidate: true });
+    }
+  };
+
+  const addSpecialty = (specialty: string) => {
+    if (specialty.trim() === '') return;
+    const currentSpecialties = getValues('selectedSpecialties') || [];
+    if (!currentSpecialties.includes(specialty.trim())) {
+      setValue('selectedSpecialties', [...currentSpecialties, specialty.trim()], { shouldValidate: true });
     }
   };
 
   const handleAddCustomSpecialty = () => {
-    const customSpecialtyValue = getValues('customSpecialty')?.trim();
-    if (customSpecialtyValue && !availableSpecialties.includes(customSpecialtyValue)) {
-      setAvailableSpecialties(prev => [...prev, customSpecialtyValue].sort());
-      setValue('selectedSpecialties', [...(getValues('selectedSpecialties') || []), customSpecialtyValue]);
-      setValue('customSpecialty', '');
+    if (customSpecialtyInput.trim() !== '') {
+      addSpecialty(customSpecialtyInput.trim());
+      setCustomSpecialtyInput('');
     }
   };
 
-  const handleSelectSuggestedKeyword = (keyword: string) => {
-    const currentKeywords = getValues('keywords') || "";
-    const keywordsSet = new Set(currentKeywords.split(',').map(k => k.trim()).filter(Boolean));
-    if (!keywordsSet.has(keyword)) {
-      setValue('keywords', [...keywordsSet, keyword].join(', '));
+  const removeSpecialty = (specialtyToRemove: string) => {
+    const currentSpecialties = getValues('selectedSpecialties') || [];
+    setValue('selectedSpecialties', currentSpecialties.filter(s => s !== specialtyToRemove), { shouldValidate: true });
+  };
+
+  const handleAddAvailabilitySlot = () => {
+    if (newSlotDay.trim() && newSlotTime.trim()) {
+      appendAvailability({ day: newSlotDay.trim(), time: newSlotTime.trim() });
+      setNewSlotDay('');
+      setNewSlotTime('');
+    } else {
+      toast({
+        title: "Missing Information",
+        description: "Please enter both day and time for the availability slot.",
+        variant: "destructive"
+      });
     }
   };
 
-  const handleSelectSuggestedSpecialty = (specialty: string) => {
-    if (!availableSpecialties.includes(specialty)) {
-      setAvailableSpecialties(prev => [...prev, specialty].sort());
-    }
-    const currentSelected = getValues('selectedSpecialties') || [];
-    if (!currentSelected.includes(specialty)) {
-      setValue('selectedSpecialties', [...currentSelected, specialty]);
-    }
-  };
+ return (
+    <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8 max-w-3xl bg-background">
+      <section className="mb-12 text-center py-8 px-6 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 shadow-lg border border-border/20">
+        <div className="flex items-center justify-center mb-4">
+          <UserPlus className="h-12 w-12 text-primary mr-4" />
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">Become a Coach</h1>
+        </div>
+        <p className="mt-4 text-lg leading-6 text-muted-foreground max-w-xl mx-auto">
+          Ready to inspire and guide others? Fill out your profile below to join our community of talented coaches.
+        </p>
+      </section>
 
-  if (authLoading || !user || isSubmitting) { // Combined loading states
-    return <div className="flex justify-center items-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading...</div>;
-  }
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        {/* Personal Information Card ... */}
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary">
+              <UserPlus className="mr-3 h-7 w-7" /> Personal Information
+            </CardTitle>
+            <CardDescription className="mt-1">Let's start with the basics.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-base font-medium">Full Name</Label>
+              <Controller name="name" control={control} render={({ field }) => <Input id="name" placeholder="e.g., Jane Doe" {...field} className="text-base py-2.5" />} />
+              {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-base font-medium">Email Address</Label>
+              <Controller name="email" control={control} render={({ field }) => <Input id="email" type="email" placeholder="you@example.com" {...field} className="text-base py-2.5" />} />
+              {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
+            </div>
+          </CardContent>
+        </Card>
 
-  return (
-    <div className="max-w-2xl mx-auto py-8">
-      <Card className="shadow-xl">
-        <CardHeader className="text-center">
-          <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
-          <CardTitle className="text-3xl font-bold">Complete Your Coach Profile</CardTitle>
-          <CardDescription>
-            Welcome, {getValues('name') || user.email}! Let's build your coach profile to help clients find you.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-            <section className="space-y-6">
-              <h3 className="text-lg font-semibold border-b pb-2">Your Details</h3>
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" {...register('name')} placeholder="e.g., Dr. Jane Doe" className={errors.name ? 'border-destructive' : ''} />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address (from signup)</Label>
-                <Input id="email" type="email" {...register('email')} readOnly className={`bg-muted/50 ${errors.email ? 'border-destructive' : ''}`} />
-                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-              </div>
-            </section>
-
-            <section className="space-y-6">
-              <h3 className="text-lg font-semibold border-b pb-2">Profile Details</h3>
-              
-              <div className="space-y-2">
-                <Label htmlFor="profileImageUrl">Profile Image URL (Optional)</Label>
-                <div className="flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                    <Input id="profileImageUrl" type="url" {...register('profileImageUrl')} placeholder="https://example.com/your-image.png" className={errors.profileImageUrl ? 'border-destructive' : ''}/>
-                </div>
-                {errors.profileImageUrl && <p className="text-sm text-destructive">{errors.profileImageUrl.message}</p>}
-                <p className="text-xs text-muted-foreground">Don’t have an image URL? Send us your photo via email and we’ll handle the upload.</p>
-                {profileImageUrlValue && z.string().url().safeParse(profileImageUrlValue).success && (
-                  <div className="mt-2 relative w-32 h-32">
-                    <NextImage src={profileImageUrlValue} alt="Profile preview" fill className="rounded-md object-cover border" data-ai-hint="person avatar" />
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bio">Your Bio (min. 50 characters for AI suggestions)</Label>
-                <Textarea id="bio" {...register('bio')} rows={6} placeholder="Tell us about your coaching philosophy, experience, and what makes you unique..." className={errors.bio ? 'border-destructive' : ''} />
-                {errors.bio && <p className="text-sm text-destructive">{errors.bio.message}</p>}
-              </div>
-
-              { (bioValue && bioValue.length >= 50) && (
-                <Alert variant="default" className="bg-accent/10 border-accent/30">
-                  <Lightbulb className="h-5 w-5 text-primary" />
-                  <AlertTitle className="font-semibold text-primary">AI Suggestions Based on Your Bio</AlertTitle>
-                  <AlertDescription className="space-y-3 text-foreground/80 mt-2">
-                    {isAiLoading && <p className="text-sm flex items-center"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing bio...</p>}
-                    {!isAiLoading && suggestedKeywordsState.length === 0 && suggestedSpecialtiesState.length === 0 && <p className="text-sm">No new suggestions based on current bio, or AI is processing.</p>}
-                    
-                    {suggestedKeywordsState.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-1">Suggested Keywords (click to add):</p>
-                        <div className="flex flex-wrap gap-2">
-                          {suggestedKeywordsState.map(keyword => (
-                            <Badge key={keyword} variant="outline" onClick={() => handleSelectSuggestedKeyword(keyword)} className="cursor-pointer hover:bg-primary/20">
-                              <PlusCircle className="mr-1 h-3 w-3" /> {keyword}
-                            </Badge>
-                          ))}
-                        </div>
+        {/* Coaching Profile Card ... */}
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary">
+              <Lightbulb className="mr-3 h-7 w-7" /> Coaching Profile
+            </CardTitle>
+            <CardDescription className="mt-1">Showcase your expertise and unique approach.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-6">
+            {/* Bio, Specialties, Keywords, Certifications, Location ... */}
+            <div className="space-y-2">
+              <Label htmlFor="bio" className="text-base font-medium">Your Bio</Label>
+              <Controller name="bio" control={control} render={({ field }) => (
+                  <Textarea id="bio" placeholder="Share your coaching philosophy... (Min 50 characters for AI suggestions)" {...field} rows={6} className="text-base py-2.5" />
+              )} />
+              {errors.bio && <p className="text-sm text-destructive mt-1">{errors.bio.message}</p>}
+              {isAiLoading && <div className="flex items-center text-sm text-muted-foreground mt-3"><Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />Analyzing bio...</div>}
+              {aiSuggestions && (
+                <div className="mt-4 p-4 border border-dashed border-primary/50 rounded-lg bg-primary/5">
+                  <div className="flex items-center mb-3"><Sparkles className="h-6 w-6 text-primary mr-2" /><h4 className="text-lg font-semibold text-primary">Smart Suggestions ✨</h4></div>
+                  {aiSuggestions.keywords && aiSuggestions.keywords.length > 0 && (
+                    <div className="mb-4">
+                      <Label className="text-base font-medium text-foreground">Keywords:</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {aiSuggestions.keywords.map(k => <Button key={k} type="button" variant="outline" size="sm" onClick={() => addSuggestedKeyword(k)} className="bg-background hover:bg-muted"><PlusCircle className="mr-2 h-4 w-4"/>{k}</Button>)} 
                       </div>
-                    )}
-                    {suggestedSpecialtiesState.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-sm font-medium mb-1">Suggested Specialties (click to select):</p>
-                         <div className="flex flex-wrap gap-2">
-                          {suggestedSpecialtiesState.map(specialty => (
-                            <Badge key={specialty} variant="outline" onClick={() => handleSelectSuggestedSpecialty(specialty)} className="cursor-pointer hover:bg-primary/20">
-                               <PlusCircle className="mr-1 h-3 w-3" /> {specialty}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <Label>Specialties (select at least one)</Label>
-                <Controller
-                  name="selectedSpecialties"
-                  control={control}
-                  render={({ field }) => (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-60 overflow-y-auto p-2 border rounded-md">
-                      {availableSpecialties.sort().map((specialty) => (
-                        <div key={specialty} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`specialty-reg-${specialty.replace(/\s+/g, '-')}`}
-                            checked={field.value?.includes(specialty)}
-                            onCheckedChange={(checked) => {
-                              return checked
-                                ? field.onChange([...(field.value || []), specialty])
-                                : field.onChange(
-                                    (field.value || []).filter(
-                                      (value) => value !== specialty
-                                    )
-                                  );
-                            }}
-                          />
-                          <Label htmlFor={`specialty-reg-${specialty.replace(/\s+/g, '-')}`} className="font-normal">{specialty}</Label>
-                        </div>
-                      ))}
                     </div>
                   )}
-                />
-                {errors.selectedSpecialties && <p className="text-sm text-destructive">{errors.selectedSpecialties.message}</p>}
-                <div className="flex items-center gap-2 mt-2">
-                  <Input {...register('customSpecialty')} placeholder="Add custom specialty" className="flex-grow"/>
-                  <Button type="button" variant="outline" onClick={handleAddCustomSpecialty}><PlusCircle className="mr-2 h-4 w-4" />Add</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="keywords" className="flex items-center"><Tag className="mr-2 h-4 w-4 text-muted-foreground"/>Keywords (comma-separated)</Label>
-                <Input id="keywords" {...register('keywords')} placeholder="e.g., leadership, wellness, mindset, career change" className={errors.keywords ? 'border-destructive' : ''}/>
-                {errors.keywords && <p className="text-sm text-destructive">{errors.keywords.message}</p>}
-                 <p className="text-xs text-muted-foreground">Help clients find you by adding relevant keywords.</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="certifications" className="flex items-center"><CheckCircle2 className="mr-2 h-4 w-4 text-muted-foreground"/>Certifications (Optional, comma-separated)</Label>
-                <Input id="certifications" {...register('certifications')} placeholder="e.g., CPC, ICF Accredited" />
-              </div>
-
-               <div className="space-y-2">
-                <Label htmlFor="location" className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-muted-foreground"/>Location (Optional)</Label>
-                <Input id="location" {...register('location')} placeholder="e.g., New York, NY or Remote" className={errors.location ? 'border-destructive' : ''} />
-                 {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
-              </div>
-            </section>
-
-            <section className="space-y-6 p-6 bg-primary/5 rounded-lg border border-primary/20">
-                <Alert variant="default" className="bg-transparent border-0 p-0">
-                    <AlertTitle className="text-xl font-semibold text-primary flex items-center">
-                        <Crown className="mr-2 h-6 w-6 text-yellow-500" />
-                        Supercharge Your Profile with Premium!
-                    </AlertTitle>
-                    <AlertDescription className="text-muted-foreground mt-2">
-                        Unlock powerful features like a Premium Badge, link your personal website, embed an engaging intro video,
-                        and connect your social media for <strong className="font-semibold text-foreground/90">only £9.99/month</strong>.
-                        Attract more clients and stand out from the crowd.
-                    </AlertDescription>
-                    <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                        <Button asChild variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                            <Link href="/pricing">Get Premium</Link>
-                        </Button>
-                        <Button asChild variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/10">
-                            <Link href="/pricing">Explore premium benefits</Link>
-                        </Button>
+                  {aiSuggestions.specialties && aiSuggestions.specialties.length > 0 && (
+                    <div>
+                      <Label className="text-base font-medium text-foreground">Specialties:</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {aiSuggestions.specialties.map(s => <Button key={s} type="button" variant="outline" size="sm" onClick={() => addSpecialty(s)} className="bg-background hover:bg-muted"><PlusCircle className="mr-2 h-4 w-4"/>{s}</Button>)} 
+                      </div>
                     </div>
-                </Alert>
-
-                <div className="space-y-2">
-                    <Label htmlFor="websiteUrl">Your Personal Website (Premium Feature)</Label>
-                    <div className="flex items-center gap-2">
-                        <Globe className="h-5 w-5 text-muted-foreground" />
-                        <Input id="websiteUrl" type="url" {...register('websiteUrl')} placeholder="https://yourwebsite.com" className={errors.websiteUrl ? 'border-destructive' : ''} />
-                    </div>
-                    {errors.websiteUrl && <p className="text-sm text-destructive">{errors.websiteUrl.message}</p>}
+                  )}
+                  {(aiSuggestions.keywords?.length === 0 && aiSuggestions.specialties?.length === 0) && <p className="text-sm text-muted-foreground">No suggestions. Expand bio.</p>}
                 </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="introVideoUrl">Intro Video URL (e.g., YouTube - Premium Feature)</Label>
-                    <div className="flex items-center gap-2">
-                        <Video className="h-5 w-5 text-muted-foreground" />
-                        <Input id="introVideoUrl" type="url" {...register('introVideoUrl')} placeholder="https://youtube.com/watch?v=yourvideo" className={errors.introVideoUrl ? 'border-destructive' : ''} />
-                    </div>
-                    {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
-                </div>
-
-                <div>
-                    <Label className="block mb-2">Social Media Link (Premium Feature)</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Input id="socialLinkPlatform" {...register('socialLinkPlatform')} placeholder="e.g., LinkedIn, Instagram" />
-                        </div>
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                            <LinkIcon className="h-5 w-5 text-muted-foreground" />
-                            <Input id="socialLinkUrl" type="url" {...register('socialLinkUrl')} placeholder="https://linkedin.com/in/yourprofile" className={errors.socialLinkUrl ? 'border-destructive' : ''}/>
-                            </div>
-                            {errors.socialLinkUrl && <p className="text-sm text-destructive">{errors.socialLinkUrl.message}</p>}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>Profile Submission</AlertTitle>
-              <AlertDescription>
-                Your profile information will be saved. New coaches are typically reviewed by an admin before appearing publicly.
-              </AlertDescription>
-            </Alert>
-
-            <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isSubmitting || authLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Saving Profile...
-                </>
-              ) : (
-                'Complete and Save Coach Profile'
               )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="customSpecialtyInput" className="text-base font-medium">Your Specialties</Label>
+              <p className="text-sm text-muted-foreground mb-3">Add from AI suggestions or type your own. (Min. 1 required)</p>
+              <div className="flex flex-wrap gap-2 mb-3 min-h-[2.5rem] p-2 border rounded-md bg-muted/20 items-center">
+                {currentSelectedSpecialties.length > 0 ? currentSelectedSpecialties.map(s => <Badge key={s} variant="secondary" className="text-sm py-1 px-2.5 flex items-center gap-1.5">{s}<button type="button" onClick={() => removeSpecialty(s)} className="rounded-full hover:bg-destructive/20 p-0.5 text-destructive-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button></Badge>) : <span className="text-sm text-muted-foreground px-1">No specialties yet.</span>} 
+              </div>
+              <div className="flex gap-3 items-center">
+                <Input id="customSpecialtyInput" placeholder="Type specialty & click Add" value={customSpecialtyInput} onChange={e => setCustomSpecialtyInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && customSpecialtyInput.trim() !== '') { e.preventDefault(); handleAddCustomSpecialty();}}} className="text-base py-2.5" /> 
+                <Button type="button" variant="outline" onClick={handleAddCustomSpecialty} disabled={customSpecialtyInput.trim() === ''} className="shrink-0"><PlusCircle className="mr-2 h-4 w-4" /> Add</Button> 
+              </div>
+              {errors.selectedSpecialties && <p className="text-sm text-destructive mt-1">{errors.selectedSpecialties.message}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="keywords" className="text-base font-medium">Keywords</Label>
+              <Controller name="keywords" control={control} render={({ field }) => <Input id="keywords" placeholder="e.g., career change, leadership (comma-separated)" {...field} className="text-base py-2.5" />} />
+              {errors.keywords && <p className="text-sm text-destructive mt-1">{errors.keywords.message}</p>}
+              <p className="text-xs text-muted-foreground">Separate with commas. Helps clients find you.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="certifications" className="text-base font-medium">Certifications (Optional)</Label>
+              <Controller name="certifications" control={control} render={({ field }) => <Input id="certifications" placeholder="e.g., ICF Certified Coach, PCC" {...field} className="text-base py-2.5" />} />
+              {errors.certifications && <p className="text-sm text-destructive mt-1">{errors.certifications.message}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location" className="text-base font-medium">Location (Optional)</Label>
+              <Controller name="location" control={control} render={({ field }) => <Input id="location" placeholder="e.g., New York, NY or Remote" {...field} className="text-base py-2.5" />} />
+              {errors.location && <p className="text-sm text-destructive mt-1">{errors.location.message}</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* NEW Availability Card */}
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary">
+              <CalendarDays className="mr-3 h-7 w-7" /> Weekly Availability
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Specify days and time frames you are available. E.g., Day: Monday, Time: 10am - 1pm.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-4">
+              {availabilityFields.map((field, index) => (
+                <div key={field.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/50">
+                  <Input
+                    {...control.register(`availability.${index}.day`)}
+                    placeholder="Day (e.g., Monday)"
+                    className="flex-1 py-2.5"
+                    defaultValue={field.day}
+                  />
+                  <Input
+                    {...control.register(`availability.${index}.time`)}
+                    placeholder="Time (e.g., 9am - 5pm)"
+                    className="flex-1 py-2.5"
+                    defaultValue={field.time}
+                  />
+                  <Button type="button" variant="ghost" onClick={() => removeAvailability(index)} size="icon" className="text-destructive hover:text-destructive/80">
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
+                </div>
+              ))}
+              {errors.availability && typeof errors.availability === 'object' && !Array.isArray(errors.availability) && errors.availability.root && (
+                 <p className="text-sm text-destructive mt-1">{errors.availability.root.message}</p>
+              )}
+               {Array.isArray(errors.availability) && errors.availability.map((err, i) => (
+                <div key={i} className="text-sm text-destructive">
+                  {err?.day && <p>Slot {i+1} Day: {err.day.message}</p>}
+                  {err?.time && <p>Slot {i+1} Time: {err.time.message}</p>}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-end gap-3 pt-4 border-t">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="newSlotDayInput" className="text-sm font-medium">Day</Label>
+                <Input 
+                  id="newSlotDayInput" 
+                  placeholder="e.g., Monday" 
+                  value={newSlotDay} 
+                  onChange={(e) => setNewSlotDay(e.target.value)} 
+                  className="py-2.5"
+                />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="newSlotTimeInput" className="text-sm font-medium">Time Frame</Label>
+                <Input 
+                  id="newSlotTimeInput" 
+                  placeholder="e.g., 10am - 1pm" 
+                  value={newSlotTime} 
+                  onChange={(e) => setNewSlotTime(e.target.value)} 
+                  className="py-2.5"
+                />
+              </div>
+              <Button type="button" variant="outline" onClick={handleAddAvailabilitySlot} className="shrink-0">
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Slot
+              </Button>
+            </div>
+            {errors.availability && typeof errors.availability.message === 'string' && (
+              <p className="text-sm text-destructive mt-1">{errors.availability.message}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Premium Profile Boosters Card ... */}
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary-foreground"><Crown className="mr-3 h-7 w-7" /> Premium Profile Boosters</CardTitle>
+            <CardDescription className="mt-1 text-primary-foreground/90">Supercharge your profile with these premium features.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-6">
+            {/* Profile Picture, Website, Intro Video, Social Link ... */}
+            <div className="space-y-2">
+              <Label htmlFor="profileImageUpload" className="text-base font-medium">Profile Picture</Label>
+               <div className="mt-1 flex flex-col items-center space-y-4">
+                {imagePreviewUrl ? (
+                  <div className="relative w-40 h-40 rounded-full overflow-hidden shadow-md">
+                    <NextImage src={imagePreviewUrl} alt="Profile Preview" layout="fill" objectFit="cover" />
+                  </div>
+                ) : (
+                  <div className="w-40 h-40 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                    <ImageIcon className="w-16 h-16" />
+                  </div>
+                )}
+                <div className="flex space-x-3">
+                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <UploadCloud className="mr-2 h-4 w-4" /> {selectedFile ? 'Change Image' : 'Upload Image'}
+                  </Button>
+                  <input 
+                    type="file" 
+                    id="profileImageUpload" 
+                    className="hidden" 
+                    accept="image/png, image/jpeg, image/jpg" 
+                    onChange={handleImageChange} 
+                    ref={fileInputRef}
+                  />
+                  {imagePreviewUrl && (
+                    <Button type="button" variant="ghost" size="icon" onClick={handleRemoveImage} aria-label="Remove image"> 
+                      <Trash2 className="h-5 w-5 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2">Recommended: Square (1:1), JPG/PNG. Max 2MB.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="websiteUrl" className="text-base font-medium">Website URL</Label>
+              <Controller name="websiteUrl" control={control} render={({ field }) => <Input id="websiteUrl" placeholder="https://yourpersonalsite.com" {...field} className="text-base py-2.5" />} />
+              {errors.websiteUrl && <p className="text-sm text-destructive mt-1">{errors.websiteUrl.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="introVideoUrl" className="text-base font-medium">Intro Video URL</Label>
+              <Controller name="introVideoUrl" control={control} render={({ field }) => <Input id="introVideoUrl" placeholder="https://youtube.com/watch?v=yourvideo" {...field} className="text-base py-2.5" />} />
+              {errors.introVideoUrl && <p className="text-sm text-destructive mt-1">{errors.introVideoUrl.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="socialLinkUrl" className="text-base font-medium">Primary Social Link</Label>
+              <Controller name="socialLinkUrl" control={control} render={({ field }) => <Input id="socialLinkUrl" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" />} />
+              {errors.socialLinkUrl && <p className="text-sm text-destructive mt-1">{errors.socialLinkUrl.message}</p>}
+            </div>
+            <div className="mt-4 pt-6 border-t border-border/20 text-center col-span-full">
+              <Link 
+                href="/pricing" 
+                className={cn(
+                  buttonVariants({ size: "lg" }), 
+                  "inline-flex items-center shadow-md hover:shadow-lg transition-shadow duration-200 ease-in-out group",
+                  "bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-orange-600 text-primary-foreground"
+                )}
+              >
+                <Crown className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" /> Get Premium
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button type="submit" className="w-full py-3 text-lg font-semibold tracking-wide shadow-lg hover:shadow-xl transition-shadow duration-200 ease-in-out" disabled={isSubmitting || isAiLoading} size="lg">
+          {isSubmitting || isAiLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserPlus className="mr-2 h-5 w-5" />}
+          {isSubmitting ? 'Creating Profile...' : (isAiLoading ? 'AI is Working...' : 'Create My Coach Profile')}
+        </Button>
+      </form>
     </div>
   );
 }
