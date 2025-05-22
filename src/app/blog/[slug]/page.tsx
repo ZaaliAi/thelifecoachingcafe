@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import type { BlogPost, Coach } from '@/types';
 import { notFound } from 'next/navigation';
 import { getFirestoreBlogPostBySlug, getAllPublishedBlogPostSlugs, getCoachById } from '@/lib/firestore';
+import ReactMarkdown from 'react-markdown'; // Added import
 
 async function getBlogPost(slug: string): Promise<BlogPost | undefined> {
   const post = await getFirestoreBlogPostBySlug(slug);
@@ -75,10 +76,9 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </div>
       </header>
 
+      {/* Updated to use ReactMarkdown */}
       <div className="prose prose-lg dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
-        {post.content.split('\n').map((para, i) => (
-          <p key={i} className="mb-6">{para}</p>
-        ))}
+        <ReactMarkdown>{post.content}</ReactMarkdown>
       </div>
 
       <footer className="pt-8 border-t">
