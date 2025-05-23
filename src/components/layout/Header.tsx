@@ -91,7 +91,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center" aria-label="The Life Coaching Cafe Home">
-          <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
+          <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain" style={{ height: 'auto' }}/>
         </Link>
         
         {/* Desktop Navigation - MODIFIED onClick handlers */} 
@@ -138,7 +138,7 @@ export function Header() {
               </SheetHeader>
               <div className="flex flex-col space-y-4 mt-4">
                 <Link href="/" className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
-                  <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
+                  <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain" style={{ height: 'auto' }}/>
                 </Link>
                 {navLinks.map(link => ( 
                     (<NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />)
