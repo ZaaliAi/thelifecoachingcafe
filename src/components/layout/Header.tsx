@@ -1,8 +1,7 @@
-
 "use client";
 
 import Link from 'next/link';
-import Image from 'next/image'; // Import next/image
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,7 +34,6 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
     inactiveClasses = "text-foreground/70 hover:text-foreground hover:bg-muted";
   }
 
-
   return (
     <Link
       href={href}
@@ -52,7 +50,6 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
   );
 };
 
-
 export function Header() {
   const { user, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -63,13 +60,14 @@ export function Header() {
 
   const logoUrl = "https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/aaadb032-0d6f-4c06-a8a5-6a6064b4fb06_removalai_preview.png?alt=media&token=0c82d001-1e15-440d-bded-37de001e2d31";
 
-
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   const commonNavLinks = navLinks.filter(link => link.href !== '/').map(link => (
-    <NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />
+    // For desktop, commonNavLinks probably don't need to close mobile menu
+    <NavLinkItem key={link.href} {...link} />
   ));
 
+  // authNavLinks constant definition remains as it was, for reference or other uses
   const authNavLinks = user ? (
     <>
       <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} onClick={closeMobileMenu}/>
@@ -79,8 +77,8 @@ export function Header() {
     </>
   ) : (
     <>
-      <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
-      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
+      <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
+      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu} /> 
       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
         <Link href="/signup?role=coach">
           Register as a Coach
@@ -96,13 +94,36 @@ export function Header() {
           <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
         </Link>
         
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation - MODIFIED onClick handlers */} 
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-          {commonNavLinks}
-          {!loading && authNavLinks}
+          {/* Render commonNavLinks without onClick for desktop */} 
+          {navLinks.filter(link => link.href !== '/').map(link => (
+            <NavLinkItem key={link.href} href={link.href} label={link.label} icon={link.icon} />
+          ))}
+          {!loading && (
+            user ? (
+              <> {/* Logged-in links for DESKTOP */}
+                <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} /> {/* onClick removed */}
+                <Button variant="ghost" onClick={logout} className="flex items-center gap-2 text-foreground/70 hover:text-foreground"> {/* onClick simplified */}
+                  <LogOut className="h-5 w-5" /> Logout
+                </Button>
+              </>
+            ) : (
+              <> {/* Logged-out links for DESKTOP */}
+                <NavLinkItem href="/login" label="Login" icon={LogIn} /> {/* onClick removed */}
+                <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} /> {/* onClick removed */}
+                {/* MODIFIED BUTTON FOR DIAGNOSTICS */}
+                <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
+                  <a href="/signup?role=coach">
+                    Register as a Coach
+                  </a>
+                </Button>
+              </>
+            )
+          )}
         </nav>
 
-        {/* Mobile Navigation Trigger */}
+        {/* Mobile Navigation Trigger (remains unchanged from previous working version) */}
         <div className="md:hidden">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
@@ -119,26 +140,28 @@ export function Header() {
                 <Link href="/" className="flex items-center mb-4" onClick={closeMobileMenu} aria-label="The Life Coaching Cafe Home">
                   <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain"/>
                 </Link>
-                {navLinks.map(link => ( // Use all navLinks for mobile, including Home
+                {navLinks.map(link => ( 
                     (<NavLinkItem key={link.href} {...link} onClick={closeMobileMenu} />)
                 ))}
                 <hr className="my-2 border-border" />
                 {!loading && (
                   user ? (
                     <>
-                      <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} onClick={closeMobileMenu}/>
-                      <Button variant="ghost" onClick={() => { logout(); closeMobileMenu(); }} className="flex items-center gap-2 text-foreground/70 hover:text-foreground justify-start px-3 py-2">
+                      <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} onClick={closeMobileMenu} />
+                      <Button variant="ghost" onClick={() => { logout(); closeMobileMenu(); }} className="flex items-center gap-2 text-foreground/70 hover:text-foreground justify-start px-3 py-2 w-full">
                         <LogOut className="h-5 w-5" /> Logout
                       </Button>
                     </>
                   ) : (
                     <>
-                      <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu}/>
-                      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu}/>
+                      <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
+                      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu} />
+                      {/* Also apply to the mobile version for consistency, though it wasn't the one throwing the error */}
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        <Link href="/signup?role=coach">
+                        {/* MODIFIED BUTTON FOR DIAGNOSTICS (Mobile) */}
+                        <a href="/signup?role=coach">
                            Register as a Coach
-                        </Link>
+                        </a>
                       </Button>
                     </>
                   )

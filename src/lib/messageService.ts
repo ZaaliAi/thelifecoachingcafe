@@ -50,7 +50,6 @@ export const sendMessageToFirestore = async (
 ): Promise<string> => {
   // --- DEBUG LOGGING AT TOP ---
   console.log("sendMessageToFirestore called!");
-  console.log("auth.currentUser.uid:", auth.currentUser?.uid);
   console.log("Arguments:", { senderId, recipientId, content, senderName, recipientName });
   try {
     // getOrCreateConversation will handle logic to find or create the conversation document
@@ -69,7 +68,6 @@ export const sendMessageToFirestore = async (
     };
 
     // --- ADDED LOGGING HERE ---
-    console.log("auth.currentUser.uid (inside try):", auth.currentUser?.uid);
     console.log("Message doc:", messageDoc);
     // --- END LOGGING ---
 

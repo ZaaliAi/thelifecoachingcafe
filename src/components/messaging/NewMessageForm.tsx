@@ -12,7 +12,7 @@ import { Loader2, Send, MessageSquare, ArrowLeft, AlertCircle } from "lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { getCoachById, sendMessage as sendFirestoreMessage } from '@/lib/firestore';
+import { getCoachById } from '@/lib/firestore'; // We will no longer call sendFirestoreMessage directly from here
 import type { Coach } from '@/types';
 import Link from 'next/link';
 
@@ -29,7 +29,7 @@ export default function NewMessageForm() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, getFirebaseAuthToken } = useAuth(); // Added getFirebaseAuthToken
   const coachId = searchParams.get('coachId');
 
   useEffect(() => {
@@ -64,17 +64,18 @@ export default function NewMessageForm() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ title: "Authentication Required", description: "Please log in to send a message.", variant: "destructive" });
-      router.push(`/login?redirect=/messages/new?coachId=${coachId}`);
+      // Ensure the redirect URL is correctly encoded
+      const redirectUrl = `/messages/new?coachId=${encodeURIComponent(coachId || '')}`;
+      router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
     }
   }, [user, authLoading, router, toast, coachId]);
+
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<MessageFormData>({
     resolver: zodResolver(messageSchema),
   });
 
   const onSubmit: SubmitHandler<MessageFormData> = async (data) => {
-    // DEBUG LOGS
-    console.log("onSubmit called");
     if (!user || !recipientCoach) {
       toast({ title: "Error", description: "Cannot send message. User or Recipient missing.", variant: "destructive" });
       return;
@@ -83,39 +84,71 @@ export default function NewMessageForm() {
       toast({ title: "Error", description: "You cannot send a message to yourself.", variant: "destructive" });
       return;
     }
-    console.log("About to call sendFirestoreMessage with:", {
-      senderId: user.id,
-      senderName: user.name || user.email || 'Unknown User',
-      recipientId: recipientCoach.id,
-      recipientName: recipientCoach.name,
-      content: data.content,
-    });
+
     setIsSending(true);
     try {
-      const messageDocId = await sendFirestoreMessage({
-        senderId: user.id,
-        senderName: user.name || user.email || 'Unknown User',
-        recipientId: recipientCoach.id,
-        recipientName: recipientCoach.name,
-        content: data.content,
+      // Get the user's ID token
+      const idToken = await getFirebaseAuthToken(); // Use the new function
+
+      if (!idToken) {
+        toast({ title: "Authentication Error", description: "Could not verify your session. Please log in again.", variant: "destructive" });
+        setIsSending(false);
+        // Optional: Redirect to login
+        const redirectUrl = `/messages/new?coachId=${encodeURIComponent(coachId || '')}`;
+        router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+        return;
+      }
+
+      const response = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Include the ID token in the Authorization header
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          recipientId: recipientCoach.id,
+          content: data.content,
+          // Do NOT send senderId, senderName from the client.
+          // The backend will get the senderId from the verified ID token.
+          // The backend can fetch senderName from the database if needed, or you can pass it
+          // to the API and trust it for *display purposes only* on the backend,
+          // but the senderId MUST come from the verified token.
+          // For simplicity here, we'll let the backend handle getting senderName.
+        }),
       });
+
+      if (!response.ok) {
+        // Attempt to read error message from the backend response
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      // Assuming the backend returns success or the new message ID upon success
+      // const result = await response.json(); // If your API returns something on success
+
       toast({
         title: "Message Sent!",
         description: `Your message to ${recipientCoach.name} has been sent successfully.`
       });
       reset(); // Clear the form
-      
+
       // Navigate to the specific conversation page
       const conversationId = [user.id, recipientCoach.id].sort().join('_');
       router.push(`/dashboard/messages/${conversationId}`);
 
-    } catch (error) {
-      console.error("Error sending message:", error);
-      toast({ title: "Send Error", description: "Could not send your message. Please try again.", variant: "destructive" });
+    } catch (error: any) {
+      console.error("Error sending message via API:", error);
+      toast({
+        title: "Send Error",
+        description: error.message || "Could not send your message. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsSending(false);
     }
   };
+
 
   if (authLoading || isLoadingCoach) {
     return (
@@ -130,11 +163,11 @@ export default function NewMessageForm() {
     return (
         <Card className="max-w-xl mx-auto text-center py-12">
             <CardHeader><CardTitle>Please Log In</CardTitle></CardHeader>
-            <CardContent><p>You need to be logged in to send a message.</p><Button asChild className="mt-4"><Link href={`/login?redirect=/messages/new?coachId=${coachId}`}>Log In</Link></Button></CardContent>
+            <CardContent><p>You need to be logged in to send a message.</p><Button asChild className="mt-4"><Link href={`/login?redirect=${encodeURIComponent(`/messages/new?coachId=${encodeURIComponent(coachId || '')}`)}`}>Log In</Link></Button></CardContent>
         </Card>
     );
   }
-  
+
   if (!recipientCoach) {
       return (
           <Card className="max-w-xl mx-auto text-center py-12">
@@ -155,7 +188,7 @@ export default function NewMessageForm() {
       <CardHeader>
           {/* Updated Link usage */}
           <Button variant="outline" size="sm" asChild className="w-fit mb-4">
-              <Link href={coachId ? `/coach/${coachId}` : '/browse-coaches'}>
+              <Link href={coachId ? `/coach/${encodeURIComponent(coachId)}` : '/browse-coaches'}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back to {recipientCoach.name ? `${recipientCoach.name.split(' ')[0]}'s Profile` : 'Coaches'}
               </Link>
           </Button>
@@ -169,12 +202,12 @@ export default function NewMessageForm() {
           <CardContent className="space-y-6">
           <div className="space-y-2">
               <Label htmlFor="content">Your Message</Label>
-              <Textarea 
-              id="content" 
-              {...register('content')} 
-              rows={8} 
-              placeholder={`Type your message to ${recipientCoach.name} here...`} 
-              className={errors.content ? 'border-destructive' : ''} 
+              <Textarea
+              id="content"
+              {...register('content')}
+              rows={8}
+              placeholder={`Type your message to ${recipientCoach.name} here...`}
+              className={errors.content ? 'border-destructive' : ''}
               />
               {errors.content && <p className="text-sm text-destructive">{errors.content.message}</p>}
           </div>

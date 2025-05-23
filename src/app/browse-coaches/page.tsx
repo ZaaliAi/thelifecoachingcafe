@@ -1,4 +1,3 @@
-
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { CoachCard } from '@/components/CoachCard';
@@ -12,8 +11,14 @@ async function getCoaches(searchTerm?: string): Promise<Coach[]> {
   return coaches;
 }
 
-export default async function BrowseCoachesPage({ searchParams }: { searchParams?: { search?: string } }) {
-  const searchTerm = searchParams?.search;
+export default async function BrowseCoachesPage({ searchParams: searchParamsProp }: { searchParams?: { search?: string } }) {
+  // Await the searchParams promise if it's a promise (which it is with Turbopack in some cases)
+  const resolvedSearchParams = await searchParamsProp;
+  const searchTerm = resolvedSearchParams?.search;
+
+  console.log("[BrowseCoachesPage] searchParamsProp (can be a Promise):", searchParamsProp);
+  console.log("[BrowseCoachesPage] resolvedSearchParams:", resolvedSearchParams);
+  console.log("[BrowseCoachesPage] Using searchTerm:", searchTerm);
   const coaches = await getCoaches(searchTerm);
 
   return (

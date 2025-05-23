@@ -3,7 +3,6 @@
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { getUserProfile } from "@/lib/firestore";
-// sendMessageToFirestore is removed as we'll use an API route
 import { fetchConversationMessages, markMessagesAsRead } from "@/lib/messageService"; 
 import type { Message as MessageType, FirestoreUserProfile } from "@/types";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,15 +16,15 @@ import Link from "next/link";
 import { format } from "date-fns";
 
 export default function ConversationThreadClient() {
-  const { user, loading: authLoading } = useAuth(); // Restored
+  const { user, loading: authLoading, getFirebaseAuthToken } = useAuth(); // Added getFirebaseAuthToken
   const params = useParams();
   const router = useRouter();
   const conversationId = params.conversationId as string;
 
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [newMessageContent, setNewMessageContent] = useState("");
-  const [otherPartyProfile, setOtherPartyProfile] = useState<FirestoreUserProfile | null>(null); // Restored
-  const [isLoadingMessages, setIsLoadingMessages] = useState(true); // Restored
+  const [otherPartyProfile, setOtherPartyProfile] = useState<FirestoreUserProfile | null>(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -34,7 +33,7 @@ export default function ConversationThreadClient() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const fetchConversationDetails = useCallback(async () => { // Restored fully
+  const fetchConversationDetails = useCallback(async () => {
     if (!user || !conversationId || !user.id) {
       if (!user && !authLoading) {
         console.warn("[ConversationThreadClient] User not authenticated, redirecting to login.");
@@ -58,7 +57,7 @@ export default function ConversationThreadClient() {
 
       let fetchedProfile: FirestoreUserProfile | null = null;
       try {
-        fetchedProfile = await getUserProfile(otherPartyId); // Restored
+        fetchedProfile = await getUserProfile(otherPartyId);
         setOtherPartyProfile(fetchedProfile);
         if (!fetchedProfile) {
              console.error(`[ConversationThreadClient] getUserProfile returned null for otherPartyId: ${otherPartyId}`);
@@ -70,7 +69,7 @@ export default function ConversationThreadClient() {
       
       let fetchedMessages: MessageType[] = [];
       try {
-        fetchedMessages = await fetchConversationMessages(conversationId, user.id); // Restored
+        fetchedMessages = await fetchConversationMessages(conversationId, user.id);
         setMessages(fetchedMessages);
         console.log(`[ConversationThreadClient] Fetched messages count: ${fetchedMessages.length}`);
 
@@ -80,7 +79,7 @@ export default function ConversationThreadClient() {
 
         if (unreadMessageIds.length > 0) {
           console.log(`[ConversationThreadClient] Marking ${unreadMessageIds.length} messages as read.`);
-          await markMessagesAsRead(unreadMessageIds, user.id); // Restored
+          await markMessagesAsRead(unreadMessageIds, user.id);
            const updatedMessages = await fetchConversationMessages(conversationId, user.id); 
            setMessages(updatedMessages);
            console.log("[ConversationThreadClient] Refetched messages after marking as read.");
@@ -99,7 +98,7 @@ export default function ConversationThreadClient() {
     }
   }, [user, conversationId, authLoading, router]);
 
-  useEffect(() => { // Restored
+  useEffect(() => {
     if (!authLoading && user && conversationId) {
       fetchConversationDetails();
     } else if (!authLoading && !user) {
@@ -112,29 +111,42 @@ export default function ConversationThreadClient() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => { // This uses fetch to API route
+  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newMessageContent.trim() || !user || !otherPartyProfile) {
       console.warn("[ConversationThreadClient] Send message prerequisites not met:", {newMessageContent, user, otherPartyProfile});
       return;
     }
 
-    const senderName = user.name || user.email || "User";
-    const recipientName = otherPartyProfile.name || otherPartyProfile.email || "Recipient";
-
     setIsSending(true);
+    setError(null);
     try {
+      const idToken = await getFirebaseAuthToken();
+      if (!idToken) {
+        setError("Authentication error. Please try logging in again.");
+        // Optionally redirect to login or prompt for re-login
+        // router.push('/login');
+        setIsSending(false);
+        return;
+      }
+
+      // Note: senderName and recipientName are included here for potential backend use (e.g., notifications),
+      // but the primary identifiers (senderId, recipientId) and content are crucial.
+      // The backend should always verify senderId against the token.
       const response = await fetch('/api/send-message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          senderId: user.id,
+          // senderId is now derived from the token on the backend
           recipientId: otherPartyProfile.id,
           content: newMessageContent,
-          senderName: senderName,
-          recipientName: recipientName,
+          // You might still want to send names for immediate display or notification purposes,
+          // but the backend should ideally fetch/verify these against profiles if needed for core logic.
+          // senderName: user.name || user.email, 
+          // recipientName: otherPartyProfile.name || otherPartyProfile.email,
         }),
       });
 
@@ -153,9 +165,8 @@ export default function ConversationThreadClient() {
     }
   };
   
-  const isLoading = authLoading || isLoadingMessages; // Restored
+  const isLoading = authLoading || isLoadingMessages;
 
-  // UI rendering logic restored
   if (isLoading && !error) {
      return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /> Loading conversation...</div>;
   }

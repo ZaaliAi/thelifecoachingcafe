@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
@@ -13,10 +12,16 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth'; // Still used for user state and loading
 import { useToast } from '@/hooks/use-toast';
 import type { UserRole } from '@/types';
-import type { FirebaseError } from 'firebase/app';
+// Import Firebase auth and the auth instance
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '@/lib/firebase'; // Your initialized Firebase auth instance
+import { adminFirestore } from '@/lib/firebaseAdmin'; // Assuming you might want to write role to Firestore from backend later. For client-side, use 'db' from '@/lib/firebase'
+import { doc, setDoc } from "firebase/firestore"; // To write user role to Firestore
+import { db } from '@/lib/firebase'; // Import db for client-side Firestore writes
+
 
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -33,7 +38,8 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 function SignupFormContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const { signup, user, loading: authLoading } = useAuth();
+  // 'user' from useAuth will be updated by onAuthStateChanged in AuthProvider
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const searchParams = useSearchParams();
@@ -51,16 +57,25 @@ function SignupFormContent() {
   }, [initialRole, setValue]);
 
   useEffect(() => {
-    // This useEffect is a fallback or handles cases where a logged-in user lands here.
-    // Primary post-signup redirection is now handled in onSubmit.
     if (!authLoading && user) {
-      if (router.pathname === '/signup') { // Only redirect if still on signup page
-        toast({ title: "Already Logged In", description: `Redirecting to your dashboard, ${user.name || user.email}.` });
-        if (user.role === 'coach' && !user.profileImageUrl) { // A heuristic for incomplete coach profile
-             router.push('/register-coach');
-        } else {
-            router.push(`/dashboard/${user.role}`);
-        }
+      // User is now a FirebaseUser. It won't have 'role' or 'name' directly
+      // unless you've updated the profile or stored it elsewhere.
+      // The redirect logic might need to be adjusted based on how you store roles.
+      // For now, let's assume a user object means they are logged in.
+      const firebaseUser = user; // user from useAuth() is now FirebaseUser
+
+      // This redirection logic might be hit if onAuthStateChanged updates the user
+      // before the onSubmit redirection completes, or if a logged-in user revisits /signup.
+      if (router.pathname === '/signup') {
+        toast({ title: "Already Logged In", description: `Redirecting to your dashboard, ${firebaseUser.displayName || firebaseUser.email}.` });
+        
+        // To determine role for redirection, you'd ideally fetch it from Firestore.
+        // For an immediate redirect post-signup, we'll use the role from the form data (see onSubmit).
+        // This block is more for users who are already logged in and land here.
+        // We'll need a more robust way to get the user's role if not immediately after signup.
+        // For now, we'll assume if they have a Firebase user object, they are logged in.
+        // A proper role-based redirect here would require fetching their profile/role from Firestore.
+        router.push('/dashboard/user'); // Or a generic dashboard, then fetch role
       }
     }
   }, [user, authLoading, router, toast]);
@@ -68,31 +83,51 @@ function SignupFormContent() {
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      const signedUpRole = await signup(data.name, data.email, data.password, data.role as UserRole);
-      
-      // `onAuthStateChanged` in AuthProvider will set the user context.
-      // We perform immediate redirection based on the role returned from signup.
-      if (signedUpRole) {
-        toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
-        if (signedUpRole === 'coach') {
-          router.push('/register-coach'); 
-        } else {
-          router.push('/dashboard/user'); 
-        }
+      // Create user with Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const firebaseUser = userCredential.user;
+
+      // Update Firebase user's profile with the name
+      await updateProfile(firebaseUser, { displayName: data.name });
+      console.log("Firebase profile updated with displayName:", data.name);
+
+      // Store user role and other details in Firestore
+      // This is a client-side write. Ensure your Firestore rules allow this.
+      // The document ID should be the user's UID.
+      const userDocRef = doc(db, "users", firebaseUser.uid);
+      await setDoc(userDocRef, {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: data.name, // Storing name from form
+        role: data.role, // Storing role from form
+        createdAt: new Date(), // Or use serverTimestamp() if preferred and configured
+      });
+      console.log("User role and details stored in Firestore for UID:", firebaseUser.uid);
+
+      // `onAuthStateChanged` in AuthProvider will set the user context automatically.
+      // The user object in the context will now be the Firebase user.
+
+      toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
+
+      // Redirect based on the role selected during signup
+      if (data.role === 'coach') {
+        router.push('/register-coach');
       } else {
-        // This case should ideally not be reached if signup didn't throw but didn't return a role.
-        // It's a fallback. The useEffect might catch the context update later.
-        toast({ title: "Signup processing...", description: "Please wait.", variant: "default" });
+        router.push('/dashboard/user');
       }
-      // setLoading(false) might not be needed if redirect happens.
-      // If signup throws, catch block handles setLoading.
+      // No need to call setIsLoading(false) if redirecting immediately.
     } catch (error: any) {
       setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
+      // Firebase error codes for createUserWithEmailAndPassword
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email is already registered. Please try logging in or use a different email.";
-      } else if (error.code) {
-        errorMessage = `Signup error: ${error.message}`;
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "The password is too weak. Please choose a stronger password.";
+      } else if (error.code) { // Catch other Firebase auth errors
+        errorMessage = `Signup error: ${error.message} (Code: ${error.code})`;
+      } else if (error.message) { // Catch non-Firebase errors
+         errorMessage = error.message;
       }
       toast({
         title: "Signup Failed",
@@ -101,15 +136,19 @@ function SignupFormContent() {
       });
     }
   };
-  
-  // Show loader if auth is in progress or if already logged in and about to redirect from useEffect.
-  if (authLoading || (!authLoading && user && router.pathname === '/signup')) {
+
+  if (authLoading) { // Simplified loading check
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
+
+  // If user is already logged in (and not loading), and on signup page, this might indicate
+  // the useEffect for redirection hasn't fired or user navigated back.
+  // The useEffect handles redirection for already logged-in users.
+  // This component should primarily render the form if no user is present or still loading.
 
   return (
     <Card className="w-full max-w-md shadow-xl">
@@ -122,6 +161,7 @@ function SignupFormContent() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* ... keep your form inputs as they are ... */}
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input id="name" {...register('name')} placeholder="e.g., Alex Smith" className={errors.name ? 'border-destructive' : ''} />
@@ -155,7 +195,7 @@ function SignupFormContent() {
               render={({ field }) => (
                 <RadioGroup
                   onValueChange={field.onChange}
-                  value={field.value} 
+                  value={field.value}
                   className="flex space-x-4"
                 >
                   <div className="flex items-center space-x-2">
@@ -196,7 +236,7 @@ function SignupFormContent() {
   );
 }
 
-
+// The rest of your SignupPage component (wrapper with Suspense) remains the same:
 export default function SignupPage() {
   return (
     <Suspense fallback={<div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading...</div>}>

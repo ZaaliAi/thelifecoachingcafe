@@ -33,7 +33,7 @@ export default function ContactUsPage() {
             </div>
             <div className="bg-card p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
               <h3 className="text-xl font-semibold mb-3 flex items-center">
-                <MessageSquare className="mr-3 h-6 w-6 text-primary" /> Live Chat Support
+                <MessageSquare className="mr-3 h-6 w-6 text-primary" /> Live Chat Support <span className="text-sm text-muted-foreground ml-2">(Coming Soon)</span>
               </h3>
               <p className="text-muted-foreground mb-4">
                 Need immediate assistance? Chat with our support team.
@@ -43,7 +43,7 @@ export default function ContactUsPage() {
                 disabled // Placeholder: enable when live chat is implemented
                 className="inline-flex w-full justify-center rounded-md border border-transparent bg-green-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70"
               >
-                Start Live Chat
+                Coming Soon
               </button>
             </div>
           </div>
