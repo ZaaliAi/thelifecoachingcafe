@@ -29,12 +29,11 @@ const nextConfig: NextConfig = {
     ],
   },
   devIndicators: {
-    buildActivity: true,
-    buildActivityPosition: 'bottom-right',
+    position: 'bottom-right',
   },
+  allowedDevOrigins: ["9003-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev"],
   experimental: {
     // serverComponentsExternalPackages: ['firebase-admin'], // Might be useful with app router
-    allowedDevOrigins: ["9003-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev"]
   },
 
   // Any other Next.js configurations you might have
