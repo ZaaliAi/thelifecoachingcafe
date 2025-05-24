@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag } from 'lucide-react';
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag, Bell } from 'lucide-react'; // Added Bell
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Added useEffect
+import { getUserUnreadMessageCount } from '@/lib/firestore'; // Added Firestore function
 
 const navLinks = [
   { href: '/', label: 'Home', icon: Home },
@@ -53,39 +54,40 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
 export function Header() {
   const { user, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0); // State for unread messages
+  const pathname = usePathname(); // Get current pathname
 
   const dashboardLink = user ? `/dashboard/${user.role}` : '/login';
   const dashboardLabel = user ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard` : '';
   const DashboardIcon = user?.role === 'admin' ? ShieldAlert : user?.role === 'coach' ? LayoutDashboard : UserCircle;
+  
+  // Determine messages page link based on user role
+  const messagesPageLink = user 
+    ? user.role === 'coach' ? '/dashboard/coach/messages' 
+    : user.role === 'user' ? '/dashboard/user/messages' 
+    : user.role === 'admin' ? '/dashboard/admin/messages' // Or a general messages overview for admin
+    : '/login' // Fallback if role is somehow undefined
+    : '/login';
+
+
+  useEffect(() => {
+    if (user && user.id) {
+      getUserUnreadMessageCount(user.id)
+        .then(count => {
+          setUnreadCount(count);
+        })
+        .catch(error => {
+          console.error("Failed to fetch unread message count:", error);
+          // Optionally, you could show a toast error here
+        });
+    } else {
+      setUnreadCount(0); // Reset count if no user or user.id is missing
+    }
+  }, [user, pathname]); // MODIFIED: Added pathname to the dependency array
 
   const logoUrl = "https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/aaadb032-0d6f-4c06-a8a5-6a6064b4fb06_removalai_preview.png?alt=media&token=0c82d001-1e15-440d-bded-37de001e2d31";
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
-
-  const commonNavLinks = navLinks.filter(link => link.href !== '/').map(link => (
-    // For desktop, commonNavLinks probably don't need to close mobile menu
-    <NavLinkItem key={link.href} {...link} />
-  ));
-
-  // authNavLinks constant definition remains as it was, for reference or other uses
-  const authNavLinks = user ? (
-    <>
-      <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} onClick={closeMobileMenu}/>
-      <Button variant="ghost" onClick={() => { logout(); closeMobileMenu(); }} className="flex items-center gap-2 text-foreground/70 hover:text-foreground">
-        <LogOut className="h-5 w-5" /> Logout
-      </Button>
-    </>
-  ) : (
-    <>
-      <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
-      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu} /> 
-      <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
-        <Link href="/signup?role=coach">
-          Register as a Coach
-        </Link>
-      </Button>
-    </>
-  );
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -94,25 +96,31 @@ export function Header() {
           <Image src={logoUrl} alt="The Life Coaching Cafe Logo" width={160} height={40} priority className="object-contain" style={{ height: 'auto' }}/>
         </Link>
         
-        {/* Desktop Navigation - MODIFIED onClick handlers */} 
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-          {/* Render commonNavLinks without onClick for desktop */} 
           {navLinks.filter(link => link.href !== '/').map(link => (
             <NavLinkItem key={link.href} href={link.href} label={link.label} icon={link.icon} />
           ))}
           {!loading && (
             user ? (
-              <> {/* Logged-in links for DESKTOP */}
-                <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} /> {/* onClick removed */}
-                <Button variant="ghost" onClick={logout} className="flex items-center gap-2 text-foreground/70 hover:text-foreground"> {/* onClick simplified */}
+              <>
+                {/* Notification Bell - Desktop */}
+                {unreadCount > 0 && (
+                  <Link href={messagesPageLink} className="relative p-2 text-foreground/70 hover:text-foreground">
+                    <Bell className="h-5 w-5" />
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+                      {unreadCount}
+                    </span>
+                  </Link>
+                )}
+                <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} />
+                <Button variant="ghost" onClick={logout} className="flex items-center gap-2 text-foreground/70 hover:text-foreground">
                   <LogOut className="h-5 w-5" /> Logout
                 </Button>
               </>
             ) : (
-              <> {/* Logged-out links for DESKTOP */}
-                <NavLinkItem href="/login" label="Login" icon={LogIn} /> {/* onClick removed */}
-                <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} /> {/* onClick removed */}
-                {/* MODIFIED BUTTON FOR DIAGNOSTICS */}
+              <>
+                <NavLinkItem href="/login" label="Login" icon={LogIn} />
+                <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} />
                 <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
                   <a href="/signup?role=coach">
                     Register as a Coach
@@ -123,8 +131,16 @@ export function Header() {
           )}
         </nav>
 
-        {/* Mobile Navigation Trigger (remains unchanged from previous working version) */}
-        <div className="md:hidden">
+        {/* Mobile Navigation Trigger */}
+        <div className="md:hidden flex items-center"> {/* Added flex items-center for mobile bell */}
+          {!loading && user && unreadCount > 0 && (
+            <Link href={messagesPageLink} className="relative p-2 mr-2 text-foreground/70 hover:text-foreground"> {/* mr-2 for spacing from menu */}
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+                {unreadCount}
+              </span>
+            </Link>
+          )}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -147,6 +163,17 @@ export function Header() {
                 {!loading && (
                   user ? (
                     <>
+                      {/* Notification Bell - Mobile Menu (Optional, could be just in header before opening menu) */}
+                      {/* If you want it *inside* the menu as well: */}
+                      {unreadCount > 0 && (
+                        <Link href={messagesPageLink} onClick={closeMobileMenu} className="relative flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-foreground/70 hover:text-foreground hover:bg-muted">
+                          <Bell className="h-5 w-5" />
+                          <span>Messages</span>
+                          <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {unreadCount}
+                          </span>
+                        </Link>
+                      )}
                       <NavLinkItem href={dashboardLink} label={dashboardLabel} icon={DashboardIcon} onClick={closeMobileMenu} />
                       <Button variant="ghost" onClick={() => { logout(); closeMobileMenu(); }} className="flex items-center gap-2 text-foreground/70 hover:text-foreground justify-start px-3 py-2 w-full">
                         <LogOut className="h-5 w-5" /> Logout
@@ -156,9 +183,7 @@ export function Header() {
                     <>
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
                       <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu} />
-                      {/* Also apply to the mobile version for consistency, though it wasn't the one throwing the error */}
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        {/* MODIFIED BUTTON FOR DIAGNOSTICS (Mobile) */}
                         <a href="/signup?role=coach">
                            Register as a Coach
                         </a>

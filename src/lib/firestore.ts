@@ -58,7 +58,7 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
     if (!isNaN(parsedDate.getTime())) {
       createdAtString = parsedDate.toISOString();
     } else {
-      console.warn(`[mapBlogPostFromFirestore] Invalid date string for createdAt for post ID ${id}: \"${data.createdAt}\". Using current date as fallback.`);
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for createdAt for post ID ${id}: "${data.createdAt}". Using current date as fallback.`);
       createdAtString = new Date().toISOString();
     }
   } else {
@@ -75,7 +75,7 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
     if (!isNaN(parsedDate.getTime())) {
       updatedAtString = parsedDate.toISOString();
     } else {
-      console.warn(`[mapBlogPostFromFirestore] Invalid date string for updatedAt for post ID ${id}: \"${data.updatedAt}\".`);
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for updatedAt for post ID ${id}: "${data.updatedAt}".`);
     }
   }
   return {
@@ -263,7 +263,7 @@ export async function updateCoachFeatureStatus(coachId: string, isFeatured: bool
 // --- Blog Post Functions ---
 export async function createFirestoreBlogPost(postData: { title: string; content: string; status: 'draft' | 'pending_approval'; authorId: string; authorName: string; excerpt?: string; tags?: string; featuredImageUrl?: string; slug?: string; }): Promise<string> {
   const blogsCollection = collection(db, "blogs");
-  const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\\w-]+/g, '') : `post-${Date.now()}`);
+  const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
   const tagsArray = postData.tags ? postData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
   const dataToSave: Omit<FirestoreBlogPost, 'id'> = {
     ...postData,
@@ -414,6 +414,24 @@ export async function getAllMessagesForAdmin(count = 50): Promise<MessageType[]>
   return querySnapshot.docs.map(docSnapshot => mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id));
 }
 
+// NEW FUNCTION for unread message count for any user
+export async function getUserUnreadMessageCount(userId: string): Promise<number> {
+  if (!userId) {
+    console.warn("[getUserUnreadMessageCount] No userId provided, returning 0.");
+    return 0;
+  }
+  try {
+    const messagesRef = collection(db, "messages");
+    const q = query(messagesRef, where("recipientId", "==", userId), where("read", "==", false));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (error) {
+    console.error("[getUserUnreadMessageCount] Error fetching unread message count for user:", userId, error);
+    return 0; // Return 0 in case of an error
+  }
+}
+
+
 // --- Admin Dashboard Stats ---
 export async function getPendingCoachCount(): Promise<number> {
   const coachesRef = collection(db, "users");
@@ -467,9 +485,11 @@ export async function getActiveSubscriptionsCount(): Promise<number> {
   return snapshot.data().count;
 }
 
-// ADDED/UPDATED FUNCTIONS FOR COACH DASHBOARD STATS:
+// EXISTING FUNCTION, can be kept for specific coach contexts or refactored.
 export async function getCoachUnreadMessageCount(coachId: string): Promise<number> {
   if (!coachId) return 0;
+  // This could optionally call getUserUnreadMessageCount(coachId) if desired
+  // For now, keeping its own implementation as it was specifically for coaches.
   const messagesRef = collection(db, "messages");
   const q = query(messagesRef, where("recipientId", "==", coachId), where("read", "==", false));
   const snapshot = await getCountFromServer(q);
