@@ -17,7 +17,6 @@ try {
   console.log("Parsed service account credentials successfully.");
 } catch (e: any) {
   console.error("Error parsing FIREBASE_ADMIN_SDK_CONFIG JSON:", e.message);
-  // Intentionally removed the problematic console.error line here
   throw new Error("Error parsing FIREBASE_ADMIN_SDK_CONFIG JSON: " + e.message);
 }
 
@@ -38,6 +37,7 @@ if (!admin.apps.length) {
 }
 
 const adminAuth = admin.auth();
-const adminFirestore = admin.firestore();
+const adminFirestore = admin.firestore(); // This is the Firestore client instance
+const FirebaseFirestoreNamespace = admin.firestore; // This is the namespace for static properties like FieldPath
 
-export { admin, adminAuth, adminFirestore };
+export { admin, adminAuth, adminFirestore, FirebaseFirestoreNamespace };

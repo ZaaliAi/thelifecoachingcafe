@@ -4,14 +4,15 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { getMessagesForUserOrCoach } from "@/lib/messageService";
-import type { Message } from "@/types";
+import type { Message, UserProfile } from "@/types";
 import { useAuth } from "@/lib/auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, MessageSquarePlus } from "lucide-react";
+// DO NOT import getUsersByIds from "@/lib/userService" here anymore
 
 interface DisplayedConversation {
-  conversationId: string; 
+  conversationId: string;
   otherPartyId: string;
   otherPartyName: string;
   otherPartyAvatar?: string | null;
@@ -20,43 +21,89 @@ interface DisplayedConversation {
   unreadCount: number;
 }
 
+async function fetchUserProfilesFromApi(userIds: string[]): Promise<Map<string, UserProfile | null>> {
+  if (userIds.length === 0) {
+    return new Map();
+  }
+  try {
+    const response = await fetch('/api/users/profiles', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userIds }),
+    });
+    if (!response.ok) {
+      console.error("Failed to fetch user profiles from API", response.status, await response.text());
+      // Return a map where requested IDs map to null to indicate failure for these IDs
+      const errorMap = new Map<string, UserProfile | null>();
+      userIds.forEach(id => errorMap.set(id, null));
+      return errorMap;
+    }
+    const profilesObject = await response.json();
+    // Convert the plain object back to a Map
+    const profilesMap = new Map<string, UserProfile | null>();
+    for (const [id, profile] of Object.entries(profilesObject)) {
+        profilesMap.set(id, profile as UserProfile | null);
+    }
+    return profilesMap;
+  } catch (error) {
+    console.error("Error calling /api/users/profiles:", error);
+    const errorMap = new Map<string, UserProfile | null>();
+    userIds.forEach(id => errorMap.set(id, null));
+    return errorMap;
+  }
+}
+
 export default function UserMessagesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [rawMessages, setRawMessages] = useState<Message[]>([]);
+  const [userProfilesMap, setUserProfilesMap] = useState<Map<string, UserProfile | null>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("[UserMessagesPage] Auth loading:", authLoading, "User object:", user);
     if (!authLoading && user && user.id) {
       const currentUserId = user.id;
-      console.log(`[UserMessagesPage] Authenticated. Attempting to load messages for user UID: ${currentUserId}`);
       setErrorMessage(null);
-      const loadMessages = async () => {
+      const loadData = async () => {
         setIsLoading(true);
         try {
-          // Use getMessagesForUserOrCoach which fetches both sent and received messages
-          const data = await getMessagesForUserOrCoach(currentUserId);
-          console.log("[UserMessagesPage] Successfully fetched raw message data:", data);
-          if (Array.isArray(data)) {
-            setRawMessages(data);
+          const messagesData = await getMessagesForUserOrCoach(currentUserId);
+          if (Array.isArray(messagesData)) {
+            setRawMessages(messagesData);
+            if (messagesData.length > 0) {
+              const otherPartyIds = Array.from(
+                new Set(
+                  messagesData.map(msg => 
+                    msg.senderId === currentUserId ? msg.recipientId : msg.senderId
+                  ).filter(id => id) // ensure no undefined/null ids
+                )
+              );
+              if (otherPartyIds.length > 0) {
+                console.log("[UserMessagesPage] Fetching profiles for otherPartyIds via API:", otherPartyIds);
+                const profiles = await fetchUserProfilesFromApi(otherPartyIds);
+                setUserProfilesMap(profiles);
+                console.log("[UserMessagesPage] User profiles map updated from API:", profiles);
+              }
+            }
           } else {
-            console.error("[UserMessagesPage] getMessagesForUserOrCoach did not return an array:", data);
+            console.error("[UserMessagesPage] getMessagesForUserOrCoach did not return an array:", messagesData);
             setRawMessages([]);
-            setErrorMessage("Received unexpected data format.");
+            setErrorMessage("Received unexpected data format for messages.");
           }
         } catch (error: any) {
-          console.error("[UserMessagesPage] CRITICAL: Failed to load messages for user.", error);
+          console.error("[UserMessagesPage] CRITICAL: Failed to load messages or profiles.", error);
           setRawMessages([]);
-          setErrorMessage(`Error loading messages: ${error.message || 'Unknown error'}.`);
+          setUserProfilesMap(new Map());
+          setErrorMessage(`Error loading data: ${error.message || 'Unknown error'}.`);
         } finally {
           setIsLoading(false);
         }
       };
-      loadMessages();
+      loadData();
     } else if (!authLoading && !user) {
-      console.warn("[UserMessagesPage] Not authenticated. Cannot load messages.");
       setIsLoading(false);
       setRawMessages([]);
       setErrorMessage("Please log in to view your messages.");
@@ -65,100 +112,62 @@ export default function UserMessagesPage() {
 
   const displayedConversations = useMemo(() => {
     if (!user || !user.id || rawMessages.length === 0) {
-      console.log("[UserMessagesPage] rawMessages is empty or user is not available. Returning empty conversations array.");
       return [];
     }
-
     const conversationsMap = new Map<string, DisplayedConversation>();
     const currentUserId = user.id;
-
-    // Sort messages by timestamp to correctly identify the last message
     const sortedMessages = [...rawMessages].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     sortedMessages.forEach(msg => {
-      // Determine the other party in the conversation
       const otherPartyId = msg.senderId === currentUserId ? msg.recipientId : msg.senderId;
-      const otherPartyName = msg.senderId === currentUserId 
-        ? (msg.recipientName || otherPartyId) 
-        : (msg.senderName || otherPartyId);
+      if (!otherPartyId) {
+        console.warn(`Message ID ${msg.id || 'N/A'} has invalid otherPartyId. Skipping.`);
+        return; // Skip this message if otherPartyId is undefined or null
+      }
       
-      // Construct a consistent conversation ID by sorting UIDs
+      const profile = userProfilesMap.get(otherPartyId);
+      let determinedOtherPartyName = profile?.name;
+
+      if (!determinedOtherPartyName) {
+        determinedOtherPartyName = msg.senderId === currentUserId 
+          ? msg.recipientName 
+          : msg.senderName;
+      }
+
+      const knownPlaceholders = ["Unknown Recipient", "Anonymous", "Unrecognised User", "Unknown User", otherPartyId];
+      if (!determinedOtherPartyName || determinedOtherPartyName.trim() === "" || knownPlaceholders.includes(determinedOtherPartyName)) {
+        determinedOtherPartyName = "Unknown User";
+      }
+      
       const ids = [currentUserId, otherPartyId].sort();
       const conversationId = ids.join('_');
 
-      // Initialize unread count for this message if it's for the current user and unread
-      let messageUnreadCount = 0;
-      if (msg.recipientId === currentUserId && !msg.read) {
-        messageUnreadCount = 1;
-      }
-
-      const existingConversation = conversationsMap.get(conversationId);
-      if (existingConversation) {
-        // Update with the latest message details
-        existingConversation.lastMessageContent = msg.content;
-        existingConversation.lastMessageTimestamp = msg.timestamp;
-        // Add to unread count if the *latest* message is unread for the current user
-        // NOTE: This logic is slightly different from summing all unread messages. 
-        // To sum all unread, we'd accumulate here. Let's stick to the coach logic
-        // which seems to just count unread messages directed to the user in the raw list.
-        // Let's recalculate total unread messages for this conversation in the final pass.
-
-        // Temporarily just update latest message info
-        conversationsMap.set(conversationId, { // Re-set to ensure latest message props are captured
-           ...existingConversation, // Keep accumulated unread count from previous messages
-           lastMessageContent: msg.content,
-           lastMessageTimestamp: msg.timestamp,
-           // Don't update unreadCount here; calculate it in the final pass.
-        });
-
-      } else {
-        // Create a new conversation entry
-        conversationsMap.set(conversationId, {
-          conversationId,
-          otherPartyId,
-          otherPartyName,
-          // TODO: Fetch otherPartyAvatar if available from user profiles (similar to coach page)
-          otherPartyAvatar: null, // Placeholder
-          lastMessageContent: msg.content,
-          lastMessageTimestamp: msg.timestamp,
-          unreadCount: messageUnreadCount, // Initialize with 1 if the first message encountered is unread
-        });
-      }
+      conversationsMap.set(conversationId, {
+        conversationId,
+        otherPartyId,
+        otherPartyName: determinedOtherPartyName,
+        otherPartyAvatar: profile?.avatarUrl || null,
+        lastMessageContent: msg.content,
+        lastMessageTimestamp: msg.timestamp,
+        unreadCount: 0,
+      });
     });
 
-    // --- Second pass to calculate total unread count per conversation ---
-    // This is necessary because a conversation might have multiple unread messages
-    // not just the last one.
-    const conversationsWithUnreadCount = new Map<string, DisplayedConversation>();
-
-    // Re-process sortedMessages to accurately sum unread messages for the current user in each conversation
-    sortedMessages.forEach(msg => {
-       const otherPartyId = msg.senderId === currentUserId ? msg.recipientId : msg.senderId;
-       const ids = [currentUserId, otherPartyId].sort();
-       const conversationId = ids.join('_');
-
-       const existingConv = conversationsWithUnreadCount.get(conversationId) || conversationsMap.get(conversationId);
-
-       if (existingConv) {
-          let currentUnreadCount = existingConv.unreadCount || 0; // Use accumulated count
-          if (msg.recipientId === currentUserId && !msg.read) {
-             currentUnreadCount += 1;
-          }
-           conversationsWithUnreadCount.set(conversationId, {
-             ...existingConv,
-             unreadCount: currentUnreadCount,
-             // Keep the latest message info from the first pass
-           });
-       } else { // Should not happen if conversationsMap was built correctly in first pass
-         console.warn(`[UserMessagesPage] Conversation ${conversationId} not found in first pass map.`);
-       }
+    conversationsMap.forEach((conv) => {
+      let count = 0;
+      rawMessages.forEach(msg => {
+        const msgOtherPartyId = msg.senderId === currentUserId ? msg.recipientId : msg.senderId;
+        if (msgOtherPartyId === conv.otherPartyId && msg.recipientId === currentUserId && !msg.read) {
+          count++;
+        }
+      });
+      conv.unreadCount = count;
     });
+    
+    const finalConversations = Array.from(conversationsMap.values()).sort((a,b) => new Date(b.lastMessageTimestamp).getTime() - new Date(a.lastMessageTimestamp).getTime());
+    return finalConversations;
 
-    console.log("[UserMessagesPage] Calculated conversations with unread counts:", Array.from(conversationsWithUnreadCount.values()));
-
-    // Sort conversations by the timestamp of their last message (most recent first)
-    return Array.from(conversationsWithUnreadCount.values()).sort((a,b) => new Date(b.lastMessageTimestamp).getTime() - new Date(a.lastMessageTimestamp).getTime());
-  }, [rawMessages, user]);
+  }, [rawMessages, user, userProfilesMap]);
 
   if (authLoading || (isLoading && user)) {
     return <div className="container mx-auto p-4 text-center"><p>Loading messages...</p></div>;
@@ -174,12 +183,6 @@ export default function UserMessagesPage() {
     <div className="container mx-auto p-4 max-w-3xl">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Your Inbox</h1>
-        {/* Optional: Button to start a new message if applicable for users */}
-        {/* 
-        <Button variant="outline" onClick={() => router.push('/messages/new')}> 
-          <MessageSquarePlus className="mr-2 h-4 w-4" /> New Message
-        </Button>
-        */}
       </div>
 
       {displayedConversations.length === 0 && !isLoading ? (
@@ -196,7 +199,6 @@ export default function UserMessagesPage() {
                 <Link href={`/dashboard/messages/${conv.conversationId}`} className="block p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center min-w-0">
-                      {/* Avatar placeholder */}
                       <Avatar className="h-10 w-10 sm:h-12 sm:w-12 mr-3 sm:mr-4">
                          <AvatarFallback>{conv.otherPartyName.substring(0, 1).toUpperCase()}</AvatarFallback>
                       </Avatar>
@@ -207,7 +209,6 @@ export default function UserMessagesPage() {
                     </div>
                     <div className="text-right ml-2 flex-shrink-0">
                       <p className="text-xs text-gray-400 mb-1">{new Date(conv.lastMessageTimestamp).toLocaleDateString([], { month: 'short', day: 'numeric'})}</p>
-                      {/* Display unread count */}
                       {conv.unreadCount > 0 && 
                         <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
                           {conv.unreadCount}
