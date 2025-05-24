@@ -1,4 +1,3 @@
-
 import type { Coach, BlogPost, Testimonial } from '@/types';
 
 export const mockCoaches: Coach[] = [
@@ -16,6 +15,7 @@ export const mockCoaches: Coach[] = [
     subscriptionTier: 'premium',
     websiteUrl: 'https://eleanorvancecoaching.com',
     introVideoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Example video
+    isFeaturedOnHomepage: false, // New field
   },
   {
     id: '2',
@@ -28,6 +28,7 @@ export const mockCoaches: Coach[] = [
     certifications: ['Maxwell Leadership Certified Coach'],
     location: 'San Francisco, CA',
     subscriptionTier: 'free',
+    isFeaturedOnHomepage: false, // New field
     // No socialLinks, websiteUrl, or introVideoUrl for free tier
   },
   {
@@ -42,6 +43,7 @@ export const mockCoaches: Coach[] = [
     location: 'London, UK',
     subscriptionTier: 'premium',
     websiteUrl: 'https://aishakhancoaching.com',
+    isFeaturedOnHomepage: false, // New field
     // No introVideoUrl for this premium coach, to show it's optional
   },
 ];

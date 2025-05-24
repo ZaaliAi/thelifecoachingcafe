@@ -33,7 +33,7 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     certifications: data.certifications || [],
     socialLinks: data.socialLinks || [],
     location: data.location === undefined ? null : data.location,
-    availability: data.availability || [], // Ensure this defaults to an array if that's the new type
+    availability: data.availability || [],
     subscriptionTier: data.subscriptionTier || 'free',
     status: data.status || 'pending_approval',
     websiteUrl: data.websiteUrl === undefined ? null : data.websiteUrl,
@@ -41,6 +41,7 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
     dataSource: 'Firestore',
+    isFeaturedOnHomepage: data.isFeaturedOnHomepage || false, // Added this line
   };
 };
 
@@ -57,7 +58,7 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
     if (!isNaN(parsedDate.getTime())) {
       createdAtString = parsedDate.toISOString();
     } else {
-      console.warn(`[mapBlogPostFromFirestore] Invalid date string for createdAt for post ID ${id}: "${data.createdAt}". Using current date as fallback.`);
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for createdAt for post ID ${id}: \"${data.createdAt}\". Using current date as fallback.`);
       createdAtString = new Date().toISOString();
     }
   } else {
@@ -74,7 +75,7 @@ const mapBlogPostFromFirestore = (docData: any, id: string): BlogPost => {
     if (!isNaN(parsedDate.getTime())) {
       updatedAtString = parsedDate.toISOString();
     } else {
-      console.warn(`[mapBlogPostFromFirestore] Invalid date string for updatedAt for post ID ${id}: "${data.updatedAt}".`);
+      console.warn(`[mapBlogPostFromFirestore] Invalid date string for updatedAt for post ID ${id}: \"${data.updatedAt}\".`);
     }
   }
   return {
@@ -131,6 +132,7 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
       dataToSet.subscriptionTier = dataToSet.subscriptionTier ?? 'free';
       dataToSet.status = dataToSet.status ?? 'pending_approval';
       dataToSet.availability = dataToSet.availability ?? [];
+      dataToSet.isFeaturedOnHomepage = dataToSet.isFeaturedOnHomepage ?? false; // Initialize for new coach
     }
     dataToSet.profileImageUrl = dataToSet.profileImageUrl ?? null;
   } else {
@@ -138,6 +140,10 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     dataToSet.location = profileData.location === undefined ? userSnap.data()?.location : (profileData.location || null);
     dataToSet.websiteUrl = profileData.websiteUrl === undefined ? userSnap.data()?.websiteUrl : (profileData.websiteUrl || null);
     dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? userSnap.data()?.introVideoUrl : (profileData.introVideoUrl || null);
+     // Ensure isFeaturedOnHomepage is handled during updates if not explicitly set
+    if (profileData.isFeaturedOnHomepage === undefined && userSnap.data()?.role === 'coach') {
+      dataToSet.isFeaturedOnHomepage = userSnap.data()?.isFeaturedOnHomepage ?? false;
+    }
   }
   dataToSet.updatedAt = serverTimestamp();
   await setDoc(userDocRef, dataToSet, { merge: !isCreating });
@@ -149,7 +155,12 @@ export async function getUserProfile(userId: string): Promise<FirestoreUserProfi
   const userSnap = await getDoc(userDocRef);
   if (userSnap.exists()) {
     const data = userSnap.data();
-    return { id: userSnap.id, ...data, availability: data.availability || [] } as FirestoreUserProfile;
+    return { 
+      id: userSnap.id, 
+      ...data, 
+      availability: data.availability || [], 
+      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined 
+    } as FirestoreUserProfile;
   }
   return null;
 }
@@ -165,13 +176,21 @@ export async function getAllUserProfilesForAdmin(): Promise<FirestoreUserProfile
       ...data,
       createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
       updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
+      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined
     } as FirestoreUserProfile;
   });
 }
 
 // --- Coach Fetching Functions ---
 export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
-  const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "approved"), firestoreLimit(count));
+  // This function will now use the isFeaturedOnHomepage field
+  const q = query(
+    collection(db, "users"), 
+    where("role", "==", "coach"), 
+    where("status", "==", "approved"), 
+    where("isFeaturedOnHomepage", "==", true), // New condition
+    firestoreLimit(count)
+  );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
 }
@@ -179,7 +198,7 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
 export async function getAllCoaches(filters?: { searchTerm?: string, includeAllStatuses?: boolean }): Promise<Coach[]> {
   const qConstraints = [where("role", "==", "coach")];
   if (!filters?.includeAllStatuses) qConstraints.push(where("status", "==", "approved"));
-  qConstraints.push(firestoreLimit(50));
+  qConstraints.push(firestoreLimit(50)); // Consider pagination for very large lists
   const coachesQuery = query(collection(db, "users"), ...qConstraints);
   const querySnapshot = await getDocs(coachesQuery);
   let allCoaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
@@ -189,7 +208,7 @@ export async function getAllCoaches(filters?: { searchTerm?: string, includeAllS
       coach.name.toLowerCase().includes(lowerSearchTerm) ||
       (coach.bio && coach.bio.toLowerCase().includes(lowerSearchTerm)) ||
       (Array.isArray(coach.specialties) && coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm))) ||
-      (() => { // Use an immediately invoked function expression to handle keyword type
+      (() => { 
         const keywordsArray = Array.isArray(coach.keywords)
           ? coach.keywords
           : (typeof coach.keywords === 'string' ? coach.keywords.split(',').map(k => k.trim()).filter(Boolean) : []);
@@ -202,7 +221,7 @@ export async function getAllCoaches(filters?: { searchTerm?: string, includeAllS
 
 export async function getCoachById(coachId: string): Promise<Coach | null> {
   if (!coachId) return null;
-  const userProfile = await getUserProfile(coachId);
+  const userProfile = await getUserProfile(coachId); // getUserProfile now includes isFeaturedOnHomepage
   if (userProfile && userProfile.role === 'coach') return mapCoachFromFirestore(userProfile, userProfile.id);
   return null;
 }
@@ -214,17 +233,37 @@ export async function getAllCoachIds(): Promise<string[]> {
 }
 
 export async function updateCoachSubscriptionTier(coachId: string, tier: 'free' | 'premium'): Promise<void> {
-  await updateDoc(doc(db, "users", coachId), { subscriptionTier: tier, updatedAt: serverTimestamp() });
+  if (!coachId) throw new Error("Coach ID is required.");
+  await updateDoc(doc(db, "users", coachId), { 
+    subscriptionTier: tier, 
+    updatedAt: serverTimestamp() 
+  });
 }
 
 export async function updateCoachStatus(coachId: string, status: CoachStatus): Promise<void> {
-  await updateDoc(doc(db, "users", coachId), { status: status, updatedAt: serverTimestamp() });
+  if (!coachId) throw new Error("Coach ID is required.");
+  await updateDoc(doc(db, "users", coachId), { 
+    status: status, 
+    updatedAt: serverTimestamp() 
+  });
+}
+
+// NEW FUNCTION for updating homepage feature status
+export async function updateCoachFeatureStatus(coachId: string, isFeatured: boolean): Promise<void> {
+  if (!coachId) {
+    throw new Error("Coach ID is required to update feature status.");
+  }
+  const coachRef = doc(db, "users", coachId); // Coaches are in the 'users' collection
+  await updateDoc(coachRef, {
+    isFeaturedOnHomepage: isFeatured,
+    updatedAt: serverTimestamp() 
+  });
 }
 
 // --- Blog Post Functions ---
 export async function createFirestoreBlogPost(postData: { title: string; content: string; status: 'draft' | 'pending_approval'; authorId: string; authorName: string; excerpt?: string; tags?: string; featuredImageUrl?: string; slug?: string; }): Promise<string> {
   const blogsCollection = collection(db, "blogs");
-  const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') : `post-${Date.now()}`);
+  const slug = postData.slug || (postData.title ? postData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\\w-]+/g, '') : `post-${Date.now()}`);
   const tagsArray = postData.tags ? postData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [];
   const dataToSave: Omit<FirestoreBlogPost, 'id'> = {
     ...postData,
@@ -408,7 +447,6 @@ export async function getTotalBlogPostsCount(): Promise<number> {
   return snapshot.data().count;
 }
 
-// ADDING THE NEW FUNCTION HERE
 export async function getPendingBlogPostCount(): Promise<number> {
   try {
     const blogsRef = collection(db, "blogs"); // Assumes your collection is named "blogs"
@@ -447,3 +485,4 @@ export async function getCoachBlogStats(coachId: string): Promise<{ pending: num
   const publishedSnapshot = await getCountFromServer(publishedQuery);
   return { pending: pendingSnapshot.data().count, published: publishedSnapshot.data().count };
 }
+

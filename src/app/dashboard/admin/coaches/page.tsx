@@ -1,5 +1,4 @@
-
-"use client"; 
+"use client";
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -7,16 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown, ShieldQuestion, Hourglass } from "lucide-react";
+import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown, ShieldQuestion, Hourglass, Star } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Coach, CoachStatus, FirestoreUserProfile } from '@/types';
+import { Switch } from "@/components/ui/switch";
+import type { Coach, CoachStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { getAllCoaches, updateCoachSubscriptionTier, updateCoachStatus } from '@/lib/firestore'; 
+import { getAllCoaches, updateCoachSubscriptionTier, updateCoachStatus, updateCoachFeatureStatus } from '@/lib/firestore';
 
-// Explicitly type the coach objects used in this component's state
 type AdminCoachView = Coach & { status: CoachStatus };
-
 
 export default function AdminManageCoachesPage() {
   const [coachesList, setCoachesList] = useState<AdminCoachView[]>([]);
@@ -26,15 +24,11 @@ export default function AdminManageCoachesPage() {
   const fetchCoaches = async () => {
     setIsLoading(true);
     try {
-      // getAllCoaches might need to be adjusted if it now only fetches 'approved' coaches
-      // For admin, we need all coaches regardless of status.
-      // Let's assume for now getAllCoaches can fetch all, or we'd need a new admin-specific fetcher.
-      // For now, let's assume it returns all coaches for admin context or we filter client-side for demo
-      const allCoachesFromDb = await getAllCoaches({ includeAllStatuses: true } as any); // Temporary any if getAllCoaches is strict
-      
+      const allCoachesFromDb = await getAllCoaches({ includeAllStatuses: true } as any);
       const applications: AdminCoachView[] = allCoachesFromDb.map(coach => ({
         ...coach,
-        status: coach.status || 'pending_approval', // Ensure status is always present
+        status: coach.status || 'pending_approval',
+        isFeaturedOnHomepage: coach.isFeaturedOnHomepage || false,
       }));
       setCoachesList(applications);
     } catch (error) {
@@ -46,17 +40,17 @@ export default function AdminManageCoachesPage() {
 
   useEffect(() => {
     fetchCoaches();
-  }, [toast]);
+  }, []);
 
   const handleStatusChange = async (coachId: string, newStatus: CoachStatus) => {
     try {
       await updateCoachStatus(coachId, newStatus);
-      setCoachesList(prev => 
+      setCoachesList(prev =>
         prev.map(app => app.id === coachId ? { ...app, status: newStatus } : app)
       );
       toast({
         title: `Coach Status Updated`,
-        description: `Coach ${coachesList.find(c=>c.id===coachId)?.name}'s status set to ${newStatus.replace('_', ' ')}.`,
+        description: `Coach ${coachesList.find(c => c.id === coachId)?.name}'s status set to ${newStatus.replace('_', ' ')}. `,
       });
     } catch (error) {
       console.error("Failed to update coach status:", error);
@@ -80,20 +74,36 @@ export default function AdminManageCoachesPage() {
     }
   };
 
+  const handleFeatureOnHomepageChange = async (coachId: string, isFeatured: boolean) => {
+    try {
+      await updateCoachFeatureStatus(coachId, isFeatured);
+      setCoachesList(prev =>
+        prev.map(coach => coach.id === coachId ? { ...coach, isFeaturedOnHomepage: isFeatured } : coach)
+      );
+      toast({
+        title: `Homepage Feature Status Updated`,
+        description: `Coach ${coachesList.find(c => c.id === coachId)?.name} will ${isFeatured ? 'now' : 'no longer'} be featured on the homepage.`,
+      });
+    } catch (error) {
+      console.error("Failed to update homepage feature status:", error);
+      toast({ title: "Update Failed", description: "Could not update homepage feature status.", variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading coach applications...</div>;
   }
 
   const getStatusBadgeVariant = (status: CoachStatus) => {
     switch (status) {
-      case 'approved': return 'default'; // Greenish or primary
-      case 'pending_approval': return 'secondary'; // Yellowish/Orange
-      case 'rejected': return 'destructive'; // Red
+      case 'approved': return 'default';
+      case 'pending_approval': return 'secondary';
+      case 'rejected': return 'destructive';
       default: return 'outline';
     }
   };
 
-   const getStatusIcon = (status: CoachStatus) => {
+  const getStatusIcon = (status: CoachStatus) => {
     switch (status) {
       case 'approved': return <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />;
       case 'pending_approval': return <Hourglass className="mr-1 h-4 w-4 text-yellow-500" />;
@@ -106,9 +116,9 @@ export default function AdminManageCoachesPage() {
     <Card>
       <CardHeader>
         <CardTitle className="text-2xl flex items-center">
-          <Users className="mr-3 h-7 w-7 text-primary" /> Manage Coach Registrations & Subscriptions
+          <Users className="mr-3 h-7 w-7 text-primary" /> Manage Coaches
         </CardTitle>
-        <CardDescription>Review applications, approve coaches, and manage subscription tiers.</CardDescription>
+        <CardDescription>Review applications, approve coaches, manage subscriptions, and feature on homepage.</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
@@ -119,6 +129,7 @@ export default function AdminManageCoachesPage() {
               <TableHead>Email</TableHead>
               <TableHead>App Status</TableHead>
               <TableHead>Subscription</TableHead>
+              <TableHead className="text-center">Featured</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -126,9 +137,13 @@ export default function AdminManageCoachesPage() {
             {coachesList.map((coach) => (
               <TableRow key={coach.id}>
                 <TableCell>
-                  {coach.profileImageUrl && (
+                  {coach.profileImageUrl ? (
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person avatar"} />
+                      <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <Avatar className="h-10 w-10">
                       <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                   )}
@@ -137,22 +152,22 @@ export default function AdminManageCoachesPage() {
                 <TableCell>{coach.email || 'N/A'}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                     <Badge variant={getStatusBadgeVariant(coach.status)} className="capitalize flex items-center">
-                        {getStatusIcon(coach.status)}
-                        {coach.status.replace('_', ' ')}
+                    <Badge variant={getStatusBadgeVariant(coach.status)} className="capitalize flex items-center">
+                      {getStatusIcon(coach.status)}
+                      {coach.status.replace('_', ' ')}
                     </Badge>
                     <Select
-                        value={coach.status}
-                        onValueChange={(value: CoachStatus) => handleStatusChange(coach.id, value)}
+                      value={coach.status}
+                      onValueChange={(value: CoachStatus) => handleStatusChange(coach.id, value)}
                     >
-                        <SelectTrigger className="h-8 w-[150px] text-xs">
-                            <SelectValue placeholder="Change Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="pending_approval">Pending Approval</SelectItem>
-                            <SelectItem value="approved">Approved</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
-                        </SelectContent>
+                      <SelectTrigger className="h-8 w-[150px] text-xs">
+                        <SelectValue placeholder="Change Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
                 </TableCell>
@@ -176,17 +191,22 @@ export default function AdminManageCoachesPage() {
                     </Select>
                   </div>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Switch
+                    checked={coach.isFeaturedOnHomepage}
+                    onCheckedChange={(isChecked) => handleFeatureOnHomepageChange(coach.id, isChecked)}
+                    aria-label={`Feature ${coach.name} on homepage`}
+                    className="data-[state=checked]:bg-green-500"
+                  />
+                  {coach.isFeaturedOnHomepage && <Star className="inline-block ml-1 h-4 w-4 text-yellow-400" />}
+                </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="sm" asChild>
                     <Link
                       href={`/coach/${coach.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                    >
-                      <>
-                        <Eye className="mr-1 h-4 w-4" /> View Profile
-                      </>
-                    </Link>
+                    ><Eye className="mr-1 h-4 w-4" /> View Profile</Link>
                   </Button>
                 </TableCell>
               </TableRow>

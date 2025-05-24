@@ -39,6 +39,7 @@ export interface FirestoreUserProfile {
   status?: CoachStatus; // For coach approval by admin
   dataAiHint?: string;
   availability?: CoachAvailability; // Uses the new array-based type
+  isFeaturedOnHomepage?: boolean; // New field
 }
 
 // This type represents the detailed Coach profile for frontend display,
@@ -63,6 +64,7 @@ export interface Coach {
   updatedAt?: string; // ISO date string
   status?: CoachStatus;
   dataSource?: string;
+  isFeaturedOnHomepage?: boolean; // New field
 }
 
 // Type for Firestore Timestamps or JS Date objects (for flexibility)
