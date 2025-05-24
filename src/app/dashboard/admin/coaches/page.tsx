@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
+// Button import removed as it's no longer used after removing the actions column and button
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Users, Loader2, Eye, Crown, ShieldQuestion, Hourglass, Star } from "lucide-react";
+import { CheckCircle2, XCircle, Users, Loader2, Crown, ShieldQuestion, Hourglass, Star } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from "@/components/ui/switch";
 import type { Coach, CoachStatus } from '@/types';
@@ -112,7 +112,6 @@ export default function AdminManageCoachesPage() {
     }
   };
 
-  // Helper function to display status text
   const getStatusText = (status: CoachStatus) => {
     if (status === 'pending_approval') {
       return 'Pending';
@@ -132,14 +131,13 @@ export default function AdminManageCoachesPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Avatar</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>App Status</TableHead>
-                <TableHead>Subscription</TableHead>
+              <TableRow>{/* Ensure no space/newline after this opening tag and before the first TableHead */}
+                <TableHead>Avatar</TableHead>{/* Ensure no space/newline before the next TableHead */}
+                <TableHead>Name</TableHead>{/* Ensure no space/newline */}
+                <TableHead>Email</TableHead>{/* Ensure no space/newline */}
+                <TableHead>App Status</TableHead>{/* Ensure no space/newline */}
+                <TableHead>Subscription</TableHead>{/* Ensure no space/newline */}
                 <TableHead className="text-center">Featured</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -157,13 +155,22 @@ export default function AdminManageCoachesPage() {
                       </Avatar>
                     )}
                   </TableCell>{/* Ensure no space/newline before the next TableCell */}
-                  <TableCell className="font-medium whitespace-nowrap">{coach.name}</TableCell>{/* Ensure no space/newline */}
+                  <TableCell className="font-medium whitespace-nowrap">
+                    <Link
+                      href={`/coach/${coach.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline text-primary"
+                    >
+                      {coach.name}
+                    </Link>
+                  </TableCell>{/* Ensure no space/newline */}
                   <TableCell className="whitespace-nowrap">{coach.email || 'N/A'}</TableCell>{/* Ensure no space/newline */}
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Badge variant={getStatusBadgeVariant(coach.status)} className="capitalize flex items-center whitespace-nowrap">
                         {getStatusIcon(coach.status)}
-                        {getStatusText(coach.status)} {/* MODIFIED HERE */}
+                        {getStatusText(coach.status)}
                       </Badge>
                       <Select
                         value={coach.status}
@@ -173,7 +180,7 @@ export default function AdminManageCoachesPage() {
                           <SelectValue placeholder="Change Status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="pending_approval">Pending</SelectItem> {/* MODIFIED HERE */}
+                          <SelectItem value="pending_approval">Pending</SelectItem>
                           <SelectItem value="approved">Approved</SelectItem>
                           <SelectItem value="rejected">Rejected</SelectItem>
                         </SelectContent>
@@ -208,16 +215,8 @@ export default function AdminManageCoachesPage() {
                       className="data-[state=checked]:bg-green-500"
                     />
                     {coach.isFeaturedOnHomepage && <Star className="inline-block ml-1 h-4 w-4 text-yellow-400" />}
-                  </TableCell>{/* Ensure no space/newline */}
-                  <TableCell className="text-right space-x-2 whitespace-nowrap">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link
-                        href={`/coach/${coach.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      ><Eye className="mr-1 h-4 w-4" /> View Profile</Link>
-                    </Button>
                   </TableCell>
+                  {/* The actions TableCell was here and is now completely removed */}
                 </TableRow>
               ))}
             </TableBody>
