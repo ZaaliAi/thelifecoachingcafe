@@ -17,7 +17,7 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { setUserProfile } from '@/lib/firestore';
 import { uploadProfileImage } from '@/services/imageUpload';
 import type { FirestoreUserProfile } from '@/types'; // CoachAvailability removed as it will be redefined locally by the schema
@@ -52,6 +52,7 @@ type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
@@ -64,6 +65,9 @@ export default function RegisterCoachPage() {
   const [newSlotDay, setNewSlotDay] = useState('');
   const [newSlotTime, setNewSlotTime] = useState('');
 
+  const defaultNameFromQuery = searchParams.get('name') || '';
+  const defaultEmailFromQuery = searchParams.get('email') || '';
+
   const {
     control,
     handleSubmit,
@@ -75,8 +79,8 @@ export default function RegisterCoachPage() {
   } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
     defaultValues: {
-      name: '',
-      email: '',
+      name: defaultNameFromQuery,
+      email: defaultEmailFromQuery,
       bio: '',
       selectedSpecialties: [],
       keywords: '',
@@ -98,16 +102,19 @@ export default function RegisterCoachPage() {
   });
 
   useEffect(() => {
+    const nameFromQuery = searchParams.get('name');
+    const emailFromQuery = searchParams.get('email');
+
     if (user) {
       reset({
-        name: user.displayName || '',
-        email: user.email || '',
+        name: nameFromQuery || user.displayName || '',
+        email: emailFromQuery || user.email || '',
         bio: '',
         selectedSpecialties: [],
         keywords: '',
         certifications: '',
         location: '',
-        profileImageUrl: null,
+        profileImageUrl: user.photoURL || null,
         websiteUrl: '',
         introVideoUrl: '',
         socialLinkPlatform: '',
@@ -115,8 +122,14 @@ export default function RegisterCoachPage() {
         availability: [], // Reset to empty array
         status: 'pending_approval',
       });
+    } else if (nameFromQuery || emailFromQuery) {
+      reset(prev => ({
+        ...prev,
+        name: nameFromQuery || prev.name,
+        email: emailFromQuery || prev.email,
+      }));
     }
-  }, [user, reset]);
+  }, [user, reset, searchParams]);
 
   const bioValue = watch('bio');
   const currentSelectedSpecialties = watch('selectedSpecialties') || [];
@@ -202,6 +215,7 @@ export default function RegisterCoachPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      router.push('/dashboard/coach/profile'); // Redirect to profile page
     } catch (error) {
       console.error('Error during coach registration:', error);
       toast({
@@ -259,7 +273,7 @@ export default function RegisterCoachPage() {
       <section className="mb-12 text-center py-8 px-6 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 shadow-lg border border-border/20">
         <div className="flex items-center justify-center mb-4">
           <UserPlus className="h-12 w-12 text-primary mr-4" />
-          <h1 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">Become a Coach</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl">Register as a Coach</h1>
         </div>
         <p className="mt-4 text-lg leading-6 text-muted-foreground max-w-xl mx-auto">
           Ready to inspire and guide others? Fill out your profile below to join our community of talented coaches.

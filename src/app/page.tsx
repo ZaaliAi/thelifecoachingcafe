@@ -12,18 +12,18 @@ const mockTestimonials: Testimonial[] = [
   {
     id: '1',
     name: 'Sarah L.',
-    text: "CoachConnect helped me find the perfect life coach who understood my needs. The AI matching was spot on!",
+    text: "The Life Coaching Cafe helped me find the perfect life coach who understood my needs. The AI matching was spot on!",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'happy person',
-    // designation: 'User of CoachConnect',
+    // designation: 'User of The Life Coaching Cafe',
   },
   {
     id: '2',
     name: 'John B.',
-    text: "As a coach, registering on CoachConnect was easy, and I love the platform's modern design and features for finding clients seeking online life coaching.",
+    text: "As a coach, registering on The Life Coaching Cafe was easy, and I love the platform's modern design and features for finding clients seeking online life coaching.",
     imageUrl: 'https://placehold.co/100x100.png',
     dataAiHint: 'professional person',
-    // designation: 'Life Coach on CoachConnect',
+    // designation: 'Life Coach on The Life Coaching Cafe',
   },
   {
     id: '3',

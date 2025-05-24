@@ -111,7 +111,7 @@ function SignupFormContent() {
 
       // Redirect based on the role selected during signup
       if (data.role === 'coach') {
-        router.push('/register-coach');
+        router.push(`/register-coach?email=${encodeURIComponent(data.email)}&name=${encodeURIComponent(data.name)}`);
       } else {
         router.push('/dashboard/user');
       }
