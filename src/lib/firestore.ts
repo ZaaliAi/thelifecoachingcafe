@@ -188,8 +188,13 @@ export async function getAllCoaches(filters?: { searchTerm?: string, includeAllS
     allCoaches = allCoaches.filter(coach =>
       coach.name.toLowerCase().includes(lowerSearchTerm) ||
       (coach.bio && coach.bio.toLowerCase().includes(lowerSearchTerm)) ||
-      coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm)) ||
-      (coach.keywords && coach.keywords.some(k => k.toLowerCase().includes(lowerSearchTerm)))
+      (Array.isArray(coach.specialties) && coach.specialties.some(s => s.toLowerCase().includes(lowerSearchTerm))) ||
+      (() => { // Use an immediately invoked function expression to handle keyword type
+        const keywordsArray = Array.isArray(coach.keywords)
+          ? coach.keywords
+          : (typeof coach.keywords === 'string' ? coach.keywords.split(',').map(k => k.trim()).filter(Boolean) : []);
+        return keywordsArray.some(k => k.toLowerCase().includes(lowerSearchTerm));
+      })()
     );
   }
   return allCoaches;
