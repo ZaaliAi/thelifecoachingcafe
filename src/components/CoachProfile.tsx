@@ -7,7 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NextImage from "next/image";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import type { Coach } from "@/types"; // Assuming you have a Coach type
+import type { Coach } from "@/types"; 
+
+// Helper to get initials
+const getInitials = (name: string): string => {
+  if (!name) return "??";
+  const names = name.split(' ');
+  const firstNameInitial = names[0] ? names[0][0] : '';
+  const lastNameInitial = names.length > 1 && names[names.length - 1] ? names[names.length - 1][0] : '';
+  return `${firstNameInitial}${lastNameInitial}`.toUpperCase();
+};
 
 // LinkedIn SVG icon
 function LinkedInIcon() {
@@ -38,28 +47,18 @@ interface CoachProfileClientProps {
 }
 
 export default function CoachProfile({ coachData, coachId }: CoachProfileClientProps) {
-  // We receive coachData as a prop now, so direct usage or minimal processing.
-  // The loading state might be handled by the parent server component or Suspense in Next.js 13+ App Router.
-  // For simplicity, if coachData is null initially, we can show a loading or not found message.
-
   const [coach, setCoach] = useState<Coach | null>(coachData);
-  const [loading, setLoading] = useState(!coachData); // If no initial data, we are loading.
+  const [loading, setLoading] = useState(!coachData); 
 
-   // If initial coachData is provided, set it.
-  // This useEffect is more for scenarios where coachData might be updated post-initial render,
-  // or if we still want to keep a local mutable copy.
   useEffect(() => {
     if (coachData) {
       setCoach(coachData);
       setLoading(false);
     }
-    // If you intend for this component to re-fetch or update based on coachId changing
-    // independently of coachData prop, then you might need more complex logic here,
-    // but typically the server component would handle re-fetching.
   }, [coachData]);
 
 
-  if (loading) { // This loading state is now for when initial coachData isn't available.
+  if (loading) { 
     return (
       <div className="flex justify-center items-center h-full min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading profile...
@@ -92,6 +91,8 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
   const orderedDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const sortedAvailabilityDays = Object.keys(availabilityByDay).sort((a, b) => orderedDays.indexOf(a) - orderedDays.indexOf(b));
 
+  const coachInitials = getInitials(coach.name);
+
   return (
     <div className="min-h-screen bg-gray-50 pb-12 flex flex-col items-center">
       <div className="relative max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col items-center px-2 sm:px-6 pt-12 pb-8 mt-8 sm:mt-16">
@@ -100,7 +101,7 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
             <DialogTrigger asChild>
               <div className="relative w-32 h-32 cursor-pointer">
                 {coach.profileImageUrl ? (
-                  <div className="rounded-full shadow-lg border-4 border-blue-500 overflow-hidden w-32 h-32 bg-white">
+                  <div className="rounded-full shadow-lg border-4 border-primary overflow-hidden w-32 h-32 bg-white">
                     <NextImage
                       src={coach.profileImageUrl}
                       alt={coach.name}
@@ -111,15 +112,19 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                     />
                   </div>
                 ) : (
-                  <div className="rounded-full shadow-lg border-4 border-blue-500 bg-gray-100 flex items-center justify-center w-32 h-32">
-                    <ImageIcon className="w-12 h-12 text-gray-400" />
+                  // Display initials if no image
+                  <div 
+                    className="rounded-full shadow-lg border-4 border-primary bg-muted flex items-center justify-center w-32 h-32 text-primary select-none"
+                    title={coach.name} // Tooltip with full name
+                  >
+                    <span className="text-4xl font-semibold">{coachInitials}</span>
                   </div>
                 )}
               </div>
             </DialogTrigger>
             <DialogContent className="!max-w-fit !w-auto !h-auto p-0">
                <DialogTitle className="sr-only">{`Profile image of ${coach.name}`}</DialogTitle>
-               {coach.profileImageUrl && (
+               {coach.profileImageUrl ? (
                  <NextImage
                     src={coach.profileImageUrl}
                     alt={`Full size profile image of ${coach.name}`}
@@ -127,11 +132,11 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                     height={500}
                     className="object-contain max-h-[calc(100vh-80px)] max-w-[calc(100vw-80px)]"
                  />
-               )}
-                {!coach.profileImageUrl && (
-                   <div className="w-64 h-64 bg-gray-200 flex items-center justify-center">
-                      <ImageIcon className="w-20 h-20 text-gray-500" />
-                   </div>
+               ) : (
+                  // Display initials in dialog as well if no image
+                  <div className="w-64 h-64 bg-muted flex items-center justify-center text-primary select-none">
+                     <span className="text-7xl font-semibold">{coachInitials}</span>
+                  </div>
                 )}
             </DialogContent>
           </Dialog>
