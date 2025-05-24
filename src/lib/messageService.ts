@@ -35,8 +35,8 @@ const mapMessageFromFirestore = (
     content: data.content,
     timestamp: data.timestamp.toDate().toISOString(),
     read: data.read || false,
-    senderName: defaultSenderName || data.senderName || data.senderId,
-    recipientName: defaultRecipientName || data.recipientName || data.recipientId,
+    senderName: defaultSenderName || data.senderName || "Unknown User", // MODIFIED FALLBACK
+    recipientName: defaultRecipientName || data.recipientName || "Unknown User", // MODIFIED FALLBACK
     conversationId: data.conversationId || "",
   };
 };
@@ -48,11 +48,9 @@ export const sendMessageToFirestore = async (
   senderName: string, 
   recipientName: string
 ): Promise<string> => {
-  // --- DEBUG LOGGING AT TOP ---
   console.log("sendMessageToFirestore called!");
   console.log("Arguments:", { senderId, recipientId, content, senderName, recipientName });
   try {
-    // getOrCreateConversation will handle logic to find or create the conversation document
     const conversationId = await getOrCreateConversation(senderId, recipientId);
 
     const messagesColRef = collection(db, "messages"); 
@@ -67,10 +65,7 @@ export const sendMessageToFirestore = async (
       conversationId,
     };
 
-    // --- ADDED LOGGING HERE ---
     console.log("Message doc:", messageDoc);
-    // --- END LOGGING ---
-
     const messageDocRef = await addDoc(messagesColRef, messageDoc);
     const conversationDocRef = doc(db, "conversations", conversationId);
     await updateDoc(conversationDocRef, {
@@ -95,7 +90,6 @@ export const fetchConversationMessages = async (
   }
   const messagesRef = collection(db, "messages");
 
-  // Messages where the user is the sender
   const sentQuery = query(
     messagesRef,
     where("conversationId", "==", conversationId),
@@ -103,7 +97,6 @@ export const fetchConversationMessages = async (
     orderBy("timestamp", "asc")
   );
 
-  // Messages where the user is the recipient
   const receivedQuery = query(
     messagesRef,
     where("conversationId", "==", conversationId),
@@ -111,23 +104,31 @@ export const fetchConversationMessages = async (
     orderBy("timestamp", "asc")
   );
 
-  // Fetch both in parallel
   const [sentSnap, receivedSnap] = await Promise.all([
     getDocs(sentQuery),
     getDocs(receivedQuery)
   ]);
 
-  // Combine and deduplicate by message id
   const allMessagesMap = new Map<string, Message>();
   const processSnap = async (snap: any) => {
     for (const doc of snap.docs) {
       const data = doc.data();
-      allMessagesMap.set(doc.id, mapMessageFromFirestore(data, doc.id, data.senderName, data.recipientName));
+      let senderNameToUse = data.senderName;
+      let recipientNameToUse = data.recipientName;
+
+      if (data.senderId && (senderNameToUse === data.senderId || !senderNameToUse)) {
+          const profile = await getUserProfile(data.senderId);
+          senderNameToUse = profile?.name || profile?.displayName || "Unknown User"; // MODIFIED FALLBACK
+      }
+      if (data.recipientId && (recipientNameToUse === data.recipientId || !recipientNameToUse)) {
+          const profile = await getUserProfile(data.recipientId);
+          recipientNameToUse = profile?.name || profile?.displayName || "Unknown User"; // MODIFIED FALLBACK
+      }
+      allMessagesMap.set(doc.id, mapMessageFromFirestore(data, doc.id, senderNameToUse, recipientNameToUse));
     }
   };
   await Promise.all([processSnap(sentSnap), processSnap(receivedSnap)]);
 
-  // Sort by timestamp ascending
   return Array.from(allMessagesMap.values()).sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
@@ -150,7 +151,7 @@ export const getOrCreateConversation = async (userId1: string, userId2: string):
       const user2Profile = await getUserProfile(userId2);
       await setDoc(conversationDocRef, {
         members,
-        memberNames: [user1Profile?.name || userId1, user2Profile?.name || userId2],
+        memberNames: [user1Profile?.name || user1Profile?.displayName || "Unknown User", user2Profile?.name || user2Profile?.displayName || "Unknown User"], // MODIFIED FALLBACK
         memberAvatars: [user1Profile?.profileImageUrl || null, user2Profile?.profileImageUrl || null],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -173,10 +174,13 @@ export const getUserConversations = async (userId: string): Promise<Conversation
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
+      const memberNames = (data.memberNames || []).map((name: string, index: number) => 
+        name || (data.members && data.members[index] ? "Unknown User" : "Unknown User") // MODIFIED FALLBACK
+      );
       return {
         id: docSnap.id,
         members: data.members,
-        memberNames: data.memberNames,
+        memberNames: memberNames,
         memberAvatars: data.memberAvatars,
         lastMessage: data.lastMessage || "",
         updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
@@ -200,7 +204,7 @@ export const fetchReceivedMessages = async (): Promise<Message[]> => {
     let senderName = data.senderName;
     if (data.senderId && (senderName === data.senderId || !senderName)) {
       const profile = await getUserProfile(data.senderId);
-      senderName = profile?.name || profile?.displayName || data.senderId;
+      senderName = profile?.name || profile?.displayName || "Unknown User"; // MODIFIED FALLBACK
     }
     return mapMessageFromFirestore(data, doc.id, senderName, data.recipientName); 
   }));
@@ -222,7 +226,7 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
       let recipientName = data.recipientName;
       if (data.recipientId && (recipientName === data.recipientId || !recipientName)) {
         const profile = await getUserProfile(data.recipientId);
-        recipientName = profile?.name || profile?.displayName || data.recipientId;
+        recipientName = profile?.name || profile?.displayName || "Unknown User"; // MODIFIED FALLBACK
       }
       allMessagesMap.set(docSnap.id, mapMessageFromFirestore(data, docSnap.id, data.senderName, recipientName));
     }
@@ -231,7 +235,7 @@ export const getMessagesForUserOrCoach = async (userId: string, messageLimit: nu
       let senderName = data.senderName;
       if (data.senderId && (senderName === data.senderId || !senderName)) {
         const profile = await getUserProfile(data.senderId);
-        senderName = profile?.name || profile?.displayName || data.senderId;
+        senderName = profile?.name || profile?.displayName || "Unknown User"; // MODIFIED FALLBACK
       }
       if (!allMessagesMap.has(docSnap.id)) {
          allMessagesMap.set(docSnap.id, mapMessageFromFirestore(data, docSnap.id, senderName, data.recipientName));
@@ -252,8 +256,7 @@ export const getSpecificConversationMessages = async (userId1: string, userId2: 
     return [];
   }
   const conversationId = [userId1, userId2].sort().join('_');
-  // This now uses the safer fetchConversationMessages to avoid permission errors
-  return fetchConversationMessages(conversationId, userId1);
+  return fetchConversationMessages(conversationId, userId1); // Relies on fetchConversationMessages updates
 };
 
 export const markMessagesAsRead = async (messageIdsToMark: string[], currentUserId: string): Promise<void> => {

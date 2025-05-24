@@ -276,19 +276,24 @@ export const onNewMessage = onDocumentCreated(
         .doc(recipientId)
         .get();
 
+      let recipientData: UserData | undefined;
       if (!userDoc.exists) {
-        console.error(
+        console.warn( // Changed to warn and handling the case
           "Recipient user document " +
-          recipientId + " not found."
+          recipientId + " not found. Using default 'Unknown User'."
         );
-        return null;
+        recipientData = { // Provide a default object
+          displayName: "Unknown User",
+          email: undefined, // Explicitly undefined as we can't send email
+        };
+      } else {
+        recipientData = userDoc.data() as UserData | undefined;
       }
-
-      const recipientData = userDoc.data() as UserData | undefined;
 
       if (!recipientData || !recipientData.email) {
         console.error(
-          "No email found for recipient user " + recipientId
+          "No email found for recipient user " + recipientId +
+          (recipientData?.displayName === "Unknown User" ? " (defaulted, no user doc)" : "")
         );
         return null;
       }
@@ -301,7 +306,9 @@ export const onNewMessage = onDocumentCreated(
       }
 
       const recipientEmail = recipientData.email;
+      // Fallback for displayName is now handled by the default object or existing data.
       const recipientName = recipientData.displayName || "User";
+
 
       const msg = {
         to: recipientEmail,
