@@ -182,7 +182,7 @@ export default function UserMessagesPage() {
   return (
     <div className="container mx-auto p-4 max-w-3xl">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Your Inbox</h1>
+        <h1 className="text-2xl font-bold">Message Centre</h1>
       </div>
 
       {displayedConversations.length === 0 && !isLoading ? (

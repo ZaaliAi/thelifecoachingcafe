@@ -164,7 +164,7 @@ export default function CoachMessagesPage() {
   return (
     <div className="container mx-auto p-4 max-w-3xl">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Message Center</h1>
+        <h1 className="text-2xl font-bold">Message Centre</h1>
       </div>
       {errorMessage && displayedConversations.length > 0 && (
         <p className="text-red-600 text-center mb-4">{errorMessage}</p> // Inline error if convos are present
