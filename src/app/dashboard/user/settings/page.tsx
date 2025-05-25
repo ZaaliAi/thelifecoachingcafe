@@ -16,6 +16,13 @@ import { useAuth } from '@/lib/auth';
 import { getUserProfile, setUserProfile } from '@/lib/firestore'; 
 import type { FirestoreUserProfile } from '@/types';
 
+// Utility to remove undefined fields (Firestore does not allow undefined!)
+function pruneUndefined<T extends object>(obj: T): Partial<T> {
+  return Object.entries(obj)
+    .filter(([_, v]) => v !== undefined)
+    .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {}) as Partial<T>;
+}
+
 const userSettingsSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'), 
@@ -112,15 +119,14 @@ export default function UserSettingsPage() {
     }
 
     try {
-      const profileUpdateData: Partial<FirestoreUserProfile> = {
+      // Build update object, but do NOT include undefined fields (Firestore will error)
+      let profileUpdateData: Partial<FirestoreUserProfile> = {
         name: data.name,
         enableNotifications: data.enableNotifications,
-        // Ensure email is not sent in profile update if it comes directly from auth
+        // Add more fields here as needed, but avoid passing undefined!
       };
-      
-      // Only include fields that are part of FirestoreUserProfile and have changed
-      // For example, if 'email' is not part of FirestoreUserProfile or shouldn't be updated from here
-      // delete (profileUpdateData as any).email; 
+
+      profileUpdateData = pruneUndefined(profileUpdateData);
 
       await setUserProfile(user.id, profileUpdateData);
       let passwordChanged = false;
@@ -128,7 +134,6 @@ export default function UserSettingsPage() {
         // Placeholder for Firebase Auth password change logic
         // You'll need to implement re-authentication and password update
         // Example:
-        // const credentials = await promptForCredentials(); // Or get currentPassword from form
         // await reauthenticate(data.currentPassword);
         // await updateUserPassword(data.newPassword);
         console.log("Password change attempt with current:", data.currentPassword, "new:", data.newPassword);
