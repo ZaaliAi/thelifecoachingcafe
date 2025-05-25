@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -15,6 +14,9 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/lib/auth'; 
 import { getUserProfile, setUserProfile } from '@/lib/firestore'; 
 import type { FirestoreUserProfile } from '@/types';
+
+// Firebase Auth imports for password change logic
+import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 
 // Utility to remove undefined fields (Firestore does not allow undefined!)
 function pruneUndefined<T extends object>(obj: T): Partial<T> {
@@ -45,7 +47,7 @@ type UserSettingsFormData = z.infer<typeof userSettingsSchema>;
 export default function UserSettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(true);
-  const { user, reauthenticate, updateUserPassword } = useAuth(); 
+  const { user } = useAuth(); 
   const { toast } = useToast();
 
   const { register, handleSubmit, control, reset, formState: { errors, isDirty } } = useForm<UserSettingsFormData>({
@@ -119,26 +121,32 @@ export default function UserSettingsPage() {
     }
 
     try {
-      // Build update object, but do NOT include undefined fields (Firestore will error)
       let profileUpdateData: Partial<FirestoreUserProfile> = {
         name: data.name,
         enableNotifications: data.enableNotifications,
-        // Add more fields here as needed, but avoid passing undefined!
       };
 
       profileUpdateData = pruneUndefined(profileUpdateData);
-
       await setUserProfile(user.id, profileUpdateData);
+
       let passwordChanged = false;
+
+      // Password change logic (with Firebase Auth)
       if (data.newPassword && data.currentPassword) {
-        // Placeholder for Firebase Auth password change logic
-        // You'll need to implement re-authentication and password update
-        // Example:
-        // await reauthenticate(data.currentPassword);
-        // await updateUserPassword(data.newPassword);
-        console.log("Password change attempt with current:", data.currentPassword, "new:", data.newPassword);
-        toast({ title: "Password Update Placeholder", description: "Password update logic needs to be implemented with Firebase Auth." });
-        // passwordChanged = true;
+        const auth = getAuth();
+        const userObj = auth.currentUser;
+        if (!userObj || !userObj.email) {
+          throw new Error("You must be logged in to update your password.");
+        }
+        // Re-authenticate user
+        const credential = EmailAuthProvider.credential(userObj.email, data.currentPassword);
+        await reauthenticateWithCredential(userObj, credential);
+
+        // Update password
+        await updatePassword(userObj, data.newPassword);
+
+        passwordChanged = true;
+        toast({ title: "Password Updated", description: "Your password was updated successfully." });
       } else if (data.newPassword && !data.currentPassword){
          toast({ title: "Password Error", description: "Current password is required to set a new password.", variant: "destructive" });
          setIsLoading(false);
@@ -149,10 +157,14 @@ export default function UserSettingsPage() {
         title: "Settings Updated!", 
         description: `Your settings have been saved. ${passwordChanged ? "Password has been changed." : ""}` 
       });
-      reset(data); // Reset form with submitted data to clear dirty state
-    } catch (error) {
+      reset({ ...data, currentPassword: '', newPassword: '', confirmNewPassword: '' }); // Clear passwords after submit
+    } catch (error: any) {
       console.error("Error updating settings:", error);
-      const errorMessage = (error as Error).message || "Could not save settings. Please try again.";
+      let errorMessage = error?.message || "Could not save settings. Please try again.";
+      // More user-friendly Firebase Auth error messages
+      if (error.code === "auth/wrong-password") errorMessage = "The current password you entered is incorrect.";
+      if (error.code === "auth/weak-password") errorMessage = "The new password is too weak. Please use at least 6 characters.";
+      if (error.code === "auth/too-many-requests") errorMessage = "Too many failed attempts. Please try again later.";
       toast({ title: "Update Failed", description: errorMessage, variant: "destructive"});
     } finally {
       setIsLoading(false);
