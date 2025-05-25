@@ -1,12 +1,12 @@
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-import * as functions from "firebase-functions"; // For functions.config()
+// Removed: import * as functions from "firebase-functions";
 import {
   onDocumentUpdated,
   onDocumentCreated,
-  FirestoreEvent,
-  QueryDocumentSnapshot,
-  Change,
+  type FirestoreEvent,
+  type QueryDocumentSnapshot,
+  type Change,
 } from "firebase-functions/v2/firestore";
 
 // Initialize Firebase Admin SDK
@@ -16,38 +16,57 @@ if (admin.apps.length === 0) {
 
 // --- Nodemailer Transporter Lazy Initialization ---
 let transporterInstance: nodemailer.Transporter | undefined;
-// Using 'any' for smtpConfigObject to simplify type issues
-// with functions.config() The structure { smtp: { ... } } is still expected.
+
+// Cache for the SMTP configuration details, directly holding {host, port, user, pass, secure}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let smtpConfigObject: any | undefined;
+let smtpDirectConfigCache: any | undefined;
 
 /**
- * Retrieves the SMTP configuration.
+ * Retrieves the SMTP configuration directly from environment variables.
  * It fetches the configuration on the first call and caches it.
- * Supports emulator environment variables.
- * @return {any | undefined} The SMTP configuration object ({host, port...}),
- * or undefined if not found.
+ * @return {any | undefined} The SMTP configuration object 
+ * ({host, port, user, pass, secure}), or undefined if not fully configured.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-// eslint-disable-next-line require-jsdoc
 function getSmtpConfig(): any | undefined {
-  if (!smtpConfigObject) {
-    if (process.env.FUNCTIONS_EMULATOR) {
-      const portStr = process.env.SMTP_PORT;
-      smtpConfigObject = {
-        smtp: {
-          host: process.env.SMTP_HOST,
-          port: portStr ? Number(portStr) : undefined,
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-          secure: process.env.SMTP_SECURE === "true",
-        },
-      };
-    } else {
-      smtpConfigObject = functions.config();
-    }
+  if (smtpDirectConfigCache) {
+    return smtpDirectConfigCache;
   }
-  return smtpConfigObject?.smtp;
+
+  const host = process.env.SMTP_HOST;
+  const portStr = process.env.SMTP_PORT;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const secure = process.env.SMTP_SECURE === "true"; // Corrected this line
+
+  if (host && portStr && user && pass) {
+    const port = Number(portStr);
+    if (isNaN(port)) {
+      console.error(`Invalid SMTP_PORT: "${portStr}". Must be a number.`);
+      return undefined;
+    }
+
+    smtpDirectConfigCache = {
+      host: host,
+      port: port,
+      user: user,
+      pass: pass,
+      secure: secure,
+    };
+    console.log("SMTP configuration loaded from environment variables.");
+    return smtpDirectConfigCache;
+  } else {
+    console.error(
+      "SMTP configuration error: One or more required environment variables " +
+      "(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) are missing or empty."
+    );
+    if (!host) console.error("SMTP_HOST is missing or empty.");
+    if (!portStr) console.error("SMTP_PORT is missing or empty.");
+    if (!user) console.error("SMTP_USER is missing or empty.");
+    if (!pass) console.error("SMTP_PASS is missing or empty.");
+    // SMTP_SECURE is optional and defaults to false effectively if not "true"
+    return undefined;
+  }
 }
 
 /**
@@ -56,7 +75,6 @@ function getSmtpConfig(): any | undefined {
  * @return {Promise<nodemailer.Transporter | undefined>} A promise that
  * resolves to the transporter instance or undefined if initialization fails.
  */
-// eslint-disable-next-line require-jsdoc
 async function getTransporter():
   Promise<nodemailer.Transporter | undefined> {
   if (transporterInstance) {
@@ -68,20 +86,16 @@ async function getTransporter():
   if (
     currentSmtpConfig &&
     currentSmtpConfig.host &&
-    currentSmtpConfig.port &&
+    currentSmtpConfig.port && // is a number
     currentSmtpConfig.user &&
     currentSmtpConfig.pass
+    // currentSmtpConfig.secure is a boolean
   ) {
     try {
       transporterInstance = nodemailer.createTransport({
         host: currentSmtpConfig.host as string,
-        port:
-          typeof currentSmtpConfig.port === "string" ?
-            parseInt(currentSmtpConfig.port, 10) :
-            currentSmtpConfig.port as number,
-        secure:
-          currentSmtpConfig.secure === true ||
-          currentSmtpConfig.secure === "true",
+        port: currentSmtpConfig.port as number,
+        secure: currentSmtpConfig.secure as boolean,
         auth: {
           user: currentSmtpConfig.user as string,
           pass: currentSmtpConfig.pass as string,
@@ -100,8 +114,8 @@ async function getTransporter():
     }
   } else {
     console.error(
-      "SMTP configuration (host, port, user, pass, secure) " +
-      "is not fully set. Cannot initialize transporter."
+      "SMTP configuration (host, port, user, pass) " +
+      "is not fully set from environment variables. Cannot initialize transporter."
     );
     return undefined;
   }
@@ -111,12 +125,18 @@ interface UserData {
   isApproved?: boolean;
   email?: string;
   displayName?: string;
+  // Add other fields that might be present in user documents
+  role?: string; // Example: if role influences approval or notifications
+  status?: string; // Example: coach status like 'pending_approval'
 }
 
 interface MessageData {
   recipientId?: string;
+  senderId?: string; // Good to have for context
   senderName?: string;
   text?: string;
+  createdAt?: admin.firestore.Timestamp; // Example, if you use timestamps
+  conversationId?: string; // If messages are part of conversations
 }
 
 // --- Email for User Approval ---
@@ -139,7 +159,7 @@ export const onUserApproved = onDocumentUpdated(
 
     if (!event.data || !event.data.before || !event.data.after) {
       console.log(
-        "Event data, before, or after snapshot is missing."
+        "Event data, before, or after snapshot is missing for onUserApproved."
       );
       return null;
     }
@@ -148,27 +168,31 @@ export const onUserApproved = onDocumentUpdated(
     const after = event.data.after.data() as UserData | undefined;
     const userId = event.params.userId;
 
-    const currentSmtpConfig = getSmtpConfig();
+    const currentSmtpConfig = getSmtpConfig(); // getSmtpConfig now returns the direct config object
+
+    // Check if the status changed to 'approved' for a coach, or isApproved became true
+    // Adapt this logic based on your exact approval mechanism
+    const justApproved = (after?.status === "approved" && before?.status !== "approved") ||
+                         (after?.isApproved === true && before?.isApproved !== true);
 
     if (
-      after?.isApproved &&
-      !before?.isApproved &&
+      justApproved &&
       after?.email &&
-      currentSmtpConfig?.user
+      currentSmtpConfig?.user // Check if SMTP sender email is configured
     ) {
       const userEmail = after.email;
       const userName = after.displayName || "User";
 
       const msg = {
         to: userEmail,
-        from: currentSmtpConfig.user as string,
+        from: currentSmtpConfig.user as string, // Sender email from SMTP config
         subject: "Your Account has been Approved!",
         html: `
           <h1>Welcome, ${userName}!</h1>
-          <p>Your account on Our Platform has been approved.</p>
+          <p>Your account on The Life Coaching Cafe has been approved.</p>
           <p>You can now log in and enjoy our services.</p>
           <p>Thanks,</p>
-          <p>The Team</p>
+          <p>The Life Coaching Cafe Team</p>
         `,
       };
 
@@ -184,7 +208,7 @@ export const onUserApproved = onDocumentUpdated(
         );
       } catch (error: unknown) {
         console.error(
-          "Error sending approval email:",
+          "Error sending approval email for user:",
           userId, error
         );
         if (
@@ -196,20 +220,24 @@ export const onUserApproved = onDocumentUpdated(
           };
           if (errWithResponse.response) {
             console.error(
+              "Nodemailer error response:",
               errWithResponse.response.body
             );
           }
         }
       }
     } else {
+      if (!justApproved) {
+         // console.log(`User ${userId}: Approval status unchanged or not an approval event. Before: ${JSON.stringify(before)}, After: ${JSON.stringify(after)}`);
+      }
       if (!after?.email) {
         console.log(
-          "User " + userId + " approved but no email found."
+          "User " + userId + " data update occurred but no email found for notification."
         );
       }
       if (!currentSmtpConfig?.user) {
         console.log(
-          "SMTP user not configured, cannot send email."
+          "SMTP user (sender email) not configured, cannot send approval email."
         );
       }
     }
@@ -247,7 +275,7 @@ export const onNewMessage = onDocumentCreated(
 
     if (!messageData) {
       console.error(
-        "No data for message " + messageId
+        "No data parsed for message " + messageId
       );
       return null;
     }
@@ -257,7 +285,7 @@ export const onNewMessage = onDocumentCreated(
 
     const messageTextPreview =
       messageData.text ?
-        messageData.text.substring(0, 100) + "..." :
+        (messageData.text.length > 100 ? messageData.text.substring(0, 97) + "..." : messageData.text) :
         "a new message.";
 
     if (!recipientId) {
@@ -267,7 +295,14 @@ export const onNewMessage = onDocumentCreated(
       return null;
     }
 
-    const currentSmtpConfig = getSmtpConfig();
+    const currentSmtpConfig = getSmtpConfig(); // getSmtpConfig now returns the direct config object
+
+    if (!currentSmtpConfig?.user) {
+      console.error(
+        "SMTP user (sender email) not configured, cannot send new message notification."
+      );
+      return null;
+    }
 
     try {
       const userDoc = await admin
@@ -276,43 +311,31 @@ export const onNewMessage = onDocumentCreated(
         .doc(recipientId)
         .get();
 
-      let recipientData: UserData | undefined;
       if (!userDoc.exists) {
-        console.warn( // Changed to warn and handling the case
+        console.warn(
           "Recipient user document " +
-          recipientId + " not found. Using default 'Unknown User'."
+          recipientId + " not found. Cannot send new message email."
         );
-        recipientData = { // Provide a default object
-          displayName: "Unknown User",
-          email: undefined, // Explicitly undefined as we can't send email
-        };
-      } else {
-        recipientData = userDoc.data() as UserData | undefined;
+        return null;
       }
+      
+      const recipientData = userDoc.data() as UserData | undefined;
 
       if (!recipientData || !recipientData.email) {
         console.error(
           "No email found for recipient user " + recipientId +
-          (recipientData?.displayName === "Unknown User" ? " (defaulted, no user doc)" : "")
-        );
-        return null;
-      }
-
-      if (!currentSmtpConfig?.user) {
-        console.error(
-          "SMTP user not configured, cannot send email."
+          ". Cannot send new message email."
         );
         return null;
       }
 
       const recipientEmail = recipientData.email;
-      // Fallback for displayName is now handled by the default object or existing data.
       const recipientName = recipientData.displayName || "User";
 
 
       const msg = {
         to: recipientEmail,
-        from: currentSmtpConfig.user as string,
+        from: currentSmtpConfig.user as string, // Sender email from SMTP config
         subject:
           "You have received a new message from " +
           senderName,
@@ -320,9 +343,9 @@ export const onNewMessage = onDocumentCreated(
           <h1>Hi ${recipientName},</h1>
           <p>You have a new message from ${senderName}:</p>
           <blockquote>${messageTextPreview}</blockquote>
-          <p>Log in to view the full message.</p>
+          <p>Log in to view the full message on The Life Coaching Cafe.</p>
           <p>Thanks,</p>
-          <p>The Team</p>
+          <p>The Life Coaching Cafe Team</p>
         `,
       };
 
@@ -337,7 +360,7 @@ export const onNewMessage = onDocumentCreated(
       );
     } catch (error: unknown) {
       console.error(
-        "Error sending new message email:",
+        "Error sending new message email for messageId:",
         messageId, error
       );
       if (
@@ -349,6 +372,7 @@ export const onNewMessage = onDocumentCreated(
         };
         if (errWithResponse.response) {
           console.error(
+            "Nodemailer error response:",
             errWithResponse.response.body
           );
         }
