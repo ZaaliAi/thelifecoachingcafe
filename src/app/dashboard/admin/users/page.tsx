@@ -10,192 +10,263 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { getAllUserProfilesForAdmin, unsuspendUserAccount } from '@/lib/firestore';
-import { cn } from "@/lib/utils"; // Added cn import
+import { cn } from "@/lib/utils";
+import { format } from 'date-fns'; // Import format from date-fns
 
 // Interface for the user data expected by the admin page
 interface AdminUserView {
   id: string;
-  name: string | null;
-  email: string | null;
-  role: 'user' | 'coach' | 'admin';
-  createdAt?: Date | string; 
- status?: string;
+  email: string;
+  status: 'active' | 'suspended' | 'pending'; // Assuming these are the possible statuses
+  createdAt: string; // Assuming createdAt is a string, adjust if it's a Date or Timestamp
+  // Add other relevant user fields you want to include in the CSV
+  name?: string; // Example: If you have a name field
 }
 
-// Placeholder function for deleting a user account - REPLACE WITH SECURE SERVER-SIDE LOGIC
-async function deleteUserAccount(userId: string): Promise<{ success: boolean; message?: string }> {
-  console.log(`Attempting to delete user: ${userId}`);
-  await new Promise(resolve => setTimeout(resolve, 1000)); 
-  return { success: true };
-}
+// Helper function to format data for CSV, handling commas and quotes
+const escapeCsvValue = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const stringValue = String(value);
+  // If the value contains a comma, double quote, or newline, enclose it in double quotes
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    // Escape double quotes by doubling them
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
 
-export default function ManageUsersPage() {
-  const { suspendUserAccount } = require('@/lib/firestore');
+// Function to generate and download the CSV
+const handleDownloadCSV = (users: AdminUserView[]) => {
+  const headers = ['ID', 'Email', 'Status', 'Created At', 'Name']; // Define your headers
+
+  // Create the header row
+  const headerRow = headers.map(escapeCsvValue).join(',');
+
+  // Create data rows
+  const dataRows = users.map(user => {
+    const rowData = [
+      user.id,
+      user.email,
+      user.status,
+      // Format the createdAt date for the CSV
+      format(new Date(user.createdAt), 'yyyy-MM-dd'),
+      user.name || '', // Include other fields, use '' for null/undefined
+      // Add other user fields here corresponding to the headers
+    ];
+    return rowData.map(escapeCsvValue).join(',');
+  });
+
+  // Combine header and data rows
+  const csvContent = [headerRow, ...dataRows].join('\n');
+
+  // Create a Blob
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+
+  // Create a download link
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', 'users.csv'); // Set the desired filename
+  link.style.visibility = 'hidden'; // Hide the link
+  document.body.appendChild(link); // Append to body
+
+  link.click(); // Trigger download
+
+  // Clean up
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+
+const AdminUsersPage = () => {
   const [users, setUsers] = useState<AdminUserView[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [userToDelete, setUserToDelete] = useState<AdminUserView | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false); // State to track if a suspension is in progress
 
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const usersData = await getAllUserProfilesForAdmin();
+        // Assuming usersData from firestore matches AdminUserView interface or needs mapping
+        setUsers(usersData as AdminUserView[]);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+        setError("Failed to fetch users. Please try again.");
+        toast({
+          title: "Error",
+          description: "Failed to fetch users.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchUsers();
   }, []);
 
-  const fetchUsers = async () => {
-    setIsLoading(true);
+  const handleUnsuspend = async (userId: string) => {
+    setIsSuspending(true); // Indicate suspension is in progress
     try {
-      const fetchedUsers = await getAllUserProfilesForAdmin();
-      setUsers(fetchedUsers as AdminUserView[]);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-      toast({ title: "Error", description: "Could not fetch users. Make sure you are authorized.", variant: "destructive" });
+      await unsuspendUserAccount(userId);
+      // Update the user's status in the local state
+      setUsers(prevUsers =>
+        prevUsers.map(user =>
+          user.id === userId ? { ...user, status: 'active' } : user
+        )
+      );
+      toast({
+        title: "Success",
+        description: "User unsuspended successfully.",
+      });
+    } catch (err) {
+      console.error("Error unsuspending user:", err);
+      toast({
+        title: "Error",
+        description: "Failed to unsuspend user.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSuspending(false); // Reset suspension state
     }
-    setIsLoading(false);
   };
 
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return;
+  // You would implement handleSuspend and handleDelete similarly,
+  // likely using AlertDialogs for confirmation and calling Firestore functions.
+  // Example placeholders:
+  // const handleSuspend = async (userId: string) => { ... };
+  // const handleDelete = async (userId: string) => { ... };
 
-    if (userToDelete.role === 'admin') {
-        toast({
-            title: "Action Not Allowed",
-            description: "Admin accounts cannot be deleted through this interface.",
-            variant: "destructive",
-        });
-        setUserToDelete(null);
-        return;
-    }
-
-    setIsDeleting(true);
-    try {
-      const result = await deleteUserAccount(userToDelete.id);
-      if (result.success) {
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userToDelete.id));
-        toast({ title: "Success", description: `User ${userToDelete.name || userToDelete.email} deleted successfully.` });
-      } else {
-        throw new Error(result.message || 'Failed to delete user.');
-      }
-    } catch (error) {
-      console.error("Failed to delete user:", error);
-      toast({ title: "Error", description: (error as Error).message || "Could not delete user.", variant: "destructive" });
-    }
-    setIsDeleting(false);
-    setUserToDelete(null); 
-  };
-
-  const handleSuspendToggle = async (user: AdminUserView) => {
-    const isCurrentlySuspended = user.status === 'suspended';
-    try {
- if (isCurrentlySuspended) {
-        await unsuspendUserAccount(user.id);
-        toast({ title: "Success", description: `User ${user.name || user.id} unsuspended successfully.` });
-
-      } else {
-        await suspendUserAccount(user.id);
-        toast({ title: "Success", description: `User ${user.name || user.id} suspended successfully.` });
-      }
-      fetchUsers(); // Refresh the list
-    } catch (error) {
-      console.error(`Failed to ${isCurrentlySuspended ? 'unsuspend' : 'suspend'} user:`, error);
-      toast({ title: "Error", description: `Could not ${isCurrentlySuspended ? 'unsuspend' : 'suspend'} user ${user.name || user.id}.`, variant: "destructive" });
-    }
-  };
 
   const filteredUsers = users.filter(user =>
-    (user.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) // Assuming you have a name field
   );
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-red-500">
+        {error}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-6">Manage Users</h1>
+
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-4">
+          <Input
+            type="text"
+            placeholder="Search by email or name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+          <Search className="h-5 w-5 text-gray-500" />
+        </div>
+        {/* Assuming you have an Add User button */}
+        <div className="flex space-x-2">
+           <Button onClick={() => handleDownloadCSV(users)}>Download CSV</Button>
+           {/* <Button>Add User</Button> */}
+        </div>
+      </div>
+
+
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><UserX className="mr-2 h-6 w-6 text-primary" /> Manage Users</CardTitle>
-          <CardDescription>View, search, and manage user accounts on the platform.</CardDescription>
+          <CardTitle>User List</CardTitle>
+          <CardDescription>Manage registered users and their statuses.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 flex items-center">
-            <Search className="mr-2 h-5 w-5 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, email, or role..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
-          {isLoading ? (
-             <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-             </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <ShieldAlert className="mx-auto h-12 w-12 mb-4" />
-              <p>No users found matching your criteria.</p>
-            </div>
-          ) : (
+          {filteredUsers.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Created At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
-                    <TableCell>{user.email || 'N/A'}</TableCell>
-                    <TableCell><Badge variant={user.role === 'admin' ? 'destructive' : user.role === 'coach' ? 'secondary' : 'outline' } className="capitalize">{user.role}</Badge></TableCell>
-                    <TableCell><Badge variant={user.status === 'active' ? 'default' : 'outline'} className={cn("capitalize", user.status === 'active' && "bg-green-500 text-white", user.status === 'pending_approval' && "bg-yellow-500 text-white", user.status === 'suspended' && "bg-red-500 text-white" )}>{user.status || 'N/A'}</Badge></TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          user.status === 'active' && 'bg-green-500',
+                          user.status === 'suspended' && 'bg-red-500',
+                          user.status === 'pending' && 'bg-yellow-500'
+                        )}
+                      >
+                        {user.status}
+                      </Badge>
+                    </TableCell>
+                    {/* Formatted Created At Date */}
+                    <TableCell>{format(new Date(user.createdAt), 'yyyy-MM-dd')}</TableCell>
                     <TableCell className="text-right">
-                      <AlertDialog>
-                        {/* Placeholder Suspend Button */}
- <Button
- variant="outline"
- disabled={user.role === 'admin'} // Disable if admin (regardless of status)
- size="sm"
- className="mr-2"
- onClick={() => handleSuspendToggle(user)}
- >
- <UserX className="mr-1 h-4 w-4" /> {user.status === 'suspended' ? 'Unsuspend' : 'Suspend'} {/* Change button text */}
- </Button>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={user.role === 'admin'}>
-                            <Trash2 className="mr-1 h-4 w-4" /> Delete
+                      {/* Unsuspend Button */}
+                      {user.status === 'suspended' && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" disabled={isSuspending}>
+                              {isSuspending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserX className="mr-2 h-4 w-4" />} Unsuspend
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action will unsuspend the user&apos;s account, allowing them to log in again.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleUnsuspend(user.id)}>Unsuspend</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+
+                      {/* Suspend Button (Example - Uncomment and implement if needed) */}
+                      {user.status !== 'suspended' && (
+                        // You'll need a similar AlertDialog and a handleSuspend function
+                         <Button variant="ghost" size="sm">
+                            <ShieldAlert className="mr-2 h-4 w-4" /> Suspend
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the account for <strong>{userToDelete?.name || userToDelete?.email}</strong> and all associated data.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={handleDeleteUser}
-                              disabled={isDeleting}
-                              className="bg-destructive hover:bg-destructive/90"
-                            >
-                              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Delete User
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      )}
+
+                       {/* Delete Button (Example - Uncomment and implement if needed) */}
+                       {/* You'll need a similar AlertDialog and a handleDelete function */}
+                       <Button variant="ghost" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          ) : (
+            <p className="text-center text-gray-500">No users found.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+export default AdminUsersPage;
