@@ -8,8 +8,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { UserX, Trash2, ShieldAlert, Loader2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import { Badge } from "@/components/ui/badge";
-import { getAllUserProfilesForAdmin } from '@/lib/firestore';
+import { Badge } from '@/components/ui/badge';
+import { getAllUserProfilesForAdmin, unsuspendUserAccount } from '@/lib/firestore';
 import { cn } from "@/lib/utils"; // Added cn import
 
 // Interface for the user data expected by the admin page
@@ -19,7 +19,7 @@ interface AdminUserView {
   email: string | null;
   role: 'user' | 'coach' | 'admin';
   createdAt?: Date | string; 
-  status?: string; 
+ status?: string;
 }
 
 // Placeholder function for deleting a user account - REPLACE WITH SECURE SERVER-SIDE LOGIC
@@ -30,6 +30,7 @@ async function deleteUserAccount(userId: string): Promise<{ success: boolean; me
 }
 
 export default function ManageUsersPage() {
+  const { suspendUserAccount } = require('@/lib/firestore');
   const [users, setUsers] = useState<AdminUserView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,19 +38,20 @@ export default function ManageUsersPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      setIsLoading(true);
-      try {
-        const fetchedUsers = await getAllUserProfilesForAdmin();
-        setUsers(fetchedUsers as AdminUserView[]); 
-      } catch (error) {
-        console.error("Failed to fetch users:", error);
-        toast({ title: "Error", description: "Could not fetch users. Make sure you are authorized.", variant: "destructive" });
-      }
-      setIsLoading(false);
-    };
     fetchUsers();
   }, []);
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const fetchedUsers = await getAllUserProfilesForAdmin();
+      setUsers(fetchedUsers as AdminUserView[]);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      toast({ title: "Error", description: "Could not fetch users. Make sure you are authorized.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  };
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
@@ -79,6 +81,24 @@ export default function ManageUsersPage() {
     }
     setIsDeleting(false);
     setUserToDelete(null); 
+  };
+
+  const handleSuspendToggle = async (user: AdminUserView) => {
+    const isCurrentlySuspended = user.status === 'suspended';
+    try {
+ if (isCurrentlySuspended) {
+        await unsuspendUserAccount(user.id);
+        toast({ title: "Success", description: `User ${user.name || user.id} unsuspended successfully.` });
+
+      } else {
+        await suspendUserAccount(user.id);
+        toast({ title: "Success", description: `User ${user.name || user.id} suspended successfully.` });
+      }
+      fetchUsers(); // Refresh the list
+    } catch (error) {
+      console.error(`Failed to ${isCurrentlySuspended ? 'unsuspend' : 'suspend'} user:`, error);
+      toast({ title: "Error", description: `Could not ${isCurrentlySuspended ? 'unsuspend' : 'suspend'} user ${user.name || user.id}.`, variant: "destructive" });
+    }
   };
 
   const filteredUsers = users.filter(user =>
@@ -133,6 +153,16 @@ export default function ManageUsersPage() {
                     <TableCell><Badge variant={user.status === 'active' ? 'default' : 'outline'} className={cn("capitalize", user.status === 'active' && "bg-green-500 text-white", user.status === 'pending_approval' && "bg-yellow-500 text-white", user.status === 'suspended' && "bg-red-500 text-white" )}>{user.status || 'N/A'}</Badge></TableCell>
                     <TableCell className="text-right">
                       <AlertDialog>
+                        {/* Placeholder Suspend Button */}
+ <Button
+ variant="outline"
+ disabled={user.role === 'admin'} // Disable if admin (regardless of status)
+ size="sm"
+ className="mr-2"
+ onClick={() => handleSuspendToggle(user)}
+ >
+ <UserX className="mr-1 h-4 w-4" /> {user.status === 'suspended' ? 'Unsuspend' : 'Suspend'} {/* Change button text */}
+ </Button>
                         <AlertDialogTrigger asChild>
                           <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={user.role === 'admin'}>
                             <Trash2 className="mr-1 h-4 w-4" /> Delete

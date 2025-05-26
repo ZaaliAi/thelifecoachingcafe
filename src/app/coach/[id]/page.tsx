@@ -55,7 +55,7 @@ export default async function Page({ params: paramsProp }: PageProps) {
   }
 
   // Serialize coachData before passing to Client Component
-  let serializableCoachData: any = { ...coachData };
+  const serializableCoachData: any = { ...coachData };
 
   if (coachData && isFirestoreTimestamp(coachData.createdAt)) {
     serializableCoachData.createdAt = coachData.createdAt.toDate().toISOString();

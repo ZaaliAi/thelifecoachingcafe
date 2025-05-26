@@ -1,6 +1,6 @@
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-// Removed: import * as functions from "firebase-functions";
+// import * as functions from "firebase-functions"; // Removed this line
 import {
   onDocumentUpdated,
   onDocumentCreated,
@@ -8,9 +8,17 @@ import {
   type QueryDocumentSnapshot,
   type Change,
 } from "firebase-functions/v2/firestore";
+// Updated import for beforeUserCreated and added related types
+import {
+  beforeUserCreated,
+  type AuthBlockingEvent,
+  type AuthUserRecord 
+} from "firebase-functions/v2/identity"; 
+import { HttpsError } from "firebase-functions/v2/https";
+
 
 // Initialize Firebase Admin SDK
-if (admin.apps.length === 0) {
+if (!admin.apps.length) {
   admin.initializeApp();
 }
 
@@ -22,9 +30,9 @@ let transporterInstance: nodemailer.Transporter | undefined;
 let smtpDirectConfigCache: any | undefined;
 
 /**
- * Retrieves the SMTP configuration directly from environment variables.
- * It fetches the configuration on the first call and caches it.
- * @return {any | undefined} The SMTP configuration object 
+ * Retrieves the SMTP configuration directly from environment variables. It
+ * fetches the configuration on the first call and caches it.
+ * @return {any | undefined} The SMTP configuration object
  * ({host, port, user, pass, secure}), or undefined if not fully configured.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,7 +66,7 @@ function getSmtpConfig(): any | undefined {
   } else {
     console.error(
       "SMTP configuration error: One or more required environment variables " +
-      "(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) are missing or empty."
+        "(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) are missing or empty."
     );
     if (!host) console.error("SMTP_HOST is missing or empty.");
     if (!portStr) console.error("SMTP_PORT is missing or empty.");
@@ -103,8 +111,7 @@ async function getTransporter():
       });
       console.log(
         "Nodemailer transporter configured on demand."
-      );
-      return transporterInstance;
+      ); return transporterInstance;
     } catch (error) {
       console.error(
         "Failed to create Nodemailer transporter:",
@@ -115,7 +122,8 @@ async function getTransporter():
   } else {
     console.error(
       "SMTP configuration (host, port, user, pass) " +
-      "is not fully set from environment variables. Cannot initialize transporter."
+        "is not fully set from environment variables. Cannot initialize " +
+        "transporter."
     );
     return undefined;
   }
@@ -142,11 +150,11 @@ interface MessageData {
 // --- Email for User Approval ---
 export const onUserApproved = onDocumentUpdated(
   "users/{userId}",
-  async (
-    event: FirestoreEvent<
+  async (event: FirestoreEvent<
       Change<QueryDocumentSnapshot> | undefined,
-      { userId: string }
-    >
+      {
+ userId: string
+} >
   ) => {
     const transporter = await getTransporter();
     if (!transporter) {
@@ -172,8 +180,9 @@ export const onUserApproved = onDocumentUpdated(
 
     // Check if the status changed to 'approved' for a coach, or isApproved became true
     // Adapt this logic based on your exact approval mechanism
-    const justApproved = (after?.status === "approved" && before?.status !== "approved") ||
-                         (after?.isApproved === true && before?.isApproved !== true);
+    const justApproved =
+      (after?.status === "approved" && before?.status !== "approved") ||
+      (after?.isApproved === true && before?.isApproved !== true);
 
     if (
       justApproved &&
@@ -197,10 +206,7 @@ export const onUserApproved = onDocumentUpdated(
       };
 
       try {
-        console.log(
-          "Sending approval email to " +
-          userEmail + " for user " + userId
-        );
+        console.log("Sending approval email to " + userEmail + " for user " + userId);
         await transporter.sendMail(msg);
         console.log(
           "Approval email sent to:",
@@ -218,17 +224,19 @@ export const onUserApproved = onDocumentUpdated(
           const errWithResponse = error as {
             response?: { body?: unknown }
           };
-          if (errWithResponse.response) {
-            console.error(
-              "Nodemailer error response:",
-              errWithResponse.response.body
+          if (errWithResponse.response) { console.error(
+            "Nodemailer error response:",
+            errWithResponse.response.body
             );
           }
         }
       }
     } else {
       if (!justApproved) {
-         // console.log(`User ${userId}: Approval status unchanged or not an approval event. Before: ${JSON.stringify(before)}, After: ${JSON.stringify(after)}`);
+        /*
+ console.log(`User ${userId}: Approval status unchanged or not an approval
+ event. Before: ${JSON.stringify(before)}, After: ${JSON.stringify(after)}`);
+ */
       }
       if (!after?.email) {
         console.log(
@@ -245,14 +253,55 @@ export const onUserApproved = onDocumentUpdated(
   }
 );
 
+/**
+ * Firebase Authentication Blocking Function to prevent signup of suspended users.
+ */
+export const blockSuspendedUsersOnSignup = beforeUserCreated(async (event: AuthBlockingEvent) => {
+  // event.data can be undefined, so we must check for its existence.
+  if (!event.data) {
+    console.log("User data is undefined in beforeUserCreated event. Allowing creation by default.");
+    // Or throw an HttpsError if this case should block creation, e.g.:
+    // throw new HttpsError("invalid-argument", "User data is missing.");
+    return; // Or return a specific response if needed for blocking
+  }
+  const user: AuthUserRecord = event.data;
+  const email = user.email;
+
+  if (!email) {
+    // If no email on the user data, allow creation (you might want different logic here)
+    // This case might also indicate an issue if email is always expected.
+    console.log("User email is undefined in beforeUserCreated event data. Allowing creation.");
+    return;
+  }
+
+  try {
+    // Check if a user with this email exists and is suspended in Firestore
+    const usersRef = admin.firestore().collection("users");
+    const querySnapshot = await usersRef.where("email", "==", email).limit(1).get();
+
+    if (!querySnapshot.empty) {
+      const userData = querySnapshot.docs[0].data();
+      if (userData.status === "suspended") {
+        throw new HttpsError("permission-denied", "This account has been suspended.");
+      }
+    }
+  } catch (error) {
+    // Re-throw the error to block the creation
+    // If it's already an HttpsError from the new import, it's fine.
+    // If it's another error, it will also block creation, which is intended.
+    throw error;
+  }
+});
+
+
 // --- Email for New Message ---
 export const onNewMessage = onDocumentCreated(
   "messages/{messageId}",
-  async (
-    event: FirestoreEvent<
+  async (event: FirestoreEvent<
       QueryDocumentSnapshot | undefined,
-      { messageId: string }
-    >
+      {
+ messageId: string
+} >
   ) => {
     const transporter = await getTransporter();
     if (!transporter) {
@@ -284,16 +333,10 @@ export const onNewMessage = onDocumentCreated(
     const senderName = messageData.senderName || "Someone";
 
     const messageTextPreview =
-      messageData.text ?
-        (messageData.text.length > 100 ? messageData.text.substring(0, 97) + "..." : messageData.text) :
-        "a new message.";
+      messageData.text ? (messageData.text.length > 100 ? messageData.text.substring(0, 97) + "..." : messageData.text) : "a new message.";
 
-    if (!recipientId) {
-      console.error(
-        "No recipientId found for message " + messageId
-      );
-      return null;
-    }
+    if (!recipientId) { console.error("No recipientId found for message " + messageId); return null; }
+
 
     const currentSmtpConfig = getSmtpConfig(); // getSmtpConfig now returns the direct config object
 
@@ -318,9 +361,7 @@ export const onNewMessage = onDocumentCreated(
         );
         return null;
       }
-      
       const recipientData = userDoc.data() as UserData | undefined;
-
       if (!recipientData || !recipientData.email) {
         console.error(
           "No email found for recipient user " + recipientId +
@@ -331,7 +372,6 @@ export const onNewMessage = onDocumentCreated(
 
       const recipientEmail = recipientData.email;
       const recipientName = recipientData.displayName || "User";
-
 
       const msg = {
         to: recipientEmail,
@@ -349,11 +389,7 @@ export const onNewMessage = onDocumentCreated(
         `,
       };
 
-      console.log(
-        "Sending new message notification to " +
-        recipientEmail +
-        " for message " + messageId
-      );
+      console.log("Sending new message notification to " + recipientEmail + " for message " + messageId);
       await transporter.sendMail(msg);
       console.log(
         "New message email sent to " + recipientEmail
@@ -370,8 +406,7 @@ export const onNewMessage = onDocumentCreated(
         const errWithResponse = error as {
           response?: { body?: unknown }
         };
-        if (errWithResponse.response) {
-          console.error(
+          if (errWithResponse.response) { console.error(
             "Nodemailer error response:",
             errWithResponse.response.body
           );

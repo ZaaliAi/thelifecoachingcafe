@@ -60,10 +60,10 @@ export default function AdminMessageLogsPage() {
 
           // Determine participants - this assumes sender/recipient names are consistent across a thread
           // or picks from the last message. Robustly, you might get user details from a user store.
-          let p1Id = lastMessage.senderId;
-          let p1Name = lastMessage.senderName || 'Unknown User';
-          let p2Id = lastMessage.recipientId;
-          let p2Name = lastMessage.recipientName || 'Unknown User';
+          const p1Id = lastMessage.senderId;
+          const p1Name = lastMessage.senderName || 'Unknown User';
+          const p2Id = lastMessage.recipientId;
+          const p2Name = lastMessage.recipientName || 'Unknown User';
           
           // Normalize to ensure consistent participant order if needed, though for display it might not matter
           // For simplicity, we'll use sender/recipient from the last message as P1/P2

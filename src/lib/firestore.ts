@@ -188,6 +188,22 @@ export async function getAllUserProfilesForAdmin(): Promise<FirestoreUserProfile
   });
 }
 
+export async function suspendUserAccount(userId: string): Promise<void> {
+  if (!userId) {
+    throw new Error("User ID is required to suspend account.");
+  }
+  const userDocRef = doc(db, "users", userId);
+  await updateDoc(userDocRef, { status: 'suspended' });
+}
+
+export async function unsuspendUserAccount(userId: string): Promise<void> {
+  if (!userId) {
+    throw new Error("User ID is required to unsuspend account.");
+  }
+  const userDocRef = doc(db, "users", userId);
+  await updateDoc(userDocRef, { status: 'active' });
+}
+
 // --- Coach Fetching Functions ---
 export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   const q = query(
