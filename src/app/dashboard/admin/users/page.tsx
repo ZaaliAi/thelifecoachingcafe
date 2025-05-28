@@ -21,6 +21,7 @@ interface AdminUserView {
   createdAt: string; // Assuming createdAt is a string, adjust if it's a Date or Timestamp
   // Add other relevant user fields you want to include in the CSV
   name?: string; // Example: If you have a name field
+  role?: string; // Added role field
 }
 
 // Helper function to format data for CSV, handling commas and quotes
@@ -39,7 +40,7 @@ const escapeCsvValue = (value: any): string => {
 
 // Function to generate and download the CSV
 const handleDownloadCSV = (users: AdminUserView[]) => {
-  const headers = ['ID', 'Email', 'Status', 'Created At', 'Name']; // Define your headers
+  const headers = ['ID', 'Email', 'Status', 'Created At', 'Name', 'Role']; // Added Role header
 
   // Create the header row
   const headerRow = headers.map(escapeCsvValue).join(',');
@@ -53,6 +54,7 @@ const handleDownloadCSV = (users: AdminUserView[]) => {
       // Format the createdAt date for the CSV
       format(new Date(user.createdAt), 'yyyy-MM-dd'),
       user.name || '', // Include other fields, use '' for null/undefined
+      user.role || '', // Include role data
       // Add other user fields here corresponding to the headers
     ];
     return rowData.map(escapeCsvValue).join(',');
@@ -87,6 +89,8 @@ const AdminUsersPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSuspending, setIsSuspending] = useState(false); // State to track if a suspension is in progress
+  // You might want a separate state for suspending/deleting individual users if needed
+  // const [suspendingUserId, setSuspendingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -113,6 +117,7 @@ const AdminUsersPage = () => {
   const handleUnsuspend = async (userId: string) => {
     setIsSuspending(true); // Indicate suspension is in progress
     try {
+      // This is where you would call your backend unsuspend function
       await unsuspendUserAccount(userId);
       // Update the user's status in the local state
       setUsers(prevUsers =>
@@ -136,11 +141,38 @@ const AdminUsersPage = () => {
     }
   };
 
-  // You would implement handleSuspend and handleDelete similarly,
-  // likely using AlertDialogs for confirmation and calling Firestore functions.
-  // Example placeholders:
-  // const handleSuspend = async (userId: string) => { ... };
-  // const handleDelete = async (userId: string) => { ... };
+  // Updated handleSuspend function - **REPLACE WITH YOUR ACTUAL BACKEND LOGIC CALL**
+  const handleSuspend = async (userId: string) => {
+      console.log("Attempting to suspend user in frontend state:", userId); // Keep for initial testing if desired
+      // *** REPLACE THIS SECTION WITH YOUR ACTUAL BACKEND SUSPEND FUNCTION CALL ***
+      // Once your backend call is successful, uncomment the state update below
+      // try {
+      //   await yourSuspendBackendFunction(userId); // Call your backend function here
+         setUsers(prevUsers =>
+           prevUsers.map(user =>
+             user.id === userId ? { ...user, status: 'suspended' } : user
+           )
+         );
+         toast({ title: "Success", description: "User suspended successfully (frontend state updated).", variant: "default" }); // Indicate frontend update
+      // } catch (error) {
+      //   console.error("Error suspending user:", error);
+      //   toast({ title: "Error", description: "Failed to suspend user.", variant: "destructive" });
+      // }
+  };
+
+    // Placeholder function for handling delete - REPLACE WITH YOUR ACTUAL LOGIC
+    const handleDelete = async (userId: string) => {
+        console.log("Attempting to delete user:", userId);
+        // *** REPLACE THIS WITH YOUR ACTUAL BACKEND DELETE FUNCTION CALL ***
+        // try {
+        //   await yourDeleteBackendFunction(userId);
+        //   setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+        //   toast({ title: "Success", description: "User deleted successfully." });
+        // } catch (error) {
+        //   console.error("Error deleting user:", error);
+        //   toast({ title: "Error", description: "Failed to delete user.", variant: "destructive" });
+        // }
+    };
 
 
   const filteredUsers = users.filter(user =>
@@ -199,6 +231,7 @@ const AdminUsersPage = () => {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
+                   <TableHead>Role</TableHead> {/* Added Role TableHead */}
                   <TableHead>Created At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -218,6 +251,7 @@ const AdminUsersPage = () => {
                         {user.status}
                       </Badge>
                     </TableCell>
+                    <TableCell>{user.role || 'N/A'}</TableCell> {/* Display user role */}
                     {/* Formatted Created At Date */}
                     <TableCell>{format(new Date(user.createdAt), 'yyyy-MM-dd')}</TableCell>
                     <TableCell className="text-right">
@@ -244,17 +278,56 @@ const AdminUsersPage = () => {
                         </AlertDialog>
                       )}
 
-                      {/* Suspend Button (Example - Uncomment and implement if needed) */}
+                      {/* Suspend Button */}
                       {user.status !== 'suspended' && (
-                        // You'll need a similar AlertDialog and a handleSuspend function
-                         <Button variant="ghost" size="sm">
-                            <ShieldAlert className="mr-2 h-4 w-4" /> Suspend
-                          </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                             {/* You might want to add a loading state for suspension as well */}
+                            <Button variant="ghost" size="sm" disabled={isSuspending /* || isSuspendingSpecificUser(user.id) */}>
+                              {/* Add a loader here if you implement a loading state */}
+                              <ShieldAlert className="mr-2 h-4 w-4" /> Suspend
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action will suspend the user&apos;s account, preventing them from logging in.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                               {/* Connect to your actual suspend function */}
+                               {/* This onClick now calls the handleSuspend function which updates frontend state */}
+                              <AlertDialogAction onClick={() => handleSuspend(user.id)}>Suspend</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
 
                        {/* Delete Button (Example - Uncomment and implement if needed) */}
-                       {/* You'll need a similar AlertDialog and a handleDelete function */}
-                       <Button variant="ghost" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                       {/*
+                       <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                             <Button variant="ghost" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action will permanently delete the user account and all associated data. This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              {/* Connect to your actual delete function */}
+                       {/*       <AlertDialogAction onClick={() => handleDelete(user.id)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        */}
                     </TableCell>
                   </TableRow>
                 ))}
