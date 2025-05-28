@@ -1,20 +1,89 @@
+"use client"; // Added this directive
+
 import Image from 'next/image';
 import Link from 'next/link';
-import type { Coach } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import type { Coach, FirestoreUserProfile } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, MapPin, MessageSquare, Crown } from 'lucide-react';
+import { Briefcase, MapPin, MessageSquare, Crown, Heart, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/lib/auth';
+import { addCoachToFavorites, removeCoachFromFavorites, getUserProfile } from '@/lib/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 interface CoachCardProps {
   coach: Coach;
 }
 
 export function CoachCard({ coach }: CoachCardProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
+  const [checkingFavoriteStatus, setCheckingFavoriteStatus] = useState(true);
+
+  const fetchFavoriteStatus = useCallback(async () => {
+    if (user && user.id && coach && coach.id) {
+      setCheckingFavoriteStatus(true);
+      try {
+        const userProfile = await getUserProfile(user.id);
+        if (userProfile && userProfile.favoriteCoachIds?.includes(coach.id)) {
+          setIsFavorited(true);
+        } else {
+          setIsFavorited(false);
+        }
+      } catch (error) {
+        console.error("Error fetching favorite status:", error);
+      } finally {
+        setCheckingFavoriteStatus(false);
+      }
+    } else {
+      setIsFavorited(false);
+      setCheckingFavoriteStatus(false);
+    }
+  }, [user, coach.id]);
+
+  useEffect(() => {
+    fetchFavoriteStatus();
+  }, [fetchFavoriteStatus]);
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user || !user.id) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to favorite a coach.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!coach || !coach.id) return;
+
+    setIsLoadingFavorite(true);
+    try {
+      if (isFavorited) {
+        await removeCoachFromFavorites(user.id, coach.id);
+        setIsFavorited(false);
+        toast({ title: "Unfavorited", description: `${coach.name} removed from your favorites.` });
+      } else {
+        await addCoachToFavorites(user.id, coach.id);
+        setIsFavorited(true);
+        toast({ title: "Favorited!", description: `${coach.name} added to your favorites.` });
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      toast({ title: "Error", description: "Could not update favorites. Please try again.", variant: "destructive" });
+    } finally {
+      setIsLoadingFavorite(false);
+    }
+  };
+
   if (!coach || !coach.name) {
-    // Return null or a placeholder if coach data is missing
     return null;
   }
 
@@ -25,11 +94,36 @@ export function CoachCard({ coach }: CoachCardProps) {
         .slice(0, 2)
         .join('')
         .toUpperCase()
-    : 'CC'; // fallback initials
+    : 'CC';
 
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
-      <CardHeader className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-6">
+      <CardHeader className="relative flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-6">
+        {user && (
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 text-muted-foreground hover:text-primary disabled:opacity-50"
+                        onClick={handleToggleFavorite}
+                        disabled={isLoadingFavorite || checkingFavoriteStatus}
+                        aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                        {isLoadingFavorite || checkingFavoriteStatus ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                            <Heart className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'fill-none'}`} />
+                        )}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>{isFavorited ? 'Remove from favorites' : 'Add to favorites'}</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+        )}
         {coach.profileImageUrl && (
           <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
             <AvatarImage

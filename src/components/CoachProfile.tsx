@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, UserCircle, MapPin, Globe, Image as ImageIcon, Video, MessageSquare } from "lucide-react";
+import { Loader2, UserCircle, MapPin, Globe, Image as ImageIcon, Video, MessageSquare, Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NextImage from "next/image";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import type { Coach } from "@/types"; 
+import { useAuth } from '@/lib/auth';
+import { addCoachToFavorites, removeCoachFromFavorites, getUserProfile } from '@/lib/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Helper to get initials
 const getInitials = (name: string): string => {
@@ -43,18 +47,82 @@ function SocialButton({ url, label, icon, className }: { url: string; label: str
 
 interface CoachProfileClientProps {
   coachData: Coach | null;
-  coachId: string;
+  coachId: string; // coachId is passed from the server component
 }
 
 export default function CoachProfile({ coachData, coachId }: CoachProfileClientProps) {
   const [coach, setCoach] = useState<Coach | null>(coachData);
   const [loading, setLoading] = useState(!coachData); 
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
+  const [checkingFavoriteStatus, setCheckingFavoriteStatus] = useState(true);
+
+  // Use coachId directly as it's guaranteed to be the ID of the profile being viewed
+  const fetchFavoriteStatus = useCallback(async () => {
+    if (user && user.id && coachId) {
+      setCheckingFavoriteStatus(true);
+      try {
+        const userProfile = await getUserProfile(user.id);
+        if (userProfile && userProfile.favoriteCoachIds?.includes(coachId)) {
+          setIsFavorited(true);
+        } else {
+          setIsFavorited(false);
+        }
+      } catch (error) {
+        console.error("Error fetching favorite status:", error);
+      } finally {
+        setCheckingFavoriteStatus(false);
+      }
+    } else {
+      setIsFavorited(false);
+      setCheckingFavoriteStatus(false);
+    }
+  }, [user, coachId]);
+
+  useEffect(() => {
+    fetchFavoriteStatus();
+  }, [fetchFavoriteStatus]);
+
+  const handleToggleFavorite = async () => {
+    if (!user || !user.id) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to favorite a coach.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!coachId) return;
+
+    setIsLoadingFavorite(true);
+    try {
+      const currentCoachName = coach?.name || "this coach"; // Fallback name for toast
+      if (isFavorited) {
+        await removeCoachFromFavorites(user.id, coachId);
+        setIsFavorited(false);
+        toast({ title: "Unfavorited", description: `${currentCoachName} removed from your favorites.` });
+      } else {
+        await addCoachToFavorites(user.id, coachId);
+        setIsFavorited(true);
+        toast({ title: "Favorited!", description: `${currentCoachName} added to your favorites.` });
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      toast({ title: "Error", description: "Could not update favorites. Please try again.", variant: "destructive" });
+    } finally {
+      setIsLoadingFavorite(false);
+    }
+  };
 
   useEffect(() => {
     if (coachData) {
       setCoach(coachData);
       setLoading(false);
     }
+    // If coachData is not initially provided, you might want to fetch it using coachId
+    // This depends on whether the server component always successfully provides coachData
   }, [coachData]);
 
 
@@ -112,10 +180,9 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                     />
                   </div>
                 ) : (
-                  // Display initials if no image
                   <div 
                     className="rounded-full shadow-lg border-4 border-primary bg-muted flex items-center justify-center w-32 h-32 text-primary select-none"
-                    title={coach.name} // Tooltip with full name
+                    title={coach.name}
                   >
                     <span className="text-4xl font-semibold">{coachInitials}</span>
                   </div>
@@ -133,7 +200,6 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                     className="object-contain max-h-[calc(100vh-80px)] max-w-[calc(100vw-80px)]"
                  />
                ) : (
-                  // Display initials in dialog as well if no image
                   <div className="w-64 h-64 bg-muted flex items-center justify-center text-primary select-none">
                      <span className="text-7xl font-semibold">{coachInitials}</span>
                   </div>
@@ -165,7 +231,8 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
               <MapPin className="h-5 w-5" /> {coach.location}
             </div>
           )}
-          <div className="mt-5 mb-2 flex flex-wrap gap-3 justify-center">
+          {/* Action Buttons Section including Favorite Button */}
+          <div className="mt-5 mb-2 flex flex-wrap gap-3 justify-center items-center">
             {coachId && (
               <Button asChild className="flex items-center gap-2 px-6 py-2 rounded bg-green-600 text-white font-semibold hover:bg-green-700 transition shadow">
                 <Link href={`/messages/new?coachId=${coachId}`}>
@@ -182,6 +249,32 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                 icon={<Video className="h-5 w-5" />}
                 className="bg-red-600 hover:bg-red-700 text-white font-semibold"
               />
+            )}
+            {/* Favorite Button */} 
+            {user && coachId && (
+                 <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-primary disabled:opacity-50 p-2 h-auto rounded-md shadow hover:shadow-md"
+                                onClick={handleToggleFavorite}
+                                disabled={isLoadingFavorite || checkingFavoriteStatus}
+                                aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                                {isLoadingFavorite || checkingFavoriteStatus ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    <Heart className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-500'}`} />
+                                )}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{isFavorited ? 'Unfavorite Coach' : 'Favorite Coach'}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             )}
           </div>
         </div>

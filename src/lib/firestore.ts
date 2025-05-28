@@ -1,7 +1,7 @@
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
   serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer,
-  Timestamp
+  Timestamp, arrayUnion, arrayRemove, documentId // Changed FieldPath to documentId import
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage } from '@/types';
@@ -129,28 +129,34 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
   const userSnap = await getDoc(userDocRef);
   const isCreating = !userSnap.exists();
   const dataToSet: { [key: string]: any } = { ...profileData };
+
   if (isCreating) {
     if (!dataToSet.email || !dataToSet.role || !dataToSet.name) throw new Error("Essential fields (name, email, role) missing for new user profile.");
     dataToSet.createdAt = serverTimestamp();
+    dataToSet.profileImageUrl = dataToSet.profileImageUrl ?? null;
+    dataToSet.enableNotifications = dataToSet.enableNotifications ?? true; // Default for new users
+    dataToSet.favoriteCoachIds = dataToSet.favoriteCoachIds ?? []; // Initialize favoriteCoachIds
+
     if (dataToSet.role === 'coach') {
       dataToSet.subscriptionTier = dataToSet.subscriptionTier ?? 'free';
       dataToSet.status = dataToSet.status ?? 'pending_approval';
       dataToSet.availability = dataToSet.availability ?? [];
       dataToSet.isFeaturedOnHomepage = dataToSet.isFeaturedOnHomepage ?? false;
     }
-    dataToSet.profileImageUrl = dataToSet.profileImageUrl ?? null;
   } else {
     dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? userSnap.data()?.profileImageUrl : (profileData.profileImageUrl ?? null);
     dataToSet.location = profileData.location === undefined ? userSnap.data()?.location : (profileData.location ?? null);
     dataToSet.websiteUrl = profileData.websiteUrl === undefined ? userSnap.data()?.websiteUrl : (profileData.websiteUrl ?? null);
     dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? userSnap.data()?.introVideoUrl : (profileData.introVideoUrl ?? null);
-    if (profileData.isFeaturedOnHomepage === undefined && userSnap.data()?.role === 'coach') {
-      dataToSet.isFeaturedOnHomepage = userSnap.data()?.isFeaturedOnHomepage ?? false;
+    
+    if (profileData.role === 'coach') { 
+        if (profileData.isFeaturedOnHomepage === undefined) {
+            dataToSet.isFeaturedOnHomepage = userSnap.data()?.isFeaturedOnHomepage ?? false;
+        }
     }
   }
   dataToSet.updatedAt = serverTimestamp();
 
-  // Remove all undefined fields before sending to Firestore
   const cleanData = pruneUndefined(dataToSet);
 
   await setDoc(userDocRef, cleanData, { merge: !isCreating });
@@ -166,7 +172,9 @@ export async function getUserProfile(userId: string): Promise<FirestoreUserProfi
       id: userSnap.id,
       ...data,
       availability: data.availability || [],
-      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined
+      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined,
+      favoriteCoachIds: data.favoriteCoachIds || [], 
+      enableNotifications: data.enableNotifications === undefined ? true : data.enableNotifications,
     } as FirestoreUserProfile;
   }
   return null;
@@ -183,7 +191,9 @@ export async function getAllUserProfilesForAdmin(): Promise<FirestoreUserProfile
       ...data,
       createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
       updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
-      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined
+      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined,
+      favoriteCoachIds: data.favoriteCoachIds || [],
+      enableNotifications: data.enableNotifications === undefined ? true : data.enableNotifications,
     } as FirestoreUserProfile;
   });
 }
@@ -499,7 +509,7 @@ export async function getPendingBlogPostCount(): Promise<number> {
 
 export async function getActiveSubscriptionsCount(): Promise<number> {
   const usersRef = collection(db, "users");
-  const q = query(usersRef, where("role", "==", "coach"), where("subscriptionTier", "===", "premium"));
+  const q = query(usersRef, where("role", "==", "coach"), where("subscriptionTier", "===", "premium")); // Corrected to triple equals for "premium"
   const snapshot = await getCountFromServer(q);
   return snapshot.data().count;
 }
@@ -522,3 +532,59 @@ export async function getCoachBlogStats(coachId: string): Promise<{ pending: num
   return { pending: pendingSnapshot.data().count, published: publishedSnapshot.data().count };
 }
 
+// --- Favorite Coach Functions ---
+export async function addCoachToFavorites(userId: string, coachId: string): Promise<void> {
+  if (!userId || !coachId) throw new Error("User ID and Coach ID are required.");
+  const userDocRef = doc(db, "users", userId);
+  // Optional: Check if coach exists and is approved before adding
+  // const coachProfile = await getCoachById(coachId);
+  // if (!coachProfile || coachProfile.status !== 'approved') {
+  //   console.warn(`Attempted to favorite a non-existent or non-approved coach (ID: ${coachId}).`);
+  //   return; // Or throw an error
+  // }
+  await updateDoc(userDocRef, {
+    favoriteCoachIds: arrayUnion(coachId),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function removeCoachFromFavorites(userId: string, coachId: string): Promise<void> {
+  if (!userId || !coachId) throw new Error("User ID and Coach ID are required.");
+  const userDocRef = doc(db, "users", userId);
+  await updateDoc(userDocRef, {
+    favoriteCoachIds: arrayRemove(coachId),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function getFavoriteCoaches(userId: string): Promise<Coach[]> {
+  if (!userId) return [];
+  const userProfile = await getUserProfile(userId);
+
+  if (!userProfile || !Array.isArray(userProfile.favoriteCoachIds) || userProfile.favoriteCoachIds.length === 0) {
+    return [];
+  }
+
+  const favoriteCoachIds = userProfile.favoriteCoachIds;
+  const coaches: Coach[] = [];
+  const BATCH_SIZE = 30; 
+
+  for (let i = 0; i < favoriteCoachIds.length; i += BATCH_SIZE) {
+    const batchIds = favoriteCoachIds.slice(i, i + BATCH_SIZE);
+    if (batchIds.length > 0) {
+      const q = query(
+        collection(db, "users"),
+        where(documentId(), "in", batchIds), // Changed to use documentId() directly
+        where("role", "==", "coach"),
+        where("status", "==", "approved") 
+      );
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(docSnapshot => {
+        if (docSnapshot.exists()) {
+          coaches.push(mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
+        }
+      });
+    }
+  }
+  return coaches;
+}
