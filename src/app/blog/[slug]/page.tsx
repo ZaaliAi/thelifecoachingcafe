@@ -8,11 +8,24 @@ import { format } from 'date-fns';
 import type { BlogPost, Coach } from '@/types';
 import { notFound } from 'next/navigation';
 import { getFirestoreBlogPostBySlug, getAllPublishedBlogPostSlugs, getCoachById } from '@/lib/firestore';
-import ReactMarkdown from 'react-markdown'; // Added import
+import ReactMarkdown from 'react-markdown';
 
-async function getBlogPost(slug: string): Promise<BlogPost | undefined> {
+async function getBlogPost(slug: string, isPreview: boolean = false): Promise<BlogPost | undefined> {
   const post = await getFirestoreBlogPostBySlug(slug);
-  if (post && post.status !== 'published') return undefined;
+  if (!post) return undefined;
+
+  if (isPreview) {
+    // For preview, allow 'pending_approval' or 'published'.
+    // Add other statuses here if needed for preview (e.g., 'draft' if authors can preview their own drafts).
+    if (post.status === 'published' || post.status === 'pending_approval') {
+      return post;
+    }
+    // If it's a preview but the status isn't suitable for preview (e.g., 'archived', 'rejected'), don't show.
+    return undefined;
+  }
+
+  // Default behavior (not preview): only show published posts
+  if (post.status !== 'published') return undefined;
   return post;
 }
 
@@ -20,8 +33,9 @@ async function getAuthorDetails(authorId: string): Promise<Coach | null> {
   return getCoachById(authorId);
 }
 
-export default async function BlogPostPage({ params }: { params: { slug: string } }) {
-  const post = await getBlogPost(params.slug);
+export default async function BlogPostPage({ params, searchParams }: { params: { slug: string }, searchParams?: { [key: string]: string | string[] | undefined } }) {
+  const isPreview = searchParams?.preview === 'true';
+  const post = await getBlogPost(params.slug, isPreview);
 
   if (!post) {
     notFound();
@@ -76,7 +90,6 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
         </div>
       </header>
 
-      {/* Updated to use ReactMarkdown */}
       <div className="prose prose-lg dark:prose-invert max-w-none text-foreground/90 leading-relaxed">
         <ReactMarkdown>{post.content}</ReactMarkdown>
       </div>

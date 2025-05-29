@@ -12,9 +12,9 @@ import {
 import {
   beforeUserCreated,
   type AuthBlockingEvent,
-  type AuthUserRecord 
-} from "firebase-functions/v2/identity"; 
-import { HttpsError } from "firebase-functions/v2/https";
+  type AuthUserRecord
+} from "firebase-functions/v2/identity";
+import { HttpsError, onCall } from "firebase-functions/v2/https"; // Added onCall here
 
 
 // Initialize Firebase Admin SDK
@@ -416,3 +416,93 @@ export const onNewMessage = onDocumentCreated(
     return null;
   }
 );
+
+// --- Suspend User Function ---
+export const suspendUser = onCall(async (request) => {
+  // Check if the user is authenticated.
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
+
+  // Authorization: Check if the caller has the 'admin' custom claim.
+  if (request.auth.token.admin !== true) {
+    console.error("Unauthorized attempt to suspend user by:", request.auth.uid);
+    throw new HttpsError("permission-denied", "You do not have permission to suspend users.");
+  }
+
+  const userId = request.data.userId;
+  if (!userId || typeof userId !== 'string') {
+    throw new HttpsError("invalid-argument", "The function must be called with a valid 'userId' string argument.");
+  }
+
+  try {
+    // Disable the user in Firebase Authentication
+    await admin.auth().updateUser(userId, {
+      disabled: true,
+    });
+    console.log(`Successfully disabled Firebase Auth for user: ${userId}`);
+
+    // Update the user's status in Firestore
+    const userRef = admin.firestore().collection("users").doc(userId);
+    await userRef.update({
+      status: "suspended",
+      // You might want to add other fields, like suspendedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log(`Successfully updated Firestore status to 'suspended' for user: ${userId}`);
+
+    return { success: true, message: `User ${userId} has been suspended.` };
+  } catch (error) {
+    console.error(`Error suspending user ${userId}:`, error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError("internal", `An internal error occurred while suspending user ${userId}.`);
+  }
+});
+
+// --- Set Admin Claim Function ---
+export const setAdminClaim = onCall(async (request) => {
+  // 1. Authentication: Ensure the caller is authenticated.
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
+
+  // 2. Authorization: CRITICAL - Ensure the CALLER is an admin.
+  // This function should only be callable by users who already have the admin custom claim.
+  if (request.auth.token.admin !== true) {
+    console.error("Unauthorized attempt to set admin claim by user:", request.auth.uid);
+    throw new HttpsError("permission-denied", "You do not have permission to set admin claims.");
+  }
+
+  const email = request.data.email;
+  if (!email || typeof email !== 'string') {
+    throw new HttpsError("invalid-argument", "The function must be called with a valid 'email' string argument (the user to make admin).");
+  }
+
+  try {
+    // Get the user to make admin by their email
+    const userToMakeAdmin = await admin.auth().getUserByEmail(email);
+    if (!userToMakeAdmin) {
+      throw new HttpsError("not-found", `User with email ${email} not found.`);
+    }
+
+    // Set the custom claim 'admin' to true for the target user
+    await admin.auth().setCustomUserClaims(userToMakeAdmin.uid, { admin: true });
+    console.log(`Successfully set admin claim for user: ${userToMakeAdmin.uid} (${email})`);
+
+    // Optional: You might want to update a 'role' field in Firestore as well
+    // await admin.firestore().collection("users").doc(userToMakeAdmin.uid).update({ role: "admin" });
+
+    return { success: true, message: `User ${email} has been made an admin.` };
+  } catch (error) {
+    console.error(`Error setting admin claim for email ${email}:`, error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    // Check for specific Firebase Auth errors if needed
+    if ((error as any).code === 'auth/user-not-found') {
+        throw new HttpsError("not-found", `User with email ${email} not found.`);
+    }
+    throw new HttpsError("internal", `An internal error occurred while setting admin claim for ${email}.`);
+  }
+});
