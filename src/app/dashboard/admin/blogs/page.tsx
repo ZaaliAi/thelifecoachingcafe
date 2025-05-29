@@ -64,7 +64,7 @@ export default function AdminManageBlogsPage() {
     try {
       await updateBlogPostStatus(postId, newStatus);
       toast({
-        title: `Blog Post ${newStatus.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}`,
+        title: `Blog Post ${newStatus.replace('_', ' ').replace(/ \w/g, l => l.toUpperCase())}`,
         description: `Blog post "${postToUpdate.title}" has been updated.`,
       });
     } catch (err) {
@@ -150,7 +150,7 @@ export default function AdminManageBlogsPage() {
                 <TableRow key={post.id}>
                   <TableCell className="font-medium max-w-xs truncate">
                     <Link
-                      href={`/blog/${post.slug}`}
+                      href={post.status === 'published' ? `/blog/${post.slug}` : `/dashboard/admin/blogs/preview/${post.slug}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="hover:underline"
@@ -164,13 +164,13 @@ export default function AdminManageBlogsPage() {
                     <Badge 
                       variant={post.status === 'published' ? 'default' : post.status === 'pending_approval' ? 'secondary' : (post.status === 'draft' ? 'outline' : 'destructive')}
                     >
-                      {post.status.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}
+                      {post.status.replace('_', ' ').replace(/ \w/g, l => l.toUpperCase())}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" asChild title="Preview Post">
                       <Link
-                        href={`/blog/${post.slug}`}
+                        href={post.status === 'published' ? `/blog/${post.slug}` : `/dashboard/admin/blogs/preview/${post.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
