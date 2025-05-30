@@ -2,12 +2,23 @@
 const admin = require('firebase-admin');
 
 // --- CONFIGURATION ---
-// IMPORTANT: Replace this path with the actual path to your service account key JSON file
-const serviceAccount = require('./coachconnect-897af-adminsdk.json.json'); // <--- FILENAME UPDATED
+// IMPORTANT: Path to your service account key JSON file.
+// Set the ADMIN_SDK_PATH environment variable, or update the fallback path.
+const serviceAccountPath = process.env.ADMIN_SDK_PATH || './replace-with-path-to-your-new-key.json';
 
 // IMPORTANT: Replace this with the email address or UID of the user you want to make an admin
 const userIdentifier = 'hello@thelifecoachingcafe.com'; // <--- Email UPDATED
 // --- END CONFIGURATION ---
+
+let serviceAccount;
+try {
+  serviceAccount = require(serviceAccountPath);
+} catch (error) {
+  console.error(`Failed to load service account key from path: ${serviceAccountPath}`);
+  console.error('Please ensure the path is correct or the ADMIN_SDK_PATH environment variable is set.');
+  console.error(error);
+  process.exit(1);
+}
 
 // Initialize the Firebase Admin SDK
 try {
@@ -59,7 +70,7 @@ async function setAdmin() {
     console.error('Error setting custom claim:', error);
     if (error.code === 'auth/user-not-found') {
         console.error(`Could not find user with identifier: ${userIdentifier}. Please ensure the email or UID is correct and the user exists in Firebase Authentication.`);
-    } else if (error.message.includes("serviceAccount")) {
+    } else if (error.message.includes("serviceAccount") || (error.message.includes("Failed to load service account key"))) { // Adjusted error check
         console.error("Likely an issue with your service account key. Please ensure the path is correct and the JSON file is valid.");
     }
   } finally {
