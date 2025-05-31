@@ -436,9 +436,9 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                 </div>
                 {errors.profileImageUrl && <p className="text-sm text-destructive mt-1">{errors.profileImageUrl.message}</p>}
                 <p className="text-xs text-muted-foreground text-center mt-2">
-                    A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.
+                    <span>A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.</span>
                     {!planId && (
-                        <span> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
+                        <span className="ml-1"> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
                     )}
                 </p>
             </div>
@@ -473,7 +473,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
             </CardTitle>
-            <CardDescription className="mt-1">{'Let clients know when you're available. You can update your availability anytime in Coach dashboard'}</CardDescription>
+            <CardDescription className="mt-1">{'Let clients know when you&apos;re available. You can update your availability anytime in Coach dashboard'}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 grid gap-6">
             <div className="space-y-4">
