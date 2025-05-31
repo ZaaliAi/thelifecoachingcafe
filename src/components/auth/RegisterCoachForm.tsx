@@ -473,10 +473,9 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
             </CardTitle>
-            <CardDescription className="mt-1">{'Let clients know when you're available. You can update your availability anytime in Coach dashboard'}</CardDescription>
+            {/* <CardDescription className="mt-1">{'Let clients know when you\'re available. You can update your availability anytime in Coach dashboard'}</CardDescription> */}
           </CardHeader>
           <CardContent className="p-6 grid gap-6">
-            {/*
             <div className="space-y-4">
               {availabilityFields.map((field, index) => (
                 <div key={field.id} className="flex items-end gap-3 p-3 border rounded-md bg-muted/20">
@@ -522,7 +521,6 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             {errors.availability && typeof errors.availability === 'object' && 'message' in errors.availability && (
                 <p className="text-sm text-destructive mt-2">{errors.availability.message}</p>
             )}
-            */}
           </CardContent>
         </Card>
 
