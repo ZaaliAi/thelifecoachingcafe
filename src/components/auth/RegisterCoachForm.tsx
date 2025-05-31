@@ -1,32 +1,31 @@
-'''use client''';
+'use client';
 
 import { useState, useEffect, useCallback, type ChangeEvent, useRef } from 'react';
 import { useForm, Controller, type SubmitHandler, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, UserPlus, Lightbulb, X, Crown, CalendarDays, Sparkles, PlusCircle, Image as ImageIcon, UploadCloud, Trash2, KeyRound } from 'lucide-react'; // Added KeyRound
+import { Loader2, UserPlus, Lightbulb, X, Crown, CalendarDays, Sparkles, PlusCircle, Image as ImageIcon, UploadCloud, Trash2, KeyRound, LinkIcon, Award, MapPin, Video, Star } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import { debounce } from 'lodash';
-import Link from 'next/link';
 import NextImage from 'next/image';
-import { useAuth } from '@/lib/auth'; // Using the new auth hook
+import Link from 'next/link';
+import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { uploadProfileImage } from '@/services/imageUpload';
 import type { FirestoreUserProfile } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { cn } from "@/lib/utils";
-import getStripe from '@/lib/stripe'; // For Stripe redirect
-import { getFunctions, httpsCallable, Functions } from 'firebase/functions'; // For calling checkout session
+import getStripe from '@/lib/stripe';
+import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
 
 interface RegisterCoachFormProps {
-  planId?: string | null; // Accept planId
+  planId?: string | null;
 }
 
 const availabilitySlotSchema = z.object({
@@ -42,25 +41,24 @@ const coachRegistrationSchema = z.object({
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.').optional().or(z.literal('')),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select or add at least one specialty.'),
   keywords: z.string().optional(),
-  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   certifications: z.string().optional(),
   location: z.string().optional(),
+  profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
   socialLinkPlatform: z.string().optional(),
   socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
-  availability: z.array(availabilitySlotSchema).optional().default([]),
-  // status will be set by registerWithEmailAndPassword
+  availability: z.array(availabilitySlotSchema).min(1, "Please add at least one availability slot.").optional().default([]),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ["confirmPassword"], 
+  path: ["confirmPassword"],
 });
 
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   const router = useRouter();
-  const { registerWithEmailAndPassword, loading: authLoading } = useAuth(); // Using the new auth hook
+  const { registerWithEmailAndPassword, loading: authLoading } = useAuth();
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
   const [customSpecialtyInput, setCustomSpecialtyInput] = useState('');
@@ -77,7 +75,6 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     watch,
     setValue,
     getValues,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm<CoachRegistrationFormData>({
     resolver: zodResolver(coachRegistrationSchema),
@@ -105,9 +102,6 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     name: "availability",
   });
 
-  // useEffect to reset form if user logs in/out or query params change, can be simplified if form is only for new reg
-  // For now, removing the user-based reset as this form will handle initial registration
-
   const bioValue = watch('bio');
   const currentSelectedSpecialties = watch('selectedSpecialties') || [];
 
@@ -116,7 +110,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     if (file) {
       setSelectedFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
-      setValue('profileImageUrl', '', { shouldValidate: false }); // Clear any manually entered URL
+      setValue('profileImageUrl', '', { shouldValidate: false });
     }
   };
 
@@ -150,7 +144,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     if (bioValue && bioValue.length >= 50) {
       debouncedFetchSuggestions(bioValue);
     } else {
-      setAiSuggestions(null); // Clear suggestions if bio is too short
+      setAiSuggestions(null);
     }
   }, [bioValue, debouncedFetchSuggestions]);
 
@@ -159,26 +153,17 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     let createdUserId: string | null = null;
 
     try {
-      // Step 1: Register Firebase Auth user and create initial Firestore document
-      // The registerWithEmailAndPassword function will handle creating the user in Auth 
-      // and their basic profile in Firestore with role 'coach' and status 'pending_approval'
-      
-      // Prepare additional data for Firestore, excluding password fields
       const { password, confirmPassword, ...profileDetails } = data;
-      
       let additionalDataForAuth: Partial<FirestoreUserProfile> = {
         ...profileDetails,
-        planId: planId || undefined, // Pass planId if present
-        // ensure all fields expected by FirestoreUserProfile are at least initialized if not in form
-        photoURL: null, // Will be updated after image upload
-        specialties: data.selectedSpecialties, // Ensure this is correctly named as in FirestoreUserProfile
-        // any other fields...
+        planId: planId || undefined,
+        photoURL: null,
+        specialties: data.selectedSpecialties,
+        availability: data.availability,
       };
 
       if (selectedFile) {
         toast({ title: 'Uploading profile image...', description: 'Please wait.' });
-        // Temporarily store other data, upload image, then update profile
-        // For now, let's assume image upload happens after user ID is known
       }
       
       const registeredUser = await registerWithEmailAndPassword(
@@ -194,24 +179,9 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       }
       createdUserId = registeredUser.uid;
 
-      // Step 2: Upload profile image if selected, now that we have the userId
       if (selectedFile && createdUserId) {
         finalProfileImageUrl = await uploadProfileImage(selectedFile, createdUserId, null);
-        // Update Firestore with the new profile image URL
-        const functions = getFunctions(firebaseApp);
-        const setUserProfileCallable = httpsCallable(functions, 'setUserProfile'); // Assuming you have a callable for this
-                                                                              // OR directly update with admin SDK from a function, or client SDK here if rules allow.
-                                                                              // For simplicity, let's assume a callable or direct update can be made.
-                                                                              // This part needs careful implementation based on your Firestore rules and setup.
-        // For now, we will rely on the initial setDoc in registerWithEmailAndPassword to include most data,
-        // and image URL would be an update. Or, modify registerWithEmailAndPassword to handle this.
-        // To keep it simpler for this step, we'll assume the image URL can be updated later or handled within register flow.
-        // The `additionalDataForAuth` already passed profile details.
-        // If image upload is critical path before Stripe, `registerWithEmailAndPassword` needs to return UID first,
-        // then upload, then update Firestore, then proceed to Stripe.
-        // For now, we will just proceed, image can be added by user later if this is too complex for one flow.
-        console.log("Profile image URL to be set (if any):", finalProfileImageUrl);
-        // Ideally, update user profile here with the finalProfileImageUrl
+        console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
       }
       
       toast({
@@ -220,20 +190,19 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         variant: 'success',
       });
 
-      // Step 3: If planId is present, initiate Stripe checkout
       if (planId && createdUserId) {
         toast({ title: "Redirecting to subscription...", description: "Please wait." });
         const functionsInstance: Functions = getFunctions(firebaseApp);
         const createCheckoutSession = httpsCallable(functionsInstance, 'createCheckoutSessionCallable');
         
-        const successUrl = `${window.location.origin}/dashboard/coach/profile?subscription_success=true`; // Or a dedicated success page
+        const successUrl = `${window.location.origin}/dashboard/coach/profile?subscription_success=true`;
         const cancelUrl = `${window.location.origin}/pricing?subscription_cancelled=true`;
 
         const { data: checkoutData }: any = await createCheckoutSession({
           priceId: planId,
           successUrl: successUrl,
           cancelUrl: cancelUrl,
-          userId: createdUserId, // Pass the newly created user's ID
+          userId: createdUserId,
         });
 
         if (checkoutData.error) {
@@ -247,17 +216,13 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             if (stripeError) {
               throw new Error(stripeError.message || "Error redirecting to Stripe.");
             }
-            // If redirectToCheckout is successful, the user is navigated away, so no further action here.
-            return; // Stop execution as user is being redirected
+            return;
           }
           throw new Error("Stripe.js failed to load.");
         }
         throw new Error("No sessionId returned from createCheckoutSessionCallable.");
       }
-
-      // If no planId, or if Stripe redirect didn't happen (e.g. error before redirect)
-      router.push('/dashboard/coach/profile'); // Default redirect if no plan or post-Stripe (if Stripe fails before redirect)
-
+      router.push('/dashboard/coach/profile');
     } catch (error: any) {
       console.error('Error during coach registration process:', error);
       toast({
@@ -268,7 +233,6 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     }
   };
   
-  // ... (rest of the helper functions: addSuggestedKeyword, addSpecialty, etc. - unchanged for now)
   const addSuggestedKeyword = (keyword: string) => {
     const currentKeywords = getValues('keywords') || '';
     const keywordsArray = currentKeywords.split(',').map(k => k.trim()).filter(k => k);
@@ -320,7 +284,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         </div>
         <p className="mt-4 text-lg leading-6 text-muted-foreground max-w-xl mx-auto">
           Ready to inspire and guide others? Fill out your profile below to join our community of talented coaches.
-          {planId && <span className="block mt-2 font-semibold">You're signing up with a pre-selected plan!</span>}
+          {planId && <span className="block mt-2 font-semibold">You're signing up as a Premium User</span>}
         </p>
       </section>
 
@@ -355,20 +319,17 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             </div>
           </CardContent>
         </Card>
-
-        {/* Other cards for Coaching Profile, Availability, Premium Boosters remain the same for now */}
-        {/* We can decide if these should be filled out before or after payment for Option B */}
         
         <Card className="shadow-xl border-border/20 overflow-hidden">
           <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <Lightbulb className="mr-3 h-7 w-7" /> Coaching Profile
             </CardTitle>
-            <CardDescription className="mt-1">Showcase your expertise and unique approach. (You can refine this after registration)</CardDescription>
+            <CardDescription className="mt-1">Showcase your expertise and unique approach.</CardDescription>
           </CardHeader>
           <CardContent className="p-6 grid gap-6">
             <div className="space-y-2">
-              <Label htmlFor="bio" className="text-base font-medium">Your Bio (Optional for now)</Label>
+              <Label htmlFor="bio" className="text-base font-medium">Your Bio</Label>
               <Controller name="bio" control={control} render={({ field }) => (
                   <Textarea id="bio" placeholder="Share your coaching philosophy... (Min 50 characters for AI suggestions)" {...field} rows={6} className="text-base py-2.5" />
               )} />
@@ -410,47 +371,158 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               </div>
               {errors.selectedSpecialties && <p className="text-sm text-destructive mt-1">{errors.selectedSpecialties.message}</p>}
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="keywords" className="text-base font-medium">Keywords (Optional for now)</Label>
+              <Label htmlFor="keywords" className="text-base font-medium">Keywords</Label>
               <Controller name="keywords" control={control} render={({ field }) => <Input id="keywords" placeholder="e.g., career change, leadership (comma-separated)" {...field} className="text-base py-2.5" />} />
+              {errors.keywords && <p className="text-sm text-destructive mt-1">{errors.keywords.message}</p>}
             </div>
-             <div className="space-y-2">
-              <Label htmlFor="profileImageUpload" className="text-base font-medium">Profile Picture (Optional for now)</Label>
-               <div className="mt-1 flex flex-col items-center space-y-4">
-                {imagePreviewUrl ? (
-                  <div className="relative w-40 h-40 rounded-full overflow-hidden shadow-md">
-                    <NextImage src={imagePreviewUrl} alt="Profile Preview" layout="fill" objectFit="cover" />
-                  </div>
-                ) : (
-                  <div className="w-40 h-40 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                    <ImageIcon className="w-16 h-16" />
-                  </div>
-                )}
-                <div className="flex space-x-3">
-                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud className="mr-2 h-4 w-4" /> {selectedFile ? 'Change Image' : 'Upload Image'}
-                  </Button>
-                  <input 
-                    type="file" 
-                    id="profileImageUpload" 
-                    className="hidden" 
-                    accept="image/png, image/jpeg, image/jpg" 
-                    onChange={handleImageChange} 
-                    ref={fileInputRef}
-                  />
-                  {imagePreviewUrl && (
-                    <Button type="button" variant="ghost" size="icon" onClick={handleRemoveImage} aria-label="Remove image"> 
-                      <Trash2 className="h-5 w-5 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground text-center mt-2">Recommended: Square (1:1), JPG/PNG. Max 2MB.</p>
+
+            <div className="space-y-2">
+              <Label htmlFor="certifications" className="text-base font-medium flex items-center"><Award className="mr-2 h-5 w-5 text-primary/80" />Certifications</Label>
+              <Controller name="certifications" control={control} render={({ field }) => <Input id="certifications" placeholder="e.g., ICF Certified Coach, NBC-HWC" {...field} className="text-base py-2.5" />} />
+              {errors.certifications && <p className="text-sm text-destructive mt-1">{errors.certifications.message}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location" className="text-base font-medium flex items-center"><MapPin className="mr-2 h-5 w-5 text-primary/80" />Location</Label>
+              <Controller name="location" control={control} render={({ field }) => <Input id="location" placeholder="e.g., New York, USA or Remote" {...field} className="text-base py-2.5" />} />
+              {errors.location && <p className="text-sm text-destructive mt-1">{errors.location.message}</p>}
             </div>
           </CardContent>
         </Card>
 
-        {/* Availability and other premium boosters can be filled out after initial registration + payment */}
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary">
+              <Crown className="mr-3 h-7 w-7" /> Premium Profile Boosters
+            </CardTitle>
+            <CardDescription className="mt-1">Enhance your profile with these additional details.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-6">
+            <div className="space-y-2">
+                <div className="flex items-center">
+                    <Label htmlFor="profileImageUpload" className="text-base font-medium">Profile Picture</Label>
+                    <Badge variant="premium" className="ml-2"><Star className="mr-1 h-3 w-3" />Premium</Badge>
+                </div>
+                <div className="mt-1 flex flex-col items-center space-y-4">
+                    {imagePreviewUrl ? (
+                    <div className="relative w-40 h-40 rounded-full overflow-hidden shadow-md">
+                        <NextImage src={imagePreviewUrl} alt="Profile Preview" layout="fill" objectFit="cover" />
+                    </div>
+                    ) : (
+                    <div className="w-40 h-40 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                        <ImageIcon className="w-16 h-16" />
+                    </div>
+                    )}
+                    <div className="flex space-x-3">
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                        <UploadCloud className="mr-2 h-4 w-4" /> {selectedFile ? 'Change Image' : 'Upload Image'}
+                    </Button>
+                    <input 
+                        type="file" 
+                        id="profileImageUpload" 
+                        className="hidden" 
+                        accept="image/png, image/jpeg, image/jpg" 
+                        onChange={handleImageChange} 
+                        ref={fileInputRef}
+                    />
+                    {imagePreviewUrl && (
+                        <Button type="button" variant="ghost" size="icon" onClick={handleRemoveImage} aria-label="Remove image"> 
+                        <Trash2 className="h-5 w-5 text-destructive" />
+                        </Button>
+                    )}
+                    </div>
+                </div>
+                {errors.profileImageUrl && <p className="text-sm text-destructive mt-1">{errors.profileImageUrl.message}</p>}
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                    A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.
+                    {!planId && (
+                        <span> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
+                    )}
+                </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="websiteUrl" className="text-base font-medium flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-primary/80" />Website URL</Label>
+              <Controller name="websiteUrl" control={control} render={({ field }) => <Input id="websiteUrl" type="url" placeholder="https://yourwebsite.com" {...field} className="text-base py-2.5" />} />
+              {errors.websiteUrl && <p className="text-sm text-destructive mt-1">{errors.websiteUrl.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="introVideoUrl" className="text-base font-medium flex items-center"><Video className="mr-2 h-5 w-5 text-primary/80" />Intro Video URL (e.g., YouTube, Vimeo)</Label>
+              <Controller name="introVideoUrl" control={control} render={({ field }) => <Input id="introVideoUrl" type="url" placeholder="https://youtube.com/yourvideo" {...field} className="text-base py-2.5" />} />
+              {errors.introVideoUrl && <p className="text-sm text-destructive mt-1">{errors.introVideoUrl.message}</p>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="socialLinkPlatform" className="text-base font-medium">Social Media Platform</Label>
+                <Controller name="socialLinkPlatform" control={control} render={({ field }) => <Input id="socialLinkPlatform" placeholder="e.g., LinkedIn, Twitter" {...field} className="text-base py-2.5" />} />
+                {errors.socialLinkPlatform && <p className="text-sm text-destructive mt-1">{errors.socialLinkPlatform.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="socialLinkUrl" className="text-base font-medium">Social Media URL</Label>
+                <Controller name="socialLinkUrl" control={control} render={({ field }) => <Input id="socialLinkUrl" type="url" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" />} />
+                {errors.socialLinkUrl && <p className="text-sm text-destructive mt-1">{errors.socialLinkUrl.message}</p>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-xl border-border/20 overflow-hidden">
+          <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
+            <CardTitle className="flex items-center text-2xl font-semibold text-primary">
+              <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
+            </CardTitle>
+            <CardDescription className="mt-1">Let clients know when you're available. (You can adjust this later)</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 grid gap-6">
+            <div className="space-y-4">
+              {availabilityFields.map((field, index) => (
+                <div key={field.id} className="flex items-end gap-3 p-3 border rounded-md bg-muted/20">
+                  <div className="flex-1 space-y-1.5">
+                    <Label htmlFor={`availability.${index}.day`} className="text-sm font-medium">Day</Label>
+                    <Controller
+                      name={`availability.${index}.day` as const}
+                      control={control}
+                      render={({ field }) => <Input placeholder="e.g., Monday" {...field} className="text-base" />}
+                    />
+                    {errors.availability?.[index]?.day && 
+                      <p className="text-sm text-destructive">{errors.availability[index]?.day?.message}</p>}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label htmlFor={`availability.${index}.time`} className="text-sm font-medium">Time Slot</Label>
+                    <Controller
+                      name={`availability.${index}.time` as const}
+                      control={control}
+                      render={({ field }) => <Input placeholder="e.g., 9am - 5pm" {...field} className="text-base" />}
+                    />
+                    {errors.availability?.[index]?.time && 
+                      <p className="text-sm text-destructive">{errors.availability[index]?.time?.message}</p>}
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removeAvailability(index)} className="text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-end gap-3 mt-4 pt-4 border-t border-border/20">
+                <div className="flex-1 space-y-1.5">
+                    <Label htmlFor="newSlotDay" className="text-sm font-medium">New Day</Label>
+                    <Input id="newSlotDay" placeholder="e.g., Wednesday" value={newSlotDay} onChange={(e) => setNewSlotDay(e.target.value)} className="text-base"/>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                    <Label htmlFor="newSlotTime" className="text-sm font-medium">New Time Slot</Label>
+                    <Input id="newSlotTime" placeholder="e.g., 10am - 2pm" value={newSlotTime} onChange={(e) => setNewSlotTime(e.target.value)} className="text-base"/>
+                </div>
+              <Button type="button" variant="outline" onClick={handleAddAvailabilitySlot} className="whitespace-nowrap shrink-0">
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Slot
+              </Button>
+            </div>
+            {errors.availability && typeof errors.availability === 'object' && 'message' in errors.availability && (
+                <p className="text-sm text-destructive mt-2">{errors.availability.message}</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Button type="submit" className="w-full py-3 text-lg font-semibold tracking-wide shadow-lg hover:shadow-xl transition-shadow duration-200 ease-in-out" disabled={isSubmitting || authLoading || isAiLoading} size="lg">
           {isSubmitting || authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserPlus className="mr-2 h-5 w-5" />}
