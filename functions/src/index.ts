@@ -1,6 +1,5 @@
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-// import * as functions from "firebase-functions"; // Removed this line
 import {
   onDocumentUpdated,
   onDocumentCreated,
@@ -8,81 +7,69 @@ import {
   type QueryDocumentSnapshot,
   type Change,
 } from "firebase-functions/v2/firestore";
-// Updated import for beforeUserCreated and added related types
 import {
   beforeUserCreated,
   type AuthBlockingEvent,
-  type AuthUserRecord
+  type AuthUserRecord,
 } from "firebase-functions/v2/identity";
-import { HttpsError, onCall } from "firebase-functions/v2/https"; // Added onCall here
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+// Export Stripe functions
+export * from "./stripe";
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   admin.initializeApp();
+  console.log("Firebase Admin SDK initialized in index.ts");
+} else {
+  console.log("Firebase Admin SDK already initialized (index.ts)");
 }
 
-// --- Nodemailer Transporter Lazy Initialization ---
 let transporterInstance: nodemailer.Transporter | undefined;
+let smtpConfigCache: any | undefined;
 
-// Cache for the SMTP configuration details, directly holding {host, port, user, pass, secure}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let smtpDirectConfigCache: any | undefined;
-
-/**
- * Retrieves the SMTP configuration directly from environment variables. It
- * fetches the configuration on the first call and caches it.
- * @return {any | undefined} The SMTP configuration object
- * ({host, port, user, pass, secure}), or undefined if not fully configured.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getSmtpConfig(): any | undefined {
-  if (smtpDirectConfigCache) {
-    return smtpDirectConfigCache;
+  if (smtpConfigCache) {
+    return smtpConfigCache;
   }
 
   const host = process.env.SMTP_HOST;
   const portStr = process.env.SMTP_PORT;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const secure = process.env.SMTP_SECURE === "true"; // Corrected this line
+  const secureStr = process.env.SMTP_SECURE;
 
-  if (host && portStr && user && pass) {
+  if (host && portStr && user && pass && secureStr) {
     const port = Number(portStr);
     if (isNaN(port)) {
       console.error(`Invalid SMTP_PORT: "${portStr}". Must be a number.`);
       return undefined;
     }
 
-    smtpDirectConfigCache = {
+    smtpConfigCache = {
       host: host,
       port: port,
       user: user,
       pass: pass,
-      secure: secure,
+      secure: secureStr?.toLowerCase() === "true",
     };
     console.log("SMTP configuration loaded from environment variables.");
-    return smtpDirectConfigCache;
+    return smtpConfigCache;
   } else {
     console.error(
       "SMTP configuration error: One or more required environment variables " +
-        "(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) are missing or empty."
+        "(SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE) are missing or empty."
     );
+    // Log which specific variables are missing for easier debugging
     if (!host) console.error("SMTP_HOST is missing or empty.");
     if (!portStr) console.error("SMTP_PORT is missing or empty.");
     if (!user) console.error("SMTP_USER is missing or empty.");
     if (!pass) console.error("SMTP_PASS is missing or empty.");
-    // SMTP_SECURE is optional and defaults to false effectively if not "true"
+    if (!secureStr) console.error("SMTP_SECURE is missing or empty.");
     return undefined;
   }
 }
 
-/**
- * Retrieves or initializes the Nodemailer transporter.
- * Transporter is created on first call and cached.
- * @return {Promise<nodemailer.Transporter | undefined>} A promise that
- * resolves to the transporter instance or undefined if initialization fails.
- */
 async function getTransporter():
   Promise<nodemailer.Transporter | undefined> {
   if (transporterInstance) {
@@ -94,10 +81,9 @@ async function getTransporter():
   if (
     currentSmtpConfig &&
     currentSmtpConfig.host &&
-    currentSmtpConfig.port && // is a number
+    currentSmtpConfig.port &&
     currentSmtpConfig.user &&
     currentSmtpConfig.pass
-    // currentSmtpConfig.secure is a boolean
   ) {
     try {
       transporterInstance = nodemailer.createTransport({
@@ -121,7 +107,7 @@ async function getTransporter():
     }
   } else {
     console.error(
-      "SMTP configuration (host, port, user, pass) " +
+      "SMTP configuration (host, port, user, pass, secure) " +
         "is not fully set from environment variables. Cannot initialize " +
         "transporter."
     );
@@ -133,21 +119,26 @@ interface UserData {
   isApproved?: boolean;
   email?: string;
   displayName?: string;
-  // Add other fields that might be present in user documents
-  role?: string; // Example: if role influences approval or notifications
-  status?: string; // Example: coach status like 'pending_approval'
+  role?: string;
+  status?: string;
 }
 
 interface MessageData {
   recipientId?: string;
-  senderId?: string; // Good to have for context
+  senderId?: string;
   senderName?: string;
   text?: string;
-  createdAt?: admin.firestore.Timestamp; // Example, if you use timestamps
-  conversationId?: string; // If messages are part of conversations
+  createdAt?: admin.firestore.Timestamp;
+  conversationId?: string;
 }
 
-// --- Email for User Approval ---
+interface BlogPostData {
+  authorId?: string;
+  status?: string;
+  title?: string;
+  slug?: string;
+}
+
 export const onUserApproved = onDocumentUpdated(
   "users/{userId}",
   async (event: FirestoreEvent<
@@ -176,10 +167,8 @@ export const onUserApproved = onDocumentUpdated(
     const after = event.data.after.data() as UserData | undefined;
     const userId = event.params.userId;
 
-    const currentSmtpConfig = getSmtpConfig(); // getSmtpConfig now returns the direct config object
+    const currentSmtpConfig = getSmtpConfig();
 
-    // Check if the status changed to 'approved' for a coach, or isApproved became true
-    // Adapt this logic based on your exact approval mechanism
     const justApproved =
       (after?.status === "approved" && before?.status !== "approved") ||
       (after?.isApproved === true && before?.isApproved !== true);
@@ -187,14 +176,14 @@ export const onUserApproved = onDocumentUpdated(
     if (
       justApproved &&
       after?.email &&
-      currentSmtpConfig?.user // Check if SMTP sender email is configured
+      currentSmtpConfig?.user
     ) {
       const userEmail = after.email;
       const userName = after.displayName || "User";
 
       const msg = {
         to: userEmail,
-        from: currentSmtpConfig.user as string, // Sender email from SMTP config
+        from: currentSmtpConfig.user as string,
         subject: "Your Account has been Approved!",
         html: `
           <h1>Welcome, ${userName}!</h1>
@@ -233,49 +222,30 @@ export const onUserApproved = onDocumentUpdated(
       }
     } else {
       if (!justApproved) {
-        /*
- console.log(`User ${userId}: Approval status unchanged or not an approval
- event. Before: ${JSON.stringify(before)}, After: ${JSON.stringify(after)}`);
- */
       }
       if (!after?.email) {
-        console.log(
-          "User " + userId + " data update occurred but no email found for notification."
-        );
       }
       if (!currentSmtpConfig?.user) {
-        console.log(
-          "SMTP user (sender email) not configured, cannot send approval email."
-        );
       }
     }
     return null;
   }
 );
 
-/**
- * Firebase Authentication Blocking Function to prevent signup of suspended users.
- */
 export const blockSuspendedUsersOnSignup = beforeUserCreated(async (event: AuthBlockingEvent) => {
-  // event.data can be undefined, so we must check for its existence.
   if (!event.data) {
     console.log("User data is undefined in beforeUserCreated event. Allowing creation by default.");
-    // Or throw an HttpsError if this case should block creation, e.g.:
-    // throw new HttpsError("invalid-argument", "User data is missing.");
-    return; // Or return a specific response if needed for blocking
+    return;
   }
   const user: AuthUserRecord = event.data;
   const email = user.email;
 
   if (!email) {
-    // If no email on the user data, allow creation (you might want different logic here)
-    // This case might also indicate an issue if email is always expected.
     console.log("User email is undefined in beforeUserCreated event data. Allowing creation.");
     return;
   }
 
   try {
-    // Check if a user with this email exists and is suspended in Firestore
     const usersRef = admin.firestore().collection("users");
     const querySnapshot = await usersRef.where("email", "==", email).limit(1).get();
 
@@ -286,15 +256,10 @@ export const blockSuspendedUsersOnSignup = beforeUserCreated(async (event: AuthB
       }
     }
   } catch (error) {
-    // Re-throw the error to block the creation
-    // If it's already an HttpsError from the new import, it's fine.
-    // If it's another error, it will also block creation, which is intended.
     throw error;
   }
 });
 
-
-// --- Email for New Message ---
 export const onNewMessage = onDocumentCreated(
   "messages/{messageId}",
   async (event: FirestoreEvent<
@@ -337,8 +302,7 @@ export const onNewMessage = onDocumentCreated(
 
     if (!recipientId) { console.error("No recipientId found for message " + messageId); return null; }
 
-
-    const currentSmtpConfig = getSmtpConfig(); // getSmtpConfig now returns the direct config object
+    const currentSmtpConfig = getSmtpConfig();
 
     if (!currentSmtpConfig?.user) {
       console.error(
@@ -375,7 +339,7 @@ export const onNewMessage = onDocumentCreated(
 
       const msg = {
         to: recipientEmail,
-        from: currentSmtpConfig.user as string, // Sender email from SMTP config
+        from: currentSmtpConfig.user as string,
         subject:
           "You have received a new message from " +
           senderName,
@@ -417,39 +381,123 @@ export const onNewMessage = onDocumentCreated(
   }
 );
 
-// --- Suspend User Function ---
+export const onBlogPostApproved = onDocumentUpdated(
+  "blogs/{blogId}",
+  async (event: FirestoreEvent<
+      Change<QueryDocumentSnapshot> | undefined,
+      {
+ blogId: string
+} >
+  ) => {
+    const transporter = await getTransporter();
+    if (!transporter) {
+      console.error(
+        "Nodemailer transporter not available.",
+        "Email for blog post approval not sent for blogId:", event.params.blogId
+      );
+      return null;
+    }
+
+    if (!event.data || !event.data.before || !event.data.after) {
+      console.log(
+        "Event data, before, or after snapshot is missing for onBlogPostApproved, blogId:", event.params.blogId
+      );
+      return null;
+    }
+
+    const before = event.data.before.data() as BlogPostData | undefined;
+    const after = event.data.after.data() as BlogPostData | undefined;
+    const blogId = event.params.blogId;
+
+    const currentSmtpConfig = getSmtpConfig();
+
+    const justApproved = after?.status === "approved" && before?.status !== "approved";
+
+    if (justApproved && after?.authorId && after?.title && currentSmtpConfig?.user) {
+      const authorId = after.authorId;
+      const blogTitle = after.title;
+
+      try {
+        const userDoc = await admin.firestore().collection("users").doc(authorId).get();
+        if (!userDoc.exists) {
+          console.warn(
+            `Author user document ${authorId} not found for blog ${blogId}. Cannot send approval email.`
+          );
+          return null;
+        }
+
+        const authorData = userDoc.data() as UserData | undefined;
+        if (!authorData || !authorData.email) {
+          console.error(
+            `No email found for author user ${authorId} of blog ${blogId}. Cannot send approval email.`
+          );
+          return null;
+        }
+
+        const authorEmail = authorData.email;
+        const authorName = authorData.displayName || "Author";
+
+        const msg = {
+          to: authorEmail,
+          from: currentSmtpConfig.user as string,
+          subject: `Your Blog Post "${blogTitle}" has been Approved!`,
+          html: `
+            <h1>Hi ${authorName},</h1>
+            <p>Great news! Your blog post titled "<strong>${blogTitle}</strong>" has been approved and is now live on The Life Coaching Cafe.</p>
+            <p>You can view it here: [TODO: Add link to blog post if slug is available and you have a URL structure]</p>
+            <p>Thanks for your contribution,</p>
+            <p>The Life Coaching Cafe Team</p>
+          `,
+        };
+
+        console.log(`Sending blog post approval email to ${authorEmail} for blog ${blogId}`);
+        await transporter.sendMail(msg);
+        console.log(`Blog post approval email sent to ${authorEmail} for blog ${blogId}`);
+
+      } catch (error: unknown) {
+        console.error(
+          `Error processing blog post approval for blog ${blogId}, author ${authorId}:`,
+          error
+        );
+        if (typeof error === "object" && error !== null && "response" in error) {
+          const errWithResponse = error as { response?: { body?: unknown } };
+          if (errWithResponse.response) {
+            console.error("Nodemailer error response:", errWithResponse.response.body);
+          }
+        }
+      }
+    } else {
+      if (!justApproved) {
+      }
+       if (!currentSmtpConfig?.user) {
+      }
+    }
+    return null;
+  }
+);
+
 export const suspendUser = onCall(async (request) => {
-  // Check if the user is authenticated.
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
-
-  // Authorization: Check if the caller has the 'admin' custom claim.
   if (request.auth.token.admin !== true) {
     console.error("Unauthorized attempt to suspend user by:", request.auth.uid);
     throw new HttpsError("permission-denied", "You do not have permission to suspend users.");
   }
-
   const userId = request.data.userId;
   if (!userId || typeof userId !== 'string') {
     throw new HttpsError("invalid-argument", "The function must be called with a valid 'userId' string argument.");
   }
-
   try {
-    // Disable the user in Firebase Authentication
     await admin.auth().updateUser(userId, {
       disabled: true,
     });
     console.log(`Successfully disabled Firebase Auth for user: ${userId}`);
-
-    // Update the user's status in Firestore
     const userRef = admin.firestore().collection("users").doc(userId);
     await userRef.update({
       status: "suspended",
-      // You might want to add other fields, like suspendedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     console.log(`Successfully updated Firestore status to 'suspended' for user: ${userId}`);
-
     return { success: true, message: `User ${userId} has been suspended.` };
   } catch (error) {
     console.error(`Error suspending user ${userId}:`, error);
@@ -460,46 +508,63 @@ export const suspendUser = onCall(async (request) => {
   }
 });
 
-// --- Set Admin Claim Function ---
-export const setAdminClaim = onCall(async (request) => {
-  // 1. Authentication: Ensure the caller is authenticated.
+export const unsuspendUser = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
+  if (request.auth.token.admin !== true) {
+    console.error("Unauthorized attempt to unsuspend user by:", request.auth.uid);
+    throw new HttpsError("permission-denied", "You do not have permission to unsuspend users.");
+  }
+  const userId = request.data.userId;
+  if (!userId || typeof userId !== 'string') {
+    throw new HttpsError("invalid-argument", "The function must be called with a valid 'userId' string argument.");
+  }
+  try {
+    await admin.auth().updateUser(userId, {
+      disabled: false, 
+    });
+    console.log(`Successfully enabled Firebase Auth for user: ${userId}`);
+    const userRef = admin.firestore().collection("users").doc(userId);
+    await userRef.update({
+      status: "active", 
+    });
+    console.log(`Successfully updated Firestore status to 'active' for user: ${userId}`);
+    return { success: true, message: `User ${userId} has been unsuspended.` };
+  } catch (error) {
+    console.error(`Error unsuspending user ${userId}:`, error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError("internal", `An internal error occurred while unsuspending user ${userId}.`);
+  }
+});
 
-  // 2. Authorization: CRITICAL - Ensure the CALLER is an admin.
-  // This function should only be callable by users who already have the admin custom claim.
+export const setAdminClaim = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
   if (request.auth.token.admin !== true) {
     console.error("Unauthorized attempt to set admin claim by user:", request.auth.uid);
     throw new HttpsError("permission-denied", "You do not have permission to set admin claims.");
   }
-
   const email = request.data.email;
   if (!email || typeof email !== 'string') {
     throw new HttpsError("invalid-argument", "The function must be called with a valid 'email' string argument (the user to make admin).");
   }
-
   try {
-    // Get the user to make admin by their email
     const userToMakeAdmin = await admin.auth().getUserByEmail(email);
     if (!userToMakeAdmin) {
       throw new HttpsError("not-found", `User with email ${email} not found.`);
     }
-
-    // Set the custom claim 'admin' to true for the target user
     await admin.auth().setCustomUserClaims(userToMakeAdmin.uid, { admin: true });
     console.log(`Successfully set admin claim for user: ${userToMakeAdmin.uid} (${email})`);
-
-    // Optional: You might want to update a 'role' field in Firestore as well
-    // await admin.firestore().collection("users").doc(userToMakeAdmin.uid).update({ role: "admin" });
-
     return { success: true, message: `User ${email} has been made an admin.` };
   } catch (error) {
     console.error(`Error setting admin claim for email ${email}:`, error);
     if (error instanceof HttpsError) {
       throw error;
     }
-    // Check for specific Firebase Auth errors if needed
     if ((error as any).code === 'auth/user-not-found') {
         throw new HttpsError("not-found", `User with email ${email} not found.`);
     }

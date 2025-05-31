@@ -1,114 +1,210 @@
-"use client";
+'''use client''';
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { auth } from '@/lib/firebase'; // Import the Firebase auth instance
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth'; // Import onAuthStateChanged and Firebase User type
-
-// Keep your custom User type if you use it for other metadata,
-// but the auth state will now hold the FirebaseUser.
-// You might want to merge or link these if your custom User type stores profile data.
-import type { User as CustomUserType, UserRole } from '@/types';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  type User as FirebaseUserAuth, // Renamed to avoid conflict with our FirebaseUser type
+} from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { firebaseApp } from './firebase'; // Your existing firebase app initialization
+import type { FirestoreUserProfile, FirebaseUser } from '@/types'; // Assuming your custom FirebaseUser type is here
 
 interface AuthContextType {
-  user: FirebaseUser | null; // This will now be the Firebase user object
-  // We'll keep your custom login/logout for now, but they need to be updated
-  // to use Firebase auth methods (e.g., signInWithEmailAndPassword, signOut)
-  // for this to fully work with Firebase.
-  login: (email: string, role: UserRole) => void; // This will need to change
-  logout: () => void; // This will need to change
+  user: FirebaseUser | null; // Using your custom FirebaseUser type
   loading: boolean;
+  error: Error | null;
+  registerWithEmailAndPassword: (
+    email: string, 
+    password: string, 
+    name: string, 
+    role: 'coach' | 'user' | 'admin', // Define specific roles
+    additionalData?: Partial<FirestoreUserProfile> // For other initial data like planId
+  ) => Promise<FirebaseUserAuth | void>;
+  loginWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUserAuth | void>;
+  logout: () => Promise<void>;
+  sendPasswordResetEmail: (email: string) => Promise<void>;
+  // Add other auth functions as needed (e.g., signInWithGoogle)
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<FirebaseUser | null>(null); // State now holds FirebaseUser
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Listen for Firebase authentication state changes
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        console.log("Firebase Auth: User is signed in", firebaseUser.uid);
-        setUser(firebaseUser); // Set the Firebase user object
-      } else {
-        console.log("Firebase Auth: User is signed out");
-        setUser(null);
-      }
-      setLoading(false);
-    });
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
 
-    // Cleanup subscription on unmount
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (firebaseUserAuth) => {
+        setLoading(true);
+        setError(null);
+        if (firebaseUserAuth) {
+          try {
+            const userDocRef = doc(db, 'users', firebaseUserAuth.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              const firestoreProfile = userDocSnap.data() as FirestoreUserProfile;
+              // Combine Firebase Auth data with Firestore profile data
+              setUser({
+                id: firebaseUserAuth.uid,
+                uid: firebaseUserAuth.uid, // uid is often used interchangeably with id
+                email: firebaseUserAuth.email,
+                displayName: firebaseUserAuth.displayName,
+                photoURL: firebaseUserAuth.photoURL,
+                emailVerified: firebaseUserAuth.emailVerified,
+                // Spread Firestore profile data, ensuring types match FirebaseUser
+                ...firestoreProfile,
+                // Ensure all required fields from FirebaseUser are present
+                name: firestoreProfile.name || firebaseUserAuth.displayName || '',
+                role: firestoreProfile.role || 'user', // Default to 'user' if not in Firestore
+                // Add other merged fields as necessary
+              } as FirebaseUser);
+            } else {
+              // This case might happen if a user exists in Auth but not Firestore
+              // You might want to create a default profile or log an error
+              console.warn(`User ${firebaseUserAuth.uid} exists in Auth but not in Firestore. Logging them out.`);
+              await signOut(auth); // Or create a default profile
+              setUser(null);
+            }
+          } catch (e: any) {
+            console.error("Error fetching user profile from Firestore:", e);
+            setError(e);
+            setUser(null); // Clear user on error fetching profile
+          }
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      },
+      (authError) => {
+        console.error("Error from onAuthStateChanged listener:", authError);
+        setError(authError);
+        setUser(null);
+        setLoading(false);
+      }
+    );
+
     return () => unsubscribe();
   }, []);
 
-  // --- IMPORTANT ---
-  // The login and logout functions below are still your MOCK implementations.
-  // For the getIdToken() to work correctly after login, these functions
-  // MUST be updated to use Firebase's authentication methods
-  // (e.g., signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut).
-  //
-  // For now, this change primarily fixes getIdToken for users ALREADY signed in
-  // via Firebase elsewhere, or if you manually trigger Firebase login.
-
-  const login = (email: string, role: UserRole) => {
-    console.warn("AuthContext: Mock login function called. For Firebase auth, this needs to be updated to use Firebase SDK (e.g., signInWithEmailAndPassword).");
-    // This mock login will NOT give you a Firebase user with getIdToken.
-    // You need to replace this with actual Firebase login.
-    const mockUser: CustomUserType = {
-      id: Date.now().toString(),
-      email,
-      role,
-      name: email.split('@')[0]
-    };
-    if (email === 'hello@thelifecoachingcafe.com') {
-        mockUser.role = 'admin';
-        mockUser.name = 'Admin User';
-    }
-    // setUser(mockUser); // This would be incorrect as setUser expects FirebaseUser | null
+  const registerWithEmailAndPassword = async (
+    email: string, 
+    password: string, 
+    name: string, 
+    role: 'coach' | 'user' | 'admin', 
+    additionalData: Partial<FirestoreUserProfile> = {}
+  ): Promise<FirebaseUserAuth | void> => {
+    setLoading(true);
+    setError(null);
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
     try {
-      localStorage.setItem('coachconnect-user', JSON.stringify(mockUser));
-    } catch (error) {
-      console.error("Failed to save mock user to localStorage:", error);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName: name });
+
+      // Create user profile in Firestore
+      const userProfile: FirestoreUserProfile = {
+        id: userCredential.user.uid,
+        uid: userCredential.user.uid,
+        email: email.toLowerCase(),
+        name: name,
+        role: role,
+        createdAt: new Date(),
+        status: role === 'coach' ? 'pending_approval' : 'active',
+        photoURL: null, // Or userCredential.user.photoURL if available and desired
+        // Add any other default fields from FirestoreUserProfile
+        bio: '',
+        specialties: [],
+        keywords: [],
+        // ... include all fields required by FirestoreUserProfile, possibly from additionalData
+        ...additionalData, // Spread additional data like planId or other initial settings
+      };
+
+      await setDoc(doc(db, "users", userCredential.user.uid), userProfile);
+      
+      // The onAuthStateChanged listener will pick up the new user and set the user state
+      // No need to call setUser directly here unless you want immediate state update before listener fires
+      console.log("User registered and profile created:", userCredential.user.uid);
+      setLoading(false);
+      return userCredential.user;
+    } catch (e: any) {
+      console.error("Error during registration:", e);
+      setError(e);
+      setLoading(false);
+      throw e; // Re-throw to be caught by the calling component
     }
-    // To make this work with Firebase, you'd call something like:
-    // import { signInWithEmailAndPassword } from 'firebase/auth';
-    // signInWithEmailAndPassword(auth, email, password_from_form)
-    //   .then(userCredential => { /* onAuthStateChanged will handle setUser */ })
-    //   .catch(error => console.error("Firebase login error:", error));
   };
 
-  const logout = () => {
-    console.warn("AuthContext: Mock logout function called. For Firebase auth, this needs to be updated to use Firebase SDK (e.g., signOut).");
-    // To make this work with Firebase, you'd call something like:
-    // import { signOut } from 'firebase/auth';
-    // signOut(auth)
-    //   .then(() => { /* onAuthStateChanged will handle setUser(null) */ })
-    //   .catch(error => console.error("Firebase logout error:", error));
-    // For now, just clearing the mock user from localStorage
+  const loginWithEmailAndPassword = async (email: string, password: string): Promise<FirebaseUserAuth | void> => {
+    setLoading(true);
+    setError(null);
+    const auth = getAuth(firebaseApp);
     try {
-      localStorage.removeItem('coachconnect-user');
-    } catch (error) {
-      console.error("Failed to remove mock user from localStorage:", error);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle setting the user state
+      setLoading(false);
+      return userCredential.user;
+    } catch (e: any) {
+      console.error("Error during login:", e);
+      setError(e);
+      setLoading(false);
+      throw e; // Re-throw
     }
-    // Calling Firebase signOut will trigger onAuthStateChanged which sets user to null.
-    // auth.signOut(); // If you want to trigger actual Firebase logout
   };
 
+  const logout = async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    const auth = getAuth(firebaseApp);
+    try {
+      await signOut(auth);
+      // onAuthStateChanged will set user to null
+      setLoading(false);
+    } catch (e: any) {
+      console.error("Error during logout:", e);
+      setError(e);
+      setLoading(false);
+      throw e; // Re-throw
+    }
+  };
 
-  const providerValue = { user, login, logout, loading };
+  const sendPasswordResetEmail = async (email: string): Promise<void> => {
+    const auth = getAuth(firebaseApp);
+    try {
+      await firebaseSendPasswordResetEmail(auth, email);
+    } catch (e: any) {
+      console.error("Error sending password reset email:", e);
+      throw e;
+    }
+  };
 
-  return (
-    <AuthContext.Provider value={providerValue}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+  const value = {
+    user,
+    loading,
+    error,
+    registerWithEmailAndPassword,
+    loginWithEmailAndPassword,
+    logout,
+    sendPasswordResetEmail,
+  };
 
-export function useAuth() {
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};

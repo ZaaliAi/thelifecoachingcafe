@@ -9,7 +9,7 @@ import { UserX, ShieldAlert, Loader2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { getAllUserProfilesForAdmin, unsuspendUserAccount } from '@/lib/firestore';
+import { getAllUserProfilesForAdmin } from '@/lib/firestore';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 
@@ -33,14 +33,12 @@ const escapeCsvValue = (value: any): string => {
     return '';
   }
   const stringValue = String(value);
-  // Check for commas, double quotes, or newlines
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
-    // Enclose in double quotes and escape existing double quotes
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('
+') || stringValue.includes('')) {
     return `"${stringValue.replace(/"/g, '""')}"`;
   }
   return stringValue;
 };
-
 
 // Function to generate and download the CSV
 const handleDownloadCSV = (users: AdminUserView[]) => {
@@ -51,14 +49,14 @@ const handleDownloadCSV = (users: AdminUserView[]) => {
       user.id,
       user.email,
       user.status,
-      format(new Date(user.createdAt), 'yyyy-MM-dd'), // Ensure date is formatted
+      format(new Date(user.createdAt), 'yyyy-MM-dd'),
       user.name || '',
       user.role || '',
     ];
     return rowData.map(escapeCsvValue).join(',');
   });
-  // Use \r\n for CSV newline characters for better compatibility
-  const csvContent = [headerRow, ...dataRows].join('\r\n');
+  const csvContent = [headerRow, ...dataRows].join('
+');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
@@ -86,7 +84,6 @@ const AdminUsersPage = () => {
       setFetchError(null);
       try {
         const usersData = await getAllUserProfilesForAdmin();
-        // Ensure createdAt is always a string and defaults if missing
         setUsers(usersData.map(u => ({...u, createdAt: u.createdAt || new Date().toISOString() })) as AdminUserView[]);
       } catch (err) {
         console.error("Error fetching users:", err);
@@ -104,11 +101,16 @@ const AdminUsersPage = () => {
     fetchUsers();
   }, []);
 
-  const handleUnsuspend = async (userId: string) => {
+ const handleUnsuspend = async (userId: string) => {
     setProcessingUserId(userId);
     setIsProcessing(true);
     try {
-      await unsuspendUserAccount(userId);
+      const functions = getFunctions(app);
+      const unsuspendUserFunction = httpsCallable(functions, 'unsuspendUser');
+
+      console.log(`Calling 'unsuspendUser' Firebase function for userId: ${userId}`);
+      await unsuspendUserFunction({ userId: userId });
+
       setUsers(prevUsers =>
         prevUsers.map(user =>
           user.id === userId ? { ...user, status: 'active' } : user
@@ -117,12 +119,44 @@ const AdminUsersPage = () => {
       toast({
         title: "Success",
         description: "User unsuspended successfully.",
+        variant: "default",
       });
-    } catch (err) {
-      console.error("Error unsuspending user:", err);
-      const errorMessage = (err instanceof Error) ? err.message : "Failed to unsuspend user.";
+
+    } catch (error: unknown) {
+      console.error("Error unsuspending user via Firebase function:", error);
+      let errorMessage = "Failed to unsuspend user. Please try again.";
+
+      if (error instanceof FunctionsError) {
+        switch (error.code) {
+          case 'unauthenticated':
+            errorMessage = "Authentication error. Please ensure you are logged in as an admin.";
+            break;
+          case 'permission-denied':
+            errorMessage = "Permission denied. You may not have the necessary admin rights.";
+            break;
+          case 'invalid-argument':
+            errorMessage = "Invalid data sent to the server. Please contact support.";
+            break;
+          case 'not-found':
+            errorMessage = "User not found or operation not applicable.";
+            break;
+          default:
+            errorMessage = error.message || `An unexpected Firebase error occurred (Code: ${error.code}).`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else {
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch {
+          errorMessage = "An unknown and unstringifiable error occurred.";
+        }
+      }
+
       toast({
-        title: "Error",
+        title: "Error Unsuspending User",
         description: errorMessage,
         variant: "destructive",
       });
@@ -140,8 +174,7 @@ const AdminUsersPage = () => {
       const suspendUserFunction = httpsCallable(functions, 'suspendUser');
 
       console.log(`Calling 'suspendUser' Firebase function for userId: ${userId}`);
-      const result = await suspendUserFunction({ userId: userId });
-      console.log("Suspend function result:", result.data);
+      await suspendUserFunction({ userId: userId });
 
       setUsers(prevUsers =>
         prevUsers.map(user =>
@@ -154,13 +187,12 @@ const AdminUsersPage = () => {
         variant: "default",
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error suspending user via Firebase function:", error);
-      const functionsError = error as FunctionsError;
       let errorMessage = "Failed to suspend user. Please try again.";
 
-      if (functionsError.code) {
-        switch (functionsError.code) {
+      if (error instanceof FunctionsError) {
+        switch (error.code) {
           case 'unauthenticated':
             errorMessage = "Authentication error. Please ensure you are logged in as an admin.";
             break;
@@ -170,11 +202,22 @@ const AdminUsersPage = () => {
           case 'invalid-argument':
             errorMessage = "Invalid data sent to the server. Please contact support.";
             break;
+          case 'not-found':
+            errorMessage = "User not found or operation not applicable.";
+            break;
           default:
-            errorMessage = functionsError.message || "An unexpected error occurred.";
+            errorMessage = error.message || `An unexpected Firebase error occurred (Code: ${error.code}).`;
         }
       } else if (error instanceof Error) {
         errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else {
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch {
+          errorMessage = "An unknown and unstringifiable error occurred.";
+        }
       }
 
       toast({
@@ -190,7 +233,6 @@ const AdminUsersPage = () => {
 
   const handleDelete = async (userId: string) => {
       console.log("Attempting to delete user:", userId);
-      // This is a placeholder. Implement actual delete logic if needed.
       toast({ title: "Notice", description: "Delete functionality not yet fully implemented." });
   };
 
@@ -208,7 +250,7 @@ const AdminUsersPage = () => {
     );
   }
 
-  if (fetchError && users.length === 0) { // Show error prominently if fetch fails and no users loaded
+  if (fetchError && users.length === 0) {
     return (
       <div className="container mx-auto py-10 text-center">
         <h1 className="text-3xl font-bold mb-6">Manage Users</h1>
@@ -241,7 +283,6 @@ const AdminUsersPage = () => {
           <Search className="h-5 w-5 text-gray-500" />
         </div>
         <div className="flex space-x-2">
-           {/* Make sure users array is passed to handleDownloadCSV */}
            <Button onClick={() => handleDownloadCSV(users)} disabled={users.length === 0}>Download CSV</Button>
         </div>
       </div>
@@ -281,7 +322,6 @@ const AdminUsersPage = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>{user.role || 'N/A'}</TableCell>
-                    {/* Ensure createdAt is valid before formatting */}
                     <TableCell>{user.createdAt ? format(new Date(user.createdAt), 'PPpp') : 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       {user.status === 'suspended' && (
@@ -309,36 +349,30 @@ const AdminUsersPage = () => {
 
                       {user.status !== 'suspended' && (
                         <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="sm" disabled={isProcessing && processingUserId === user.id}>
-          {isProcessing && processingUserId === user.id ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          ) : (
-            <ShieldAlert className="mr-2 h-4 w-4 text-red-600" />
-          )}
-          Suspend
-        </Button>
-      </AlertDialogTrigger>
-
-  {/* AlertDialogContent is NOW A SIBLING to AlertDialogTrigger */}
-  <AlertDialogContent> {/* This was your Line 317, now correctly placed */}
-    <AlertDialogHeader> {/* This was your Line 318 */}
-      <AlertDialogTitle>Are you sure you want to suspend this user?</AlertDialogTitle>
-      <AlertDialogDescription>
-        This action will suspend the user&apos;s account, preventing them from logging in.
-      </AlertDialogDescription>
-    </AlertDialogHeader> {/* This was your Line 323 */}
-    <AlertDialogFooter> {/* This was your Line 324 */}
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={() => handleSuspend(user.id)} className="bg-red-600 hover:bg-red-700">Suspend</AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" disabled={isProcessing && processingUserId === user.id}>
+                              {isProcessing && processingUserId === user.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <ShieldAlert className="mr-2 h-4 w-4 text-red-600" />
+                              )}
+                              Suspend
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent> 
+                            <AlertDialogHeader> 
+                              <AlertDialogTitle>Are you sure you want to suspend this user?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action will suspend the user&apos;s account, preventing them from logging in.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader> 
+                            <AlertDialogFooter> 
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleSuspend(user.id)} className="bg-red-600 hover:bg-red-700">Suspend</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
-                      {/* Basic delete button, can be enhanced with a confirmation dialog */}
-                      {/* <Button variant="ghost" size="sm" onClick={() => handleDelete(user.id)} disabled={isProcessing && processingUserId === user.id} className="text-red-600 hover:text-red-700 ml-2">
-                        {isProcessing && processingUserId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </Button> */}
                     </TableCell>
                   </TableRow>
                 ))}
