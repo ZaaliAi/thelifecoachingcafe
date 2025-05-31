@@ -57,6 +57,7 @@ const coachRegistrationSchema = z.object({
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
+  console.log('RegisterCoachForm rendering');
   const router = useRouter();
   const { registerWithEmailAndPassword, loading: authLoading } = useAuth();
   const [isAiLoading, setIsAiLoading] = useState(false);
