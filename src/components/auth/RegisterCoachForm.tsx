@@ -505,7 +505,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                 </div>
               ))}
             </div>
-            {/* <div className="flex items-end gap-3 mt-4 pt-4 border-t border-border/20">
+            <div className="flex items-end gap-3 mt-4 pt-4 border-t border-border/20">
                 <div className="flex-1 space-y-1.5">
                     <Label htmlFor="newSlotDay" className="text-sm font-medium">New Day</Label>
                     <Input id="newSlotDay" placeholder="e.g., Wednesday" value={newSlotDay} onChange={(e) => setNewSlotDay(e.target.value)} className="text-base"/>
@@ -517,10 +517,10 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               <Button type="button" variant="outline" onClick={handleAddAvailabilitySlot} className="whitespace-nowrap shrink-0">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Slot
               </Button>
-            </div> */}
-            {errors.availability && typeof errors.availability === 'object' && 'message' in errors.availability && (
+            </div>
+            {/* {errors.availability && typeof errors.availability === 'object' && 'message' in errors.availability && (
                 <p className="text-sm text-destructive mt-2">{errors.availability.message}</p>
-            )}
+            )} */}
           </CardContent>
         </Card>
 
