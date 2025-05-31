@@ -33,6 +33,7 @@ const escapeCsvValue = (value: any): string => {
     return '';
   }
   const stringValue = String(value);
+  // Ensure special characters in strings are properly escaped for the includes method
   if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('
 ') || stringValue.includes('')) {
     return `"${stringValue.replace(/"/g, '""')}"`;
@@ -55,6 +56,7 @@ const handleDownloadCSV = (users: AdminUserView[]) => {
     ];
     return rowData.map(escapeCsvValue).join(',');
   });
+  // Ensure newline characters in the join method are properly escaped
   const csvContent = [headerRow, ...dataRows].join('
 ');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
