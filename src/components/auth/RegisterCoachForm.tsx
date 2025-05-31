@@ -473,7 +473,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
             </CardTitle>
-            {/* <CardDescription className="mt-1">{'Let clients know when you\'re available. You can update your availability anytime in Coach dashboard'}</CardDescription> */}
+            <CardDescription className="mt-1">{'Let clients know when you&apos;re available. You can update your availability anytime in Coach dashboard'}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 grid gap-6">
             <div className="space-y-4">
