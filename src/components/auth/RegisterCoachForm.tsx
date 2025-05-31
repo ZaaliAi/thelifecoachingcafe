@@ -392,7 +392,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
           </CardContent>
         </Card>
 
-        {/* <Card className="shadow-xl border-border/20 overflow-hidden">
+        <Card className="shadow-xl border-border/20 overflow-hidden">
           <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <Crown className="mr-3 h-7 w-7" /> Premium Profile Boosters
@@ -466,9 +466,9 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               </div>
             </div>
           </CardContent>
-        </Card> */}
+        </Card>
 
-        <Card className="shadow-xl border-border/20 overflow-hidden">
+        {/* <Card className="shadow-xl border-border/20 overflow-hidden">
           <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
@@ -522,7 +522,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                 <p className="text-sm text-destructive mt-2">{errors.availability.message}</p>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
 
         <Button type="submit" className="w-full py-3 text-lg font-semibold tracking-wide shadow-lg hover:shadow-xl transition-shadow duration-200 ease-in-out" disabled={isSubmitting || authLoading || isAiLoading} size="lg">
           {isSubmitting || authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserPlus className="mr-2 h-5 w-5" />}
