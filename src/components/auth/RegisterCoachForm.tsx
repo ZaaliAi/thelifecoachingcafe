@@ -57,7 +57,6 @@ const coachRegistrationSchema = z.object({
 type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
-  console.log('RegisterCoachForm rendering');
   const router = useRouter();
   const { registerWithEmailAndPassword, loading: authLoading } = useAuth();
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -437,9 +436,9 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                 </div>
                 {errors.profileImageUrl && <p className="text-sm text-destructive mt-1">{errors.profileImageUrl.message}</p>}
                 <p className="text-xs text-muted-foreground text-center mt-2">
-                    A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.
+                    <span>A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.</span>
                     {!planId && (
-                        <span> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
+                        <span className="ml-1"> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
                     )}
                 </p>
             </div>
