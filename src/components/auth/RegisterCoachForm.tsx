@@ -392,7 +392,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xl border-border/20 overflow-hidden">
+        {/* <Card className="shadow-xl border-border/20 overflow-hidden">
           <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <Crown className="mr-3 h-7 w-7" /> Premium Profile Boosters
@@ -466,7 +466,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         <Card className="shadow-xl border-border/20 overflow-hidden">
           <CardHeader className="p-6 bg-muted/30 border-b border-border/20 rounded-t-lg">
