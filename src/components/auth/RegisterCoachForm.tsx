@@ -25,6 +25,7 @@ import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
 
 const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RURVlG6UVJU45QN1mByj8Fc";
+const LOCAL_STORAGE_KEY = 'registerCoachFormData';
 
 interface RegisterCoachFormProps {
   planId?: string | null;
@@ -72,16 +73,27 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   const [newSlotDay, setNewSlotDay] = useState('');
   const [newSlotTime, setNewSlotTime] = useState('');
 
-  const {
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    getValues,
-    formState: { errors, isSubmitting },
-  } = useForm<CoachRegistrationFormData>({
-    resolver: zodResolver(coachRegistrationSchema),
-    defaultValues: {
+  const getInitialFormValues = () => {
+    try {
+      const upgradeAttempt = localStorage.getItem('coachFormUpgradeAttempt') === 'true';
+      const storedDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+
+      if (upgradeAttempt) { // If an upgrade was just attempted
+        localStorage.removeItem('coachFormUpgradeAttempt'); // Clear the flag
+        if (storedDataString) {
+          console.log('Loading form data from local storage (upgrade attempt)'); // Debug
+          return JSON.parse(storedDataString);
+        }
+      } else if (!planId && storedDataString) { // If it's free tier (no planId) and data exists
+        console.log('Loading form data from local storage (free tier session)'); // Debug
+        return JSON.parse(storedDataString);
+      }
+    } catch (error) {
+      console.error("Error loading/parsing data from local storage:", error);
+      // Fall through to default if error
+    }
+    // Standard empty default values:
+    return {
       name: '',
       email: '',
       password: '',
@@ -91,14 +103,46 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       keywords: '',
       certifications: '',
       location: '',
-      profileImageUrl: null,
+      profileImageUrl: null, // Ensure this matches Zod schema (optional, nullable)
       websiteUrl: '',
       introVideoUrl: '',
       socialLinkPlatform: '',
       socialLinkUrl: '',
       availability: [],
-    },
+    };
+  };
+
+  const initialFormValues = getInitialFormValues();
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<CoachRegistrationFormData>({
+    resolver: zodResolver(coachRegistrationSchema),
+    defaultValues: initialFormValues,
   });
+
+  const watchedValues = watch(); // Watch all fields
+
+  useEffect(() => {
+    const debouncedSave = debounce((dataToSave) => {
+      if (isFreeTier) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+        console.log('Form data saved to local storage (free tier)'); // For debugging
+      }
+    }, 1000); // Debounce for 1 second
+
+    debouncedSave(watchedValues);
+
+    // Cleanup function for the debounce if the component unmounts or dependencies change
+    return () => {
+      debouncedSave.cancel();
+    };
+  }, [watchedValues, isFreeTier]); // Re-run if watchedValues or isFreeTier changes
 
   const { fields: availabilityFields, append: appendAvailability, remove: removeAvailability } = useFieldArray({
     control,
@@ -225,6 +269,15 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         }
         throw new Error("No sessionId returned from createCheckoutSessionCallable.");
       }
+      // Clear Local Storage after successful operations, before final navigation for non-Stripe path
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        localStorage.removeItem('coachFormUpgradeAttempt'); // Also clear the upgrade flag
+        console.log('Local storage cleared after successful submission.'); // Debug
+      } catch (error) {
+        console.error("Error clearing local storage:", error);
+        // Non-critical, so don't let this break the flow
+      }
       router.push('/dashboard/coach/profile');
     } catch (error: any) {
       console.error('Error during coach registration process:', error);
@@ -279,10 +332,24 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   };
 
   const handleUpgradeToPremium = async () => {
-    // The subtask prompt uses a simplified router.push approach for now.
-    // The more complex inline upgrade logic is commented out in the prompt and not implemented here.
+    // Get current form values
+    const currentFormData = getValues(); // getValues() from react-hook-form
+
+    // Save current form data to local storage immediately
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentFormData));
+      console.log('Form data saved to local storage before upgrade attempt'); // Debug
+    } catch (error) {
+      console.error("Error saving data to local storage before upgrade:", error);
+      // Proceed with navigation even if save fails, but log it.
+    }
+
+    // Set the upgrade attempt flag
+    localStorage.setItem('coachFormUpgradeAttempt', 'true');
+    console.log('Upgrade attempt flag set'); // Debug
+
+    // Navigate to the premium registration page
     router.push(`/register-coach?planId=${YOUR_DEFAULT_PREMIUM_PRICE_ID}`);
-    return;
   };
 
  return (
