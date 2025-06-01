@@ -512,9 +512,16 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                     )}
                     </div>
                     {isFreeTier && (
-                      <div className="text-center p-4 mt-2 border border-dashed border-gray-300 rounded-md bg-gray-50">
-                        <p className="text-sm text-gray-600 mb-2">Profile Picture is a Premium Feature.</p>
-                        <Button type="button" size="sm" onClick={handleUpgradeToPremium}>
+                      <div className="text-center p-4 mt-3 border border-custom-gold bg-light-gold-bg rounded-md">
+                        <Crown className="h-6 w-6 text-custom-gold mx-auto mb-2" />
+                        <p className="text-sm text-neutral-700 mb-3">Profile Picture is a Premium Feature.</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="border-custom-gold text-custom-gold hover:bg-custom-gold hover:text-white"
+                          onClick={handleUpgradeToPremium}
+                        >
                           Upgrade to Unlock
                         </Button>
                       </div>
@@ -534,9 +541,17 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               <Controller name="websiteUrl" control={control} render={({ field }) => <Input id="websiteUrl" type="url" placeholder="https://yourwebsite.com" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
               {errors.websiteUrl && <p className="text-sm text-destructive mt-1">{errors.websiteUrl.message}</p>}
               {isFreeTier && (
-                <div className="text-right mt-1">
-                  <Button type="button" size="sm" variant="link" className="text-primary hover:text-primary/80 p-0 h-auto" onClick={handleUpgradeToPremium}>
-                    Upgrade to Unlock
+                <div className="text-center p-3 mt-2 border border-custom-gold bg-light-gold-bg rounded-md">
+                  <Sparkles className="h-5 w-5 text-custom-gold mx-auto mb-1" />
+                  <p className="text-xs text-neutral-700 mb-2">Adding a Website URL is a Premium Feature.</p>
+                  <Button
+                    type="button"
+                    size="xs" /* Slightly smaller button for these individual field upgrades */
+                    variant="outline"
+                    className="border-custom-gold text-custom-gold hover:bg-custom-gold hover:text-white"
+                    onClick={handleUpgradeToPremium}
+                  >
+                    Upgrade
                   </Button>
                 </div>
               )}
@@ -546,9 +561,17 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
               <Controller name="introVideoUrl" control={control} render={({ field }) => <Input id="introVideoUrl" type="url" placeholder="https://youtube.com/yourvideo" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
               {errors.introVideoUrl && <p className="text-sm text-destructive mt-1">{errors.introVideoUrl.message}</p>}
               {isFreeTier && (
-                <div className="text-right mt-1">
-                  <Button type="button" size="sm" variant="link" className="text-primary hover:text-primary/80 p-0 h-auto" onClick={handleUpgradeToPremium}>
-                    Upgrade to Unlock
+                <div className="text-center p-3 mt-2 border border-custom-gold bg-light-gold-bg rounded-md">
+                  <Sparkles className="h-5 w-5 text-custom-gold mx-auto mb-1" />
+                  <p className="text-xs text-neutral-700 mb-2">Adding an Intro Video is a Premium Feature.</p>
+                  <Button
+                    type="button"
+                    size="xs" /* Slightly smaller button */
+                    variant="outline"
+                    className="border-custom-gold text-custom-gold hover:bg-custom-gold hover:text-white"
+                    onClick={handleUpgradeToPremium}
+                  >
+                    Upgrade
                   </Button>
                 </div>
               )}
@@ -565,9 +588,16 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                 {errors.socialLinkUrl && <p className="text-sm text-destructive mt-1">{errors.socialLinkUrl.message}</p>}
               </div>
               {isFreeTier && (
-                <div className="md:col-span-2 text-center p-4 mt-2 border border-dashed border-gray-300 rounded-md bg-gray-50">
-                  <p className="text-sm text-gray-600 mb-2">Adding Social Media Links is a Premium Feature.</p>
-                  <Button type="button" size="sm" onClick={handleUpgradeToPremium}>
+                <div className="md:col-span-2 text-center p-4 mt-3 border border-custom-gold bg-light-gold-bg rounded-md">
+                  <LinkIcon className="h-6 w-6 text-custom-gold mx-auto mb-2" />
+                  <p className="text-sm text-neutral-700 mb-3">Adding Social Media Links is a Premium Feature.</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-custom-gold text-custom-gold hover:bg-custom-gold hover:text-white"
+                    onClick={handleUpgradeToPremium}
+                  >
                     Upgrade to Unlock
                   </Button>
                 </div>
