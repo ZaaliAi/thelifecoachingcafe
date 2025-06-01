@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NextImage from "next/image";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import type { Coach } from "@/types"; 
+import type { Coach } from "@/types";
 import { useAuth } from '@/lib/auth';
 import { addCoachToFavorites, removeCoachFromFavorites, getUserProfile } from '@/lib/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -52,7 +52,7 @@ interface CoachProfileClientProps {
 
 export default function CoachProfile({ coachData, coachId }: CoachProfileClientProps) {
   const [coach, setCoach] = useState<Coach | null>(coachData);
-  const [loading, setLoading] = useState(!coachData); 
+  const [loading, setLoading] = useState(!coachData);
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFavorited, setIsFavorited] = useState(false);
@@ -94,7 +94,21 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
       });
       return;
     }
-    if (!coachId) return;
+    if (!coachId) {
+         console.error("Coach ID is missing, cannot toggle favorite.");
+         return; // Add a check and log if coachId is missing
+    }
+
+
+    // START of added console.log statements
+    console.log("Authenticated user object:", user);
+    console.log("Authenticated user ID:", user?.id);
+    console.log("Coach object:", coach);
+    console.log("Coach ID:", coachId); // Use coachId directly from props as it's guaranteed to be the ID
+    console.log("Type of Coach ID:", typeof coachId); // Use coachId directly from props
+    console.log("User ID passed to Firestore function:", user?.id);
+    // END of added console.log statements
+
 
     setIsLoadingFavorite(true);
     try {
@@ -126,7 +140,7 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
   }, [coachData]);
 
 
-  if (loading) { 
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-full min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" /> Loading profile...
@@ -180,7 +194,7 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                     />
                   </div>
                 ) : (
-                  <div 
+                  <div
                     className="rounded-full shadow-lg border-4 border-primary bg-muted flex items-center justify-center w-32 h-32 text-primary select-none"
                     title={coach.name}
                   >
@@ -250,7 +264,7 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                 className="bg-red-600 hover:bg-red-700 text-white font-semibold"
               />
             )}
-            {/* Favorite Button */} 
+            {/* Favorite Button */}
             {user && coachId && (
                  <TooltipProvider>
                     <Tooltip>
@@ -385,7 +399,7 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
                   key={s.url}
                   label={s.platform}
                   icon={<UserCircle className="h-5 w-5" />}
-                  url={s.url} 
+                  url={s.url}
                 />)}
               </div>
             )}

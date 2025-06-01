@@ -2,18 +2,30 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink } from "lucide-react";
+import { useAuth, type User } from "@/lib/auth"; // Assuming User type can be imported from auth
 import { useEffect, useState } from "react";
-// Assuming these functions exist or will be created in your firestore.ts:
-import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore"; 
+import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { loadStripe } from '@stripe/stripe-js';
+import { app } from '@/lib/firebase'; // Your Firebase app instance
+import { useToast } from "@/hooks/use-toast";
+
+// It's good practice to ensure the User type from useAuth includes subscriptionTier
+// If not, you might need to define an extended type here or update the one in @/lib/auth
+interface AppUser extends User {
+  subscriptionTier?: string; // free or premium
+}
 
 export default function CoachDashboardPage() {
-  const { user, loading } = useAuth();
+  const { user: authUser, loading } = useAuth();
+  const user = authUser as AppUser | null; // Cast to AppUser
+  const { toast } = useToast();
   const [coachName, setCoachName] = useState("Coach");
   const [blogStats, setBlogStats] = useState<{ pending: number, published: number }>({ pending: 0, published: 0 });
   const [newMessages, setNewMessages] = useState(0);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isUpgrading, setIsUpgrading] = useState(false);
 
   useEffect(() => {
     if (user && user.role === 'coach') {
@@ -23,31 +35,78 @@ export default function CoachDashboardPage() {
         setIsLoadingStats(true);
         if (user.id) {
           try {
-            // Use Promise.all to fetch stats concurrently
             const [fetchedBlogStats, fetchedUnreadMessages] = await Promise.all([
-              getCoachBlogStats ? getCoachBlogStats(user.id) : Promise.resolve({ pending: 0, published: 0 }), // Conditional call
-              getCoachUnreadMessageCount(user.id)
+              getCoachBlogStats ? getCoachBlogStats(user.id) : Promise.resolve({ pending: 0, published: 0 }),
+              getCoachUnreadMessageCount ? getCoachUnreadMessageCount(user.id) : Promise.resolve(0)
             ]);
             
-            if (getCoachBlogStats) { // Only set if the function was called
-                setBlogStats(fetchedBlogStats || { pending: 0, published: 0 });
-            } else {
-                setBlogStats({ pending: 0, published: 0 }); // Default if getCoachBlogStats is not available
-            }
+            setBlogStats(fetchedBlogStats || { pending: 0, published: 0 });
             setNewMessages(fetchedUnreadMessages || 0);
 
           } catch (error) {
             console.error("Error fetching coach dashboard stats:", error);
-            // Set to default values on error
             setBlogStats({ pending: 0, published: 0 });
             setNewMessages(0);
+            toast({ title: "Error", description: "Could not load dashboard stats.", variant: "destructive" });
           }
         }
         setIsLoadingStats(false);
       };
       fetchStats();
     }
-  }, [user]);
+  }, [user, toast]);
+
+  const handleUpgrade = async () => {
+    if (!user || !user.id) {
+      console.error("User not authenticated for upgrade.");
+      toast({ title: "Authentication Error", description: "Please log in again to upgrade.", variant: "destructive" });
+      return;
+    }
+    const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    if (!stripePublishableKey) {
+        console.error("Stripe publishable key is not set in environment variables.");
+        toast({ title: "Configuration Error", description: "Stripe payments are not configured correctly. Please contact support.", variant: "destructive" });
+        setIsUpgrading(false);
+        return;
+    }
+    setIsUpgrading(true);
+    try {
+      const functions = getFunctions(app);
+      const createCheckoutSession = httpsCallable(functions, 'createCheckoutSessionCallable');
+
+      const successUrl = `${window.location.origin}/payment-success?upgrade=true&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/dashboard/coach`;
+
+      const result: any = await createCheckoutSession({
+        priceId: "price_1RURVlG6UVJU45QN1mByj8Fc", // Premium Price ID
+        successUrl: successUrl,
+        cancelUrl: cancelUrl,
+        userId: user.id,
+      });
+
+      if (result.data.sessionId) {
+        const stripe = await loadStripe(stripePublishableKey);
+        if (stripe) {
+          const { error: stripeError } = await stripe.redirectToCheckout({ sessionId: result.data.sessionId });
+          if (stripeError) {
+            console.error("Stripe redirect error:", stripeError);
+            toast({ title: "Payment Error", description: stripeError.message || "Could not redirect to Stripe. Please try again.", variant: "destructive" });
+          }
+        } else {
+          console.error("Stripe.js failed to load.");
+          toast({ title: "Payment Error", description: "Stripe.js failed to load. Please try again.", variant: "destructive" });
+        }
+      } else {
+        const errorMessage = result.data.error || "Failed to create Stripe session. Please try again.";
+        console.error("Failed to create Stripe session:", errorMessage);
+        toast({ title: "Upgrade Error", description: errorMessage, variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error("Error calling createCheckoutSessionCallable:", error);
+      toast({ title: "Upgrade Error", description: error.message || "An unexpected error occurred. Please try again.", variant: "destructive" });
+    }
+    setIsUpgrading(false);
+  };
 
   if (loading) {
     return (
@@ -60,15 +119,19 @@ export default function CoachDashboardPage() {
   if (!user || user.role !== 'coach') {
     return <p>Access denied. This dashboard is for coaches.</p>;
   }
+  
+  const isPremiumCoach = user.subscriptionTier === 'premium'; 
 
   return (
     <div className="space-y-8">
       <Card>
         <CardHeader>
           <CardTitle className="text-3xl">Welcome, {coachName}!</CardTitle>
-          <CardDescription>Manage your profile, blog posts, and client interactions.</CardDescription>
+          <CardDescription>Manage your profile, blog posts, and client interactions. {isPremiumCoach && <span className="font-semibold text-primary">(Premium Coach <Star className="inline h-5 w-5 text-yellow-400 fill-yellow-400" />)</span>}</CardDescription>
         </CardHeader>
       </Card>
+
+      {/* Main Dashboard Function Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -119,13 +182,54 @@ export default function CoachDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upgrade to Premium Card - Moved to after the main function cards */}
+      {!isPremiumCoach && user.role === 'coach' && (
+        <Card className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xl">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+                <div>
+                    <CardTitle className="text-2xl">Unlock Premium Features!</CardTitle>
+                    <CardDescription className="text-indigo-100">Elevate your coaching practice with exclusive benefits.</CardDescription>
+                </div>
+                <Star className="h-12 w-12 text-yellow-300" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc list-inside space-y-1 mb-6 text-indigo-50">
+              <li>Priority listing in search results</li>
+              <li>Enhanced profile customization options</li>
+              <li>Advanced analytics on your posts and profile</li>
+              <li>Direct support from our team</li>
+            </ul>
+            <Button 
+              onClick={handleUpgrade} 
+              disabled={isUpgrading} 
+              size="lg" 
+              className="w-full bg-yellow-400 hover:bg-yellow-500 text-purple-700 font-bold shadow-md transition-transform transform hover:scale-105"
+            >
+              {isUpgrading ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Upgrading...</>
+              ) : (
+                <>Upgrade to Premium Now <ExternalLink className="ml-2 h-5 w-5" /></>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Performance Overview Card - Stays after the (potentially moved) Upgrade card */}
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary"/>Performance Overview</CardTitle>
-            <CardDescription>Summary of your profile views and engagement.</CardDescription>
+            <CardTitle className="flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary" />Performance Overview</CardTitle>
+            <CardDescription>Summary of your profile views and engagement. {isPremiumCoach && <span className="text-sm text-green-500">(Premium Analytics Unlocked)</span>}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">Profile views, message rates, and blog engagement statistics will appear here (feature coming soon).</p>
+          {isPremiumCoach ? (
+             <p className="text-muted-foreground">Display premium analytics here...</p>
+          ) : (
+            <p className="text-muted-foreground">Profile views, message rates, and blog engagement statistics will appear here. Upgrade to Premium for advanced analytics.</p>
+          )}
         </CardContent>
       </Card>
     </div>
