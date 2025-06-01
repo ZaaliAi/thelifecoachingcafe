@@ -3,20 +3,20 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag, Bell } from 'lucide-react'; // Added Bell
+import { Home, Search, BookOpen, LogIn, UserPlus, UserCircle, LogOut, Menu, LayoutDashboard, ShieldAlert, Users, Tag, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { useState, useEffect } from 'react'; // Added useEffect
-import { getUserUnreadMessageCount } from '@/lib/firestore'; // Added Firestore function
+import { useState, useEffect } from 'react';
+import { getUserUnreadMessageCount } from '@/lib/firestore';
 
 const navLinks = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/find-a-coach', label: 'CoachMatch AI', icon: Search },
   { href: '/browse-coaches', label: 'Browse Coaches', icon: Users },
   { href: '/blog', label: 'Blog', icon: BookOpen },
-  { href: '/pricing', label: 'Pricing', icon: Tag },
+  // { href: '/pricing', label: 'Pricing', icon: Tag }, // Removed pricing link
 ];
 
 const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" }) => {
@@ -54,21 +54,19 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
 export function Header() {
   const { user, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0); // State for unread messages
-  const pathname = usePathname(); // Get current pathname
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pathname = usePathname();
 
   const dashboardLink = user ? `/dashboard/${user.role}` : '/login';
   const dashboardLabel = user ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} Dashboard` : '';
   const DashboardIcon = user?.role === 'admin' ? ShieldAlert : user?.role === 'coach' ? LayoutDashboard : UserCircle;
   
-  // Determine messages page link based on user role
   const messagesPageLink = user 
     ? user.role === 'coach' ? '/dashboard/coach/messages' 
     : user.role === 'user' ? '/dashboard/user/messages' 
-    : user.role === 'admin' ? '/dashboard/admin/messages' // Or a general messages overview for admin
-    : '/login' // Fallback if role is somehow undefined
+    : user.role === 'admin' ? '/dashboard/admin/messages'
+    : '/login'
     : '/login';
-
 
   useEffect(() => {
     if (user && user.id) {
@@ -78,12 +76,11 @@ export function Header() {
         })
         .catch(error => {
           console.error("Failed to fetch unread message count:", error);
-          // Optionally, you could show a toast error here
         });
     } else {
-      setUnreadCount(0); // Reset count if no user or user.id is missing
+      setUnreadCount(0);
     }
-  }, [user, pathname]); // MODIFIED: Added pathname to the dependency array
+  }, [user, pathname]);
 
   const logoUrl = "https://firebasestorage.googleapis.com/v0/b/coachconnect-897af.firebasestorage.app/o/aaadb032-0d6f-4c06-a8a5-6a6064b4fb06_removalai_preview.png?alt=media&token=0c82d001-1e15-440d-bded-37de001e2d31";
 
@@ -103,7 +100,6 @@ export function Header() {
           {!loading && (
             user ? (
               <>
-                {/* Notification Bell - Desktop */}
                 {unreadCount > 0 && (
                   <Link href={messagesPageLink} className="relative p-2 text-foreground/70 hover:text-foreground">
                     <Bell className="h-5 w-5" />
@@ -120,9 +116,9 @@ export function Header() {
             ) : (
               <>
                 <NavLinkItem href="/login" label="Login" icon={LogIn} />
-                <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} />
+                <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} /> {/* MODIFIED HERE */}
                 <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
-                  <a href="/signup?role=coach">
+                  <a href="/pricing">
                     Register as a Coach
                   </a>
                 </Button>
@@ -132,9 +128,9 @@ export function Header() {
         </nav>
 
         {/* Mobile Navigation Trigger */}
-        <div className="md:hidden flex items-center"> {/* Added flex items-center for mobile bell */}
+        <div className="md:hidden flex items-center">
           {!loading && user && unreadCount > 0 && (
-            <Link href={messagesPageLink} className="relative p-2 mr-2 text-foreground/70 hover:text-foreground"> {/* mr-2 for spacing from menu */}
+            <Link href={messagesPageLink} className="relative p-2 mr-2 text-foreground/70 hover:text-foreground">
               <Bell className="h-5 w-5" />
               <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
                 {unreadCount}
@@ -163,8 +159,6 @@ export function Header() {
                 {!loading && (
                   user ? (
                     <>
-                      {/* Notification Bell - Mobile Menu (Optional, could be just in header before opening menu) */}
-                      {/* If you want it *inside* the menu as well: */}
                       {unreadCount > 0 && (
                         <Link href={messagesPageLink} onClick={closeMobileMenu} className="relative flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-foreground/70 hover:text-foreground hover:bg-muted">
                           <Bell className="h-5 w-5" />
@@ -182,9 +176,9 @@ export function Header() {
                   ) : (
                     <>
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
-                      <NavLinkItem href="/signup" label="Sign Up" icon={UserPlus} onClick={closeMobileMenu} />
+                      <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} onClick={closeMobileMenu} /> {/* MODIFIED HERE */}
                       <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
-                        <a href="/signup?role=coach">
+                        <a href="/pricing">
                            Register as a Coach
                         </a>
                       </Button>

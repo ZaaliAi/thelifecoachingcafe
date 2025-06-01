@@ -1,98 +1,73 @@
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
-import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
+import { useForm, type SubmitHandler } from 'react-hook-form'; // Removed Controller
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Removed useSearchParams
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+// Removed RadioGroup, RadioGroupItem imports
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, UserPlus } from 'lucide-react';
 import { useAuth } from '@/lib/auth'; 
 import { useToast } from '@/hooks/use-toast';
-import type { UserRole } from '@/types';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase'; 
-import { setUserProfile } from '@/lib/firestore'; // Import setUserProfile
 
+// Updated schema: removed role
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
   confirmPassword: z.string(),
-  role: z.enum(['user', 'coach'], { required_error: 'Please select a role.' }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
 
+// SignupFormData type will be inferred from the updated schema
 type SignupFormData = z.infer<typeof signupSchema>;
 
 function SignupFormContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, registerWithEmailAndPassword } = useAuth(); 
   const router = useRouter();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const initialRole = searchParams.get('role') === 'coach' ? 'coach' : 'user';
+  // Removed searchParams and initialRole logic
 
-  const { control, register, handleSubmit, formState: { errors }, setValue } = useForm<SignupFormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      role: initialRole,
+      // Removed role from defaultValues
       name: '',
       email: '',
     }
   });
 
-  useEffect(() => {
-    setValue('role', initialRole);
-  }, [initialRole, setValue]);
+  // Removed useEffect for setting initialRole
 
   useEffect(() => {
     if (!authLoading && user) {
-      const firebaseUser = user;
-      // Check if already on a dashboard page to prevent redirect loops if user manually navigates to /signup
+      // Redirect if user is already logged in and on signup page
       if (!router.pathname?.includes('/dashboard')) {
-          // Simple check for displayName; in a real app, you'd fetch Firestore role for accurate redirect.
-          const targetDashboard = firebaseUser.displayName?.toLowerCase().includes('coach') ? '/dashboard/coach' : '/dashboard/user';
-        //   toast({ title: "Already Logged In", description: `Redirecting to your dashboard, ${firebaseUser.displayName || firebaseUser.email}.` });
-        //   router.push(targetDashboard); // Or a generic dashboard page
+        router.push('/dashboard/user'); // Default to user dashboard
       }
     }
-  }, [user, authLoading, router, toast]);
+  }, [user, authLoading, router]);
 
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const firebaseUser = userCredential.user;
-
-      await updateProfile(firebaseUser, { displayName: data.name });
-      console.log("Firebase auth profile updated with displayName:", data.name);
-
-      // Use setUserProfile to store user details in Firestore
-      await setUserProfile(firebaseUser.uid, {
-        name: data.name, // Correctly use 'name'
-        email: data.email,
-        role: data.role,
-        // setUserProfile handles createdAt and other defaults for new users
-      });
-      console.log("User details stored in Firestore using setUserProfile for UID:", firebaseUser.uid);
-
+      // Call registerWithEmailAndPassword with role hardcoded to 'user'
+      await registerWithEmailAndPassword(data.email, data.password, data.name, 'user');
+      
       toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
 
-      if (data.role === 'coach') {
-        router.push(`/register-coach?email=${encodeURIComponent(data.email)}&name=${encodeURIComponent(data.name)}`);
-      } else {
-        router.push('/dashboard/user');
-      }
+      // Always redirect to user dashboard
+      router.push('/dashboard/user');
+
     } catch (error: any) {
-      setIsLoading(false);
       let errorMessage = "Signup failed. Please try again.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email is already registered. Please try logging in or use a different email.";
@@ -108,6 +83,8 @@ function SignupFormContent() {
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -124,8 +101,9 @@ function SignupFormContent() {
       <CardHeader className="text-center">
         <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
         <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>
+        {/* Updated CardDescription */}
         <CardDescription>
-          Join The Life Coaching Cafe today to find or become a life coach.
+          Join The Life Coaching Cafe today to find your ideal life coach.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -155,30 +133,7 @@ function SignupFormContent() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>I am a:</Label>
-            <Controller
-              name="role"
-              control={control}
-              render={({ field }) => (
-                <RadioGroup
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  className="flex space-x-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="user" id="role-user" />
-                    <Label htmlFor="role-user" className="font-normal">User (Seeking a coach)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="coach" id="role-coach" />
-                    <Label htmlFor="role-coach" className="font-normal">Coach (Want to offer services)</Label>
-                  </div>
-                </RadioGroup>
-              )}
-            />
-            {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
-          </div>
+          {/* Removed Role Selection RadioGroup */}
 
           <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
             {isLoading || authLoading ? (
