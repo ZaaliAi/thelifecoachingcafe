@@ -31,7 +31,7 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 function SignupFormContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const { user, loading: authLoading, registerWithEmailAndPassword } = useAuth(); 
+  const { user, loading: authLoading, signup } = useAuth(); // Changed from registerWithEmailAndPassword to signup
   const router = useRouter();
   const { toast } = useToast();
   // Removed searchParams and initialRole logic
@@ -50,7 +50,8 @@ function SignupFormContent() {
   useEffect(() => {
     if (!authLoading && user) {
       // Redirect if user is already logged in and on signup page
-      if (!router.pathname?.includes('/dashboard')) {
+      // Ensure router.pathname is checked safely
+      if (router && typeof router.pathname === 'string' && !router.pathname.includes('/dashboard')) {
         router.push('/dashboard/user'); // Default to user dashboard
       }
     }
@@ -59,8 +60,8 @@ function SignupFormContent() {
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      // Call registerWithEmailAndPassword with role hardcoded to 'user'
-      await registerWithEmailAndPassword(data.email, data.password, data.name, 'user');
+      // Call signup with role hardcoded to 'user'
+      await signup(data.name, data.email, data.password, 'user'); // Changed from registerWithEmailAndPassword
       
       toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
 
@@ -69,18 +70,23 @@ function SignupFormContent() {
 
     } catch (error: any) {
       let errorMessage = "Signup failed. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "This email is already registered. Please try logging in or use a different email.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "The password is too weak. Please choose a stronger password.";
-      } else if (error.code) {
-        errorMessage = `Signup error: ${error.message} (Code: ${error.code})`;
-      } else if (error.message) {
-         errorMessage = error.message;
+      if (error && typeof error.code === 'string') { // More robust error checking
+        if (error.code === 'auth/email-already-in-use') {
+          errorMessage = "This email is already registered. Please try logging in or use a different email.";
+        } else if (error.code === 'auth/weak-password') {
+          errorMessage = "The password is too weak. Please choose a stronger password.";
+        } else if (error.message) { // Ensure error.message is a string
+          errorMessage = `Signup error: ${String(error.message)} (Code: ${error.code})`;
+        }
+      } else if (error && error.message) { // Fallback if error.code is not available
+         errorMessage = String(error.message);
+      } else if (typeof error === 'string') { // If error itself is a string
+        errorMessage = error;
       }
+      // Ensure description is always a string
       toast({
         title: "Signup Failed",
-        description: errorMessage,
+        description: String(errorMessage),
         variant: "destructive",
       });
     } finally {
