@@ -3,10 +3,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isNotSuspended() {
-      // Check if the user document exists before trying to access its data
-      return request.auth != null && 
+      // Ensure the user is authenticated and their document exists.
+      // These checks might be redundant if the calling rule already verifies them,
+      // but it's safer to include them.
+      return request.auth != null &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'suspended';
+             (
+               // Case 1: The 'status' field does NOT exist.
+               // In this case, the user is considered active (not suspended).
+               !('status' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+               // Case 2: The 'status' field DOES exist AND is not 'suspended'.
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'suspended'
+             );
     }
 
     // Blog posts: Public read, only authenticated users can write
