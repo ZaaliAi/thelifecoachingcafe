@@ -142,7 +142,7 @@ export default function PricingPage() {
         <Crown className="mx-auto h-12 w-12 text-primary mb-4" />
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Subscription Plans</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Choose the best plan for certified life coaches to grow your practice and connect with clients seeking personal development and coaching for confidence.
+          Choose the best plan to grow your Life Coach practice and connect with clients seeking personal development.
         </p>
       </section>
 
@@ -154,7 +154,7 @@ export default function PricingPage() {
               <Users className="mr-3 h-7 w-7 text-muted-foreground" />
               Free Tier
             </CardTitle>
-            <CardDescription>Get started and build your presence on CoachConnect's life coach directory.</CardDescription>
+            <CardDescription>Get started and build your presence on Life Coaching Cafe directory.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow space-y-4">
             <p className="text-3xl font-bold">£0 <span className="text-sm font-normal text-muted-foreground">/ month</span></p>
