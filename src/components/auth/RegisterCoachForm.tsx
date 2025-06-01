@@ -24,6 +24,8 @@ import getStripe from '@/lib/stripe';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
 
+const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RURVlG6UVJU45QN1mByj8Fc";
+
 interface RegisterCoachFormProps {
   planId?: string | null;
 }
@@ -59,6 +61,7 @@ type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   const router = useRouter();
   const { registerWithEmailAndPassword, loading: authLoading } = useAuth();
+  const isFreeTier = !planId; // If planId is null, undefined, or an empty string, it's a free tier.
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
   const [customSpecialtyInput, setCustomSpecialtyInput] = useState('');
@@ -275,6 +278,13 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     }
   };
 
+  const handleUpgradeToPremium = async () => {
+    // The subtask prompt uses a simplified router.push approach for now.
+    // The more complex inline upgrade logic is commented out in the prompt and not implemented here.
+    router.push(`/register-coach?planId=${YOUR_DEFAULT_PREMIUM_PRICE_ID}`);
+    return;
+  };
+
  return (
     <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8 max-w-3xl bg-background">
       <section className="mb-12 text-center py-8 px-6 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 shadow-lg border border-border/20">
@@ -416,7 +426,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                     </div>
                     )}
                     <div className="flex space-x-3">
-                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isFreeTier}>
                         <UploadCloud className="mr-2 h-4 w-4" /> {selectedFile ? 'Change Image' : 'Upload Image'}
                     </Button>
                     <input 
@@ -426,44 +436,75 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                         accept="image/png, image/jpeg, image/jpg" 
                         onChange={handleImageChange} 
                         ref={fileInputRef}
+                        disabled={isFreeTier}
                     />
-                    {imagePreviewUrl && (
+                    {!isFreeTier && imagePreviewUrl && (
                         <Button type="button" variant="ghost" size="icon" onClick={handleRemoveImage} aria-label="Remove image"> 
                         <Trash2 className="h-5 w-5 text-destructive" />
                         </Button>
                     )}
                     </div>
+                    {isFreeTier && (
+                      <div className="text-center p-4 mt-2 border border-dashed border-gray-300 rounded-md bg-gray-50">
+                        <p className="text-sm text-gray-600 mb-2">Profile Picture is a Premium Feature.</p>
+                        <Button type="button" size="sm" onClick={handleUpgradeToPremium}>
+                          Upgrade to Unlock
+                        </Button>
+                      </div>
+                    )}
                 </div>
                 {errors.profileImageUrl && <p className="text-sm text-destructive mt-1">{errors.profileImageUrl.message}</p>}
-                <p className="text-xs text-muted-foreground text-center mt-2">
+                {/* <p className="text-xs text-muted-foreground text-center mt-2">
                     <span>A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.</span>
                     {!planId && (
                         <span className="ml-1"> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
                     )}
-                </p>
+                </p> */}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="websiteUrl" className="text-base font-medium flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-primary/80" />Website URL</Label>
-              <Controller name="websiteUrl" control={control} render={({ field }) => <Input id="websiteUrl" type="url" placeholder="https://yourwebsite.com" {...field} className="text-base py-2.5" />} />
+              <Controller name="websiteUrl" control={control} render={({ field }) => <Input id="websiteUrl" type="url" placeholder="https://yourwebsite.com" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
               {errors.websiteUrl && <p className="text-sm text-destructive mt-1">{errors.websiteUrl.message}</p>}
+              {isFreeTier && (
+                <div className="text-right mt-1">
+                  <Button type="button" size="sm" variant="link" className="text-primary hover:text-primary/80 p-0 h-auto" onClick={handleUpgradeToPremium}>
+                    Upgrade to Unlock
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="introVideoUrl" className="text-base font-medium flex items-center"><Video className="mr-2 h-5 w-5 text-primary/80" />Intro Video URL (e.g., YouTube, Vimeo)</Label>
-              <Controller name="introVideoUrl" control={control} render={({ field }) => <Input id="introVideoUrl" type="url" placeholder="https://youtube.com/yourvideo" {...field} className="text-base py-2.5" />} />
+              <Controller name="introVideoUrl" control={control} render={({ field }) => <Input id="introVideoUrl" type="url" placeholder="https://youtube.com/yourvideo" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
               {errors.introVideoUrl && <p className="text-sm text-destructive mt-1">{errors.introVideoUrl.message}</p>}
+              {isFreeTier && (
+                <div className="text-right mt-1">
+                  <Button type="button" size="sm" variant="link" className="text-primary hover:text-primary/80 p-0 h-auto" onClick={handleUpgradeToPremium}>
+                    Upgrade to Unlock
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="socialLinkPlatform" className="text-base font-medium">Social Media Platform</Label>
-                <Controller name="socialLinkPlatform" control={control} render={({ field }) => <Input id="socialLinkPlatform" placeholder="e.g., LinkedIn, Twitter" {...field} className="text-base py-2.5" />} />
+                <Controller name="socialLinkPlatform" control={control} render={({ field }) => <Input id="socialLinkPlatform" placeholder="e.g., LinkedIn, Twitter" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
                 {errors.socialLinkPlatform && <p className="text-sm text-destructive mt-1">{errors.socialLinkPlatform.message}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="socialLinkUrl" className="text-base font-medium">Social Media URL</Label>
-                <Controller name="socialLinkUrl" control={control} render={({ field }) => <Input id="socialLinkUrl" type="url" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" />} />
+                <Controller name="socialLinkUrl" control={control} render={({ field }) => <Input id="socialLinkUrl" type="url" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
                 {errors.socialLinkUrl && <p className="text-sm text-destructive mt-1">{errors.socialLinkUrl.message}</p>}
               </div>
+              {isFreeTier && (
+                <div className="md:col-span-2 text-center p-4 mt-2 border border-dashed border-gray-300 rounded-md bg-gray-50">
+                  <p className="text-sm text-gray-600 mb-2">Adding Social Media Links is a Premium Feature.</p>
+                  <Button type="button" size="sm" onClick={handleUpgradeToPremium}>
+                    Upgrade to Unlock
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -526,7 +567,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
 
         <Button type="submit" className="w-full py-3 text-lg font-semibold tracking-wide shadow-lg hover:shadow-xl transition-shadow duration-200 ease-in-out" disabled={isSubmitting || authLoading || isAiLoading} size="lg">
           {isSubmitting || authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserPlus className="mr-2 h-5 w-5" />}
-          {isSubmitting || authLoading ? 'Processing Registration...' : 'Create Account & Proceed to Payment'}
+          {isSubmitting || authLoading ? 'Processing Registration...' : (isFreeTier ? 'Create Free Account' : 'Create Account & Proceed to Payment')}
         </Button>
       </form>
     </div>
