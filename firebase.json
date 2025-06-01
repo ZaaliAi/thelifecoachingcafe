@@ -28,6 +28,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
+      "runtime": "nodejs20",
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]

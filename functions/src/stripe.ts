@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
+import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -20,17 +21,21 @@ interface CreateStripePortalLinkData {
   returnUrl: string;
 }
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+// Use functions.config() to access environment configuration set by `firebase functions:config:set`
+const stripeConfig = functions.config().stripe;
+const stripeSecretKey = stripeConfig?.secretkey;
+const stripeWebhookSecret = stripeConfig?.webhooksecret;
+
 let stripe: Stripe | undefined;
 
 if (!stripeSecretKey) {
-  console.warn(
-    'WARNING: STRIPE_SECRET_KEY environment variable was not found. Stripe functions will fail.'
+  console.error(
+    'CRITICAL_ERROR: STRIPE_SECRET_KEY is not configured in Firebase Functions config. Stripe functions WILL FAIL. Run: firebase functions:config:set stripe.secretkey="YOUR_KEY"'
   );
 } else {
   try {
     stripe = new Stripe(stripeSecretKey, { 
-      apiVersion: "2025-05-28.basil", // Reverted to the version your SDK expects
+      apiVersion: "2024-04-10", 
       telemetry: false, 
     });
     console.log('Stripe SDK initialized successfully.');
@@ -40,15 +45,15 @@ if (!stripeSecretKey) {
 }
 
 export const createCheckoutSessionCallable = functions.https.onCall(
-  async (request: functions.https.CallableRequest<CreateCheckoutSessionData>) => {
+  async (request: CallableRequest<CreateCheckoutSessionData>) => {
     if (!stripe) {
         console.error('Stripe SDK is not available. Cannot process createCheckoutSessionCallable.');
-        throw new functions.https.HttpsError('internal', 'Stripe SDK not configured. Check server logs.');
+        throw new HttpsError('internal', 'Stripe SDK not configured or failed to initialize. Check server logs.');
     }
     const { priceId, successUrl, cancelUrl, userId: clientUserId } = request.data;
 
     if (!priceId || !successUrl || !cancelUrl) {
-      throw new functions.https.HttpsError('invalid-argument', 'Missing required arguments.');
+      throw new HttpsError('invalid-argument', 'Missing required arguments.');
     }
 
     try {
@@ -86,11 +91,12 @@ export const createCheckoutSessionCallable = functions.https.onCall(
         metadata: { ...(firebaseUIDToUpdate && { firebaseUID: firebaseUIDToUpdate }) }
       };
       const session = await stripe.checkout.sessions.create(sessionCreateParams);
-      if (!session.id) throw new functions.https.HttpsError('internal', 'Failed to create Stripe session ID.');
+      if (!session.id) throw new HttpsError('internal', 'Failed to create Stripe session ID.');
       return { sessionId: session.id };
     } catch (error: any) {
       console.error('Error in createCheckoutSessionCallable:', error);
-      throw new functions.https.HttpsError('internal', error.message || 'Internal error creating checkout.');
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError('internal', error.message || 'Internal error creating checkout.');
     }
   }
 );
@@ -99,13 +105,12 @@ export const stripeWebhookHandler = functions.https.onRequest(
   async (req, res) => {
     if (!stripe) { 
         console.error('Stripe SDK not available. Cannot process stripeWebhookHandler.');
-        res.status(500).send('Stripe SDK not configured. Check server logs.');
+        res.status(500).send('Stripe SDK not configured or failed to initialize. Check server logs.');
         return;
     }
-    const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!stripeWebhookSecret) {
-      console.error('STRIPE_WEBHOOK_SECRET not set. Cannot process webhook.');
-      res.status(500).send('Webhook config error: Secret not set.');
+      console.error('CRITICAL_ERROR: STRIPE_WEBHOOK_SECRET not configured in Firebase Functions config. Webhook will fail. Run: firebase functions:config:set stripe.webhooksecret="YOUR_KEY"');
+      res.status(500).send('Webhook config error: Secret not set on server.');
       return;
     }
 
@@ -114,6 +119,10 @@ export const stripeWebhookHandler = functions.https.onRequest(
     try {
       if (!sigHeader) throw new Error('No stripe-signature header.');
       const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+      if (!(req as any).rawBody) {
+        console.error('Webhook Error: req.rawBody is not available. Ensure body parser is not consuming it before verification or is configured to preserve it.');
+        throw new Error('Missing rawBody for webhook verification.');
+      }
       event = stripe.webhooks.constructEvent((req as any).rawBody, sig!, stripeWebhookSecret);
     } catch (err: any) {
       console.error('Webhook signature verification failed:', err.message);
@@ -140,24 +149,22 @@ export const stripeWebhookHandler = functions.https.onRequest(
           }
 
           let sessionSubscriptionId: string | undefined;
-          // Using `as any` for session.subscription as it was in your original code that Stripe provided
-          if (typeof (session as any).subscription === 'string') {
-            sessionSubscriptionId = (session as any).subscription;
-          } else if ((session as any).subscription && typeof (session as any).subscription.id === 'string') {
-            sessionSubscriptionId = (session as any).subscription.id;
+          if (typeof session.subscription === 'string') {
+            sessionSubscriptionId = session.subscription;
+          } else if (session.subscription && typeof (session.subscription as Stripe.Subscription).id === 'string') {
+            sessionSubscriptionId = (session.subscription as Stripe.Subscription).id;
           }
 
           if (firebaseUID && sessionSubscriptionId && sessionCustomerId) {
             stripeSubscription = await stripe.subscriptions.retrieve(sessionSubscriptionId);
-            // Using `as any` for stripeSubscription.items and stripeSubscription.current_period_end
-            const priceIdFromSubscription = (stripeSubscription as any).items.data[0]?.price.id;
+            const priceIdFromSubscription = stripeSubscription.items.data[0]?.price.id;
 
             const updateDataForCheckout: any = {
               stripeSubscriptionId: stripeSubscription.id,
               stripeCustomerId: sessionCustomerId,
               subscriptionStatus: stripeSubscription.status,
               subscriptionPriceId: priceIdFromSubscription,
-              subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis((stripeSubscription as any).current_period_end * 1000),
+              subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis(stripeSubscription.current_period_end * 1000),
               updatedAt: admin.firestore.FieldValue.serverTimestamp() 
             };
 
@@ -182,9 +189,8 @@ export const stripeWebhookHandler = functions.https.onRequest(
           console.log('Invoice ' + stripeInvoice.id + ' paid.');
           
           let invSubIdForPaid: string | undefined;
-          // Using `as any` for stripeInvoice.subscription
-          if (typeof (stripeInvoice as any).subscription === 'string') invSubIdForPaid = (stripeInvoice as any).subscription;
-          else if ((stripeInvoice as any).subscription && typeof (stripeInvoice as any).subscription.id === 'string') invSubIdForPaid = (stripeInvoice as any).subscription.id;
+          if (typeof stripeInvoice.subscription === 'string') invSubIdForPaid = stripeInvoice.subscription;
+          else if (stripeInvoice.subscription && typeof (stripeInvoice.subscription as Stripe.Subscription).id === 'string') invSubIdForPaid = (stripeInvoice.subscription as Stripe.Subscription).id;
 
           let invCustIdForPaid: string | undefined;
           if (typeof stripeInvoice.customer === 'string') invCustIdForPaid = stripeInvoice.customer;
@@ -196,12 +202,10 @@ export const stripeWebhookHandler = functions.https.onRequest(
             if (userSnapshot && userSnapshot.exists) {
               const updateDataForInvoicePaid: any = {
                 subscriptionStatus: stripeSubscription.status,
-                // Using `as any` for stripeSubscription.current_period_end
-                subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis((stripeSubscription as any).current_period_end * 1000),
+                subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis(stripeSubscription.current_period_end * 1000),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
               };
-              // Using `as any` for stripeSubscription.items
-              const priceIdFromSub = (stripeSubscription as any).items.data[0]?.price.id;
+              const priceIdFromSub = stripeSubscription.items.data[0]?.price.id;
               if (priceIdFromSub === "price_1RURVlG6UVJU45QN1mByj8Fc") {
                 updateDataForInvoicePaid.subscriptionTier = 'premium';
               } else if (priceIdFromSub) {
@@ -222,9 +226,8 @@ export const stripeWebhookHandler = functions.https.onRequest(
           console.log('Invoice payment failed for ' + stripeInvoice.id + '.');
 
           let invSubIdForFailed: string | undefined;
-          // Using `as any` for stripeInvoice.subscription
-          if (typeof (stripeInvoice as any).subscription === 'string') invSubIdForFailed = (stripeInvoice as any).subscription;
-          else if ((stripeInvoice as any).subscription && typeof (stripeInvoice as any).subscription.id === 'string') invSubIdForFailed = (stripeInvoice as any).subscription.id;
+          if (typeof stripeInvoice.subscription === 'string') invSubIdForFailed = stripeInvoice.subscription;
+          else if (stripeInvoice.subscription && typeof (stripeInvoice.subscription as Stripe.Subscription).id === 'string') invSubIdForFailed = (stripeInvoice.subscription as Stripe.Subscription).id;
 
           let invCustIdForFailed: string | undefined;
           if (typeof stripeInvoice.customer === 'string') invCustIdForFailed = stripeInvoice.customer;
@@ -264,20 +267,18 @@ export const stripeWebhookHandler = functions.https.onRequest(
             if (userSnapshot && userSnapshot.exists) {
               const updateDataForSubUpdate: any = {
                 subscriptionStatus: stripeSubscription.status,
-                // Using `as any` for stripeSubscription.items and stripeSubscription.current_period_end
-                subscriptionPriceId: (stripeSubscription as any).items.data[0]?.price.id,
-                subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis((stripeSubscription as any).current_period_end * 1000),
+                subscriptionPriceId: stripeSubscription.items.data[0]?.price.id,
+                subscriptionCurrentPeriodEnd: admin.firestore.Timestamp.fromMillis(stripeSubscription.current_period_end * 1000),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
               };
-              // Using `as any` for stripeSubscription.cancel_at_period_end and stripeSubscription.cancel_at
-              if ((stripeSubscription as any).cancel_at_period_end && (stripeSubscription as any).cancel_at) {
+              if (stripeSubscription.cancel_at_period_end && stripeSubscription.cancel_at) {
                 updateDataForSubUpdate.subscriptionCancelAtPeriodEnd = true;
-                updateDataForSubUpdate.subscriptionCancellationDate = admin.firestore.Timestamp.fromMillis((stripeSubscription as any).cancel_at * 1000);
+                updateDataForSubUpdate.subscriptionCancellationDate = admin.firestore.Timestamp.fromMillis(stripeSubscription.cancel_at * 1000);
               } else {
                  updateDataForSubUpdate.subscriptionCancelAtPeriodEnd = false; 
               }
               
-              const currentPriceId = (stripeSubscription as any).items.data[0]?.price.id;
+              const currentPriceId = stripeSubscription.items.data[0]?.price.id;
               if (currentPriceId === "price_1RURVlG6UVJU45QN1mByj8Fc") {
                 updateDataForSubUpdate.subscriptionTier = 'premium';
               } else if (currentPriceId) {
@@ -336,21 +337,21 @@ export const stripeWebhookHandler = functions.https.onRequest(
 );
 
 export const createStripePortalLink = functions.https.onCall(
-  async (request: functions.https.CallableRequest<CreateStripePortalLinkData>) => {
+  async (request: CallableRequest<CreateStripePortalLinkData>) => {
     if (!stripe) {
       console.error('Stripe SDK not available. Cannot create portal link.');
-      throw new functions.https.HttpsError('internal', 'Stripe SDK not configured. Check server logs.');
+      throw new HttpsError('internal', 'Stripe SDK not configured or failed to initialize. Check server logs.');
     }
 
     if (!request.auth || !request.auth.uid) {
-      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+      throw new HttpsError('unauthenticated', 'User must be authenticated.');
     }
 
     const userId = request.auth.uid;
     const { returnUrl } = request.data;
 
     if (!returnUrl || typeof returnUrl !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', "Valid 'returnUrl' is required."); 
+        throw new HttpsError('invalid-argument', "Valid 'returnUrl' is required."); 
     }
 
     try {
@@ -359,7 +360,7 @@ export const createStripePortalLink = functions.https.onCall(
 
       if (!userData || !userData.stripeCustomerId) {
         console.error('User ' + userId + ' has no stripeCustomerId.');
-        throw new functions.https.HttpsError('not-found', 'Stripe customer ID not found.');
+        throw new HttpsError('not-found', 'Stripe customer ID not found.');
       }
 
       const stripeCustomerId = userData.stripeCustomerId;
@@ -369,15 +370,15 @@ export const createStripePortalLink = functions.https.onCall(
       });
 
       if (!portalSession.url) {
-        throw new functions.https.HttpsError('internal', 'Failed to create Stripe portal session URL.');
+        throw new HttpsError('internal', 'Failed to create Stripe portal session URL.');
       }
       
       return { portalUrl: portalSession.url };
 
     } catch (error: any) {
       console.error('Error creating Stripe portal link for user ' + userId + ':', error);
-      if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message || 'Internal error creating portal link.');
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError('internal', error.message || 'Internal error creating portal link.');
     }
   }
 );
