@@ -22,15 +22,14 @@ interface CreateStripePortalLinkData {
 }
 
 // Use functions.config() to access environment configuration set by `firebase functions:config:set`
-const stripeConfig = functions.config().stripe;
-const stripeSecretKey = stripeConfig?.secretkey;
-const stripeWebhookSecret = stripeConfig?.webhooksecret;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 let stripe: Stripe | undefined;
 
 if (!stripeSecretKey) {
   console.error(
-    'CRITICAL_ERROR: STRIPE_SECRET_KEY is not configured in Firebase Functions config. Stripe functions WILL FAIL. Run: firebase functions:config:set stripe.secretkey="YOUR_KEY"'
+    'CRITICAL_ERROR: STRIPE_SECRET_KEY is not configured in environment variables. Stripe functions WILL FAIL.'
   );
 } else {
   try {

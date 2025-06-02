@@ -84,3 +84,4 @@ export const deleteUserAccount = functions.https.onCall(async (request: Callable
 });
 
 export * from "./stripe";
+export * from "./contact";

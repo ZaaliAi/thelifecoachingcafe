@@ -1,12 +1,23 @@
 "use client";
 
-import { Mail, Phone, MapPin as MapPinIcon, MessageSquare } from 'lucide-react'; // Added MessageSquare
+import { Mail, MessageSquare, Loader2 } from 'lucide-react'; // Added MessageSquare, Loader2
+import { useState } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '@/lib/firebase'; // Your Firebase app instance
+import { useToast } from "@/hooks/use-toast";
 
 export default function ContactUsPage() {
+  const { toast } = useToast();
   const companyEmail = "hello@thelifecoachingcafe.com";
   const companyPhone = "+1 (555) 123-4567";    // Placeholder - will be removed from display
   // const companyAddress = "123 Coaching Lane, Suite 100, Knowledgetown, USA 12345"; // Placeholder - companyAddress is not used anymore
 
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   return (
     <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <header className="mb-12 text-center">
@@ -53,7 +64,43 @@ export default function ContactUsPage() {
         
         <section>
           <h2 className="text-2xl font-semibold text-primary mb-6 text-center">Send Us a Message</h2>
-          <form className="space-y-6 bg-card p-8 rounded-lg shadow-lg">
+          <form 
+            className="space-y-6 bg-card p-8 rounded-lg shadow-lg"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setIsLoading(true);
+              setStatusMessage(null); // Clear previous status
+
+              try {
+                const functions = getFunctions(app);
+                const sendContactMessage = httpsCallable(functions, 'sendContactMessage');
+
+                const result = await sendContactMessage({ name, email, subject, message });
+                
+                // Assuming the callable function returns a success indicator in result.data
+                if (result.data && (result.data as any).success) {
+                  setStatusMessage("Message sent successfully! We will get back to you shortly.");
+                  toast({ title: "Success", description: "Your message has been sent.", variant: "default" });
+                  // Reset form fields
+                  setName('');
+                  setEmail('');
+                  setSubject('');
+                  setMessage('');
+                } else {
+                   // Handle errors returned by the callable function
+                  const errorMessage = (result.data as any)?.error || "Failed to send message. Please try again.";
+                  setStatusMessage(`Error: ${errorMessage}`);
+                  toast({ title: "Error", description: errorMessage, variant: "destructive" });
+                }
+              } catch (error: any) {
+                console.error("Error calling sendContactMessage callable function:", error);
+                setStatusMessage(`Error sending message: ${error.message || "An unexpected error occurred."}`);
+                toast({ title: "Error", description: error.message || "An unexpected error occurred while sending your message.", variant: "destructive" });
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+          >
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-foreground mb-1">Full Name</label>
               <input 
@@ -61,6 +108,8 @@ export default function ContactUsPage() {
                 name="name" 
                 id="name" 
                 autoComplete="name" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
                 placeholder="Your Full Name"
               />
@@ -72,6 +121,8 @@ export default function ContactUsPage() {
                 name="email" 
                 id="email" 
                 autoComplete="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
                 placeholder="you@example.com"
               />
@@ -82,6 +133,8 @@ export default function ContactUsPage() {
                 type="text" 
                 name="subject" 
                 id="subject" 
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
                 placeholder="How can we help?"
               />
@@ -91,18 +144,25 @@ export default function ContactUsPage() {
               <textarea 
                 id="message" 
                 name="message" 
-                rows={4} 
+                rows={4}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="Your message..."
               ></textarea>
             </div>
+            {statusMessage && (
+              <p className={`text-center text-sm ${statusMessage.startsWith('Error') ? 'text-red-500' : 'text-green-500'}`}>
+                {statusMessage}
+              </p>
+            )}
             <div>
               <button 
                 type="submit"
-                disabled // Disabled for now as it's a placeholder
+                disabled={isLoading} 
                 className="inline-flex w-full justify-center rounded-md border border-transparent bg-primary py-2.5 px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
               >
-                Send Message
+                {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : 'Send Message'}
               </button>
             </div>
           </form>
