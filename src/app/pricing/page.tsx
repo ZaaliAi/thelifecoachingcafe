@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getFirestore, collection, getDocs, query, where, orderBy, DocumentData } from 'firebase/firestore';
-import { firebaseApp } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth'; 
 import SubscribeButton from '@/components/SubscribeButton';
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,7 @@ export default function PricingPage() {
     const fetchPaidProductsAndPrices = async () => {
       setLoadingProducts(true);
       setError(null);
-      const db = getFirestore(firebaseApp);
+      // Firestore instance is already exported as db from '@/lib/firebase'
       const productsRef = collection(db, 'products');
       const q = query(productsRef, where('active', '==', true));
 

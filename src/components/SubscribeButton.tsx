@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
-import { firebaseApp } from '@/lib/firebase'; 
+import { functions } from '@/lib/firebase'; 
 import getStripe from '@/lib/stripe';
 
 interface SubscribeButtonProps {
@@ -36,11 +36,10 @@ const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     setLoading(true);
 
     try {
-      const functionsInstance: Functions = getFunctions(firebaseApp);
       // Corrected function name to match our implementation
       const createCheckoutSession = httpsCallable(
-        functionsInstance,
-        'createCheckoutSessionCallable' 
+ functions, // Use the imported functions instance directly
+ 'createCheckoutSessionCallable'
       );
 
       console.log(`Creating checkout session for user: ${userId}, price: ${priceId}`);
