@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///home/user/studio/src/app/pricing/page.tsx"],"sourcesContent":["// src/app/pricing/page.tsx\n'use client';\n\nimport React from 'react';\n\nexport default function PricingPage() {\n  console.log(\"Minimal Pricing Page Rendered\");\n  return (\n    <div>\n      <h1>Minimal Pricing Page</h1>\n      <p>If you see this, the basic component structure is working.</p>\n    </div>\n  );\n}\n"],"names":[],"mappings":"AAAA,2BAA2B;;;;;AAC3B;;AAIe,SAAS;IACtB,QAAQ,GAAG,CAAC;IACZ,qBACE,6LAAC;;0BACC,6LAAC;0BAAG;;;;;;0BACJ,6LAAC;0BAAE;;;;;;;;;;;;AAGT;KARwB","debugId":null}}]
+}
