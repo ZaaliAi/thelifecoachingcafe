@@ -2,7 +2,7 @@
 "use client";
 
 import type { User, UserRole, FirestoreUserProfile, CoachStatus } from '@/types';
-import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'; // Imported useCallback
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react'; // Removed useCallback
 import { auth } from './firebase'; // Correctly imports auth from firebase.ts
 import {
   onAuthStateChanged,
@@ -23,7 +23,6 @@ interface AuthContextType {
   logout: () => Promise<void>;
   loading: boolean;
   getFirebaseAuthToken: () => Promise<string | null>; // New function
-  refreshUserProfile: () => Promise<void>; // Added refresh function
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -245,45 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-
-  const refreshUserProfile = useCallback(async () => {
-    console.log("[AuthProvider] refreshUserProfile called (cached). Firebase user UID:", firebaseUserSt?.uid);
-    if (!firebaseUserSt) {
-      console.warn("[AuthProvider] refreshUserProfile: No Firebase user (from state), cannot refresh.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const userProfile = await getUserProfile(firebaseUserSt.uid);
-      if (userProfile) {
-        console.log(`[AuthProvider] refreshUserProfile: Fetched profile for ${firebaseUserSt.email}:`, JSON.stringify(userProfile, null, 2));
-        const appUser: User = {
-          id: firebaseUserSt.uid,
-          email: userProfile.email || firebaseUserSt.email!, // Prefer Firestore email, fallback to auth email
-          role: userProfile.role,
-          name: userProfile.name || firebaseUserSt.displayName || firebaseUserSt.email!.split('@')[0] || 'User',
-          profileImageUrl: userProfile.profileImageUrl || firebaseUserSt.photoURL || undefined,
-        };
-        if (userProfile.role === 'coach' && userProfile.subscriptionTier) {
-          appUser.subscriptionTier = userProfile.subscriptionTier;
-        }
-        setUser(appUser);
-        console.log("[AuthProvider] refreshUserProfile: App user context UPDATED:", JSON.stringify(appUser, null, 2));
-      } else {
-        console.warn(`[AuthProvider] refreshUserProfile: No Firestore profile found for user ${firebaseUserSt.uid}. User might need to be logged out or a default profile created.`);
-        // Potentially set user to null or handle as an error state
-        // For now, just log, as onAuthStateChanged handles initial creation.
-      }
-    } catch (error) {
-      console.error("[AuthProvider] refreshUserProfile: Error fetching/updating profile:", error);
-      // Decide if user state should be cleared or error handled otherwise
-    } finally {
-      setLoading(false);
-    }
-  }, [firebaseUserSt, setUser, setLoading]); // Added setUser and setLoading to dependency array as they are used. State setters are stable.
-
-  const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken, refreshUserProfile };
+  const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken };
 
   return (
     <AuthContext.Provider value={providerValue}>

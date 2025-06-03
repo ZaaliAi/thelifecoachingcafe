@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink } from "lucide-react";
 import { useAuth, type User } from "@/lib/auth"; // Assuming User type can be imported from auth
-import { useEffect, useState, useRef } from "react"; // Imported useRef
+import { useEffect, useState } from "react"; // Removed useRef
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { loadStripe } from '@stripe/stripe-js';
@@ -18,30 +18,17 @@ interface AppUser extends User {
 }
 
 export default function CoachDashboardPage() {
-  const { user: authUser, loading, refreshUserProfile } = useAuth(); // Added refreshUserProfile
+  const { user: authUser, loading } = useAuth(); // Removed refreshUserProfile
   const user = authUser as AppUser | null; // Cast to AppUser
   const { toast } = useToast();
-  const hasRefreshedInitially = useRef(false); // Initialized ref
+  // const hasRefreshedInitially = useRef(false); // Removed ref
   const [coachName, setCoachName] = useState("Coach");
   const [blogStats, setBlogStats] = useState<{ pending: number, published: number }>({ pending: 0, published: 0 });
   const [newMessages, setNewMessages] = useState(0);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isUpgrading, setIsUpgrading] = useState(false);
 
-  // useEffect to refresh user profile on initial mount
-  useEffect(() => {
-    if (!loading && user?.id && !hasRefreshedInitially.current) {
-      console.log("[CoachDashboardPage] Attempting initial user profile refresh.");
-      refreshUserProfile().then(() => {
-        console.log("[CoachDashboardPage] Initial user profile refresh successful.");
-        hasRefreshedInitially.current = true;
-      }).catch(err => {
-        console.error("[CoachDashboardPage] Error during initial user profile refresh:", err);
-        // Optionally show a toast to the user if refresh fails
-        // toast({ title: "Profile Sync Error", description: "Could not sync your latest profile data.", variant: "destructive" });
-      });
-    }
-  }, [user?.id, loading, refreshUserProfile]); // Dependency array updated
+  // Removed useEffect for refreshUserProfile
 
   useEffect(() => {
     if (user && user.role === 'coach') {
