@@ -2,7 +2,7 @@
 "use client";
 
 import type { User, UserRole, FirestoreUserProfile, CoachStatus } from '@/types';
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'; // Imported useCallback
 import { auth } from './firebase'; // Correctly imports auth from firebase.ts
 import {
   onAuthStateChanged,
@@ -246,10 +246,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
 
-  const refreshUserProfile = async () => {
-    console.log("[AuthProvider] refreshUserProfile called.");
+  const refreshUserProfile = useCallback(async () => {
+    console.log("[AuthProvider] refreshUserProfile called (cached). Firebase user UID:", firebaseUserSt?.uid);
     if (!firebaseUserSt) {
-      console.warn("[AuthProvider] refreshUserProfile: No Firebase user, cannot refresh.");
+      console.warn("[AuthProvider] refreshUserProfile: No Firebase user (from state), cannot refresh.");
       return;
     }
 
@@ -281,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [firebaseUserSt, setUser, setLoading]); // Added setUser and setLoading to dependency array as they are used. State setters are stable.
 
   const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken, refreshUserProfile };
 
