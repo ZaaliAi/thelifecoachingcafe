@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
+// Assuming 'app' from '@/lib/firebase' is initialized globally and getAuth() works without it.
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address.'),
@@ -28,14 +30,24 @@ export default function ForgotPasswordPage() {
 
   const onSubmit: SubmitHandler<ForgotPasswordFormData> = async (data) => {
     setIsLoading(true);
-    // Simulate API call for password reset
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
-    setSubmitted(true);
-    toast({
-      title: "Password Reset Email Sent",
-      description: `If an account exists for ${data.email}, you will receive password reset instructions.`,
-    });
+    try {
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, data.email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: `If an account exists for ${data.email}, you will receive password reset instructions. Please check your inbox (and spam folder).`,
+      });
+      setSubmitted(true);
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      toast({
+        title: "Error Sending Reset Email",
+        description: error.message || "An unexpected error occurred. Please ensure you are online and try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
