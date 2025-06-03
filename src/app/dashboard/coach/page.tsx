@@ -18,7 +18,7 @@ interface AppUser extends User {
 }
 
 export default function CoachDashboardPage() {
-  const { user: authUser, loading } = useAuth();
+  const { user: authUser, loading, refreshUserProfile } = useAuth(); // Added refreshUserProfile
   const user = authUser as AppUser | null; // Cast to AppUser
   const { toast } = useToast();
   const [coachName, setCoachName] = useState("Coach");
@@ -26,6 +26,18 @@ export default function CoachDashboardPage() {
   const [newMessages, setNewMessages] = useState(0);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isUpgrading, setIsUpgrading] = useState(false);
+
+  // useEffect to refresh user profile on mount and when user.id/loading changes
+  useEffect(() => {
+    if (!loading && user?.id) {
+      console.log("[CoachDashboardPage] Attempting to refresh user profile.");
+      refreshUserProfile().catch(err => {
+        console.error("[CoachDashboardPage] Error refreshing user profile:", err);
+        // Optionally show a toast to the user if refresh fails
+        // toast({ title: "Profile Sync Error", description: "Could not sync your latest profile data.", variant: "destructive" });
+      });
+    }
+  }, [user?.id, loading, refreshUserProfile, toast]); // Added toast to dependencies as it's used in the catch block if uncommented
 
   useEffect(() => {
     if (user && user.role === 'coach') {

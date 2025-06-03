@@ -23,6 +23,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   loading: boolean;
   getFirebaseAuthToken: () => Promise<string | null>; // New function
+  refreshUserProfile: () => Promise<void>; // Added refresh function
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -93,6 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: userProfile.name || userName, // Prefer Firestore name
               profileImageUrl: userProfile.profileImageUrl || currentFirebaseUser.photoURL || undefined,
             };
+            // Ensure subscriptionTier is included for coaches
+            if (appUser.role === 'coach' && userProfile.subscriptionTier) {
+              appUser.subscriptionTier = userProfile.subscriptionTier;
+            }
             setUser(appUser);
             console.log("[AuthProvider] App user context SET from existing Firestore profile:", JSON.stringify(appUser, null, 2));
             if (profileNeedsCreationDueToSignup) {
@@ -125,6 +130,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: userName,
               profileImageUrl: initialProfileData.profileImageUrl || undefined,
             };
+            // Ensure subscriptionTier is included for newly created coach profiles
+            if (appUser.role === 'coach' && initialProfileData.subscriptionTier) {
+              appUser.subscriptionTier = initialProfileData.subscriptionTier;
+            }
             setUser(appUser);
             console.log("[AuthProvider] New Firestore profile created & app user context SET:", JSON.stringify(appUser, null, 2));
             localStorage.removeItem(SIGNUP_ROLE_KEY);
@@ -237,7 +246,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
 
-  const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken };
+  const refreshUserProfile = async () => {
+    console.log("[AuthProvider] refreshUserProfile called.");
+    if (!firebaseUserSt) {
+      console.warn("[AuthProvider] refreshUserProfile: No Firebase user, cannot refresh.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const userProfile = await getUserProfile(firebaseUserSt.uid);
+      if (userProfile) {
+        console.log(`[AuthProvider] refreshUserProfile: Fetched profile for ${firebaseUserSt.email}:`, JSON.stringify(userProfile, null, 2));
+        const appUser: User = {
+          id: firebaseUserSt.uid,
+          email: userProfile.email || firebaseUserSt.email!, // Prefer Firestore email, fallback to auth email
+          role: userProfile.role,
+          name: userProfile.name || firebaseUserSt.displayName || firebaseUserSt.email!.split('@')[0] || 'User',
+          profileImageUrl: userProfile.profileImageUrl || firebaseUserSt.photoURL || undefined,
+        };
+        if (userProfile.role === 'coach' && userProfile.subscriptionTier) {
+          appUser.subscriptionTier = userProfile.subscriptionTier;
+        }
+        setUser(appUser);
+        console.log("[AuthProvider] refreshUserProfile: App user context UPDATED:", JSON.stringify(appUser, null, 2));
+      } else {
+        console.warn(`[AuthProvider] refreshUserProfile: No Firestore profile found for user ${firebaseUserSt.uid}. User might need to be logged out or a default profile created.`);
+        // Potentially set user to null or handle as an error state
+        // For now, just log, as onAuthStateChanged handles initial creation.
+      }
+    } catch (error) {
+      console.error("[AuthProvider] refreshUserProfile: Error fetching/updating profile:", error);
+      // Decide if user state should be cleared or error handled otherwise
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken, refreshUserProfile };
 
   return (
     <AuthContext.Provider value={providerValue}>
