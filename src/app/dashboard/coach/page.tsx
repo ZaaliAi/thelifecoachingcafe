@@ -222,19 +222,7 @@ export default function CoachDashboardPage() {
       )}
 
       {/* Performance Overview Card - Stays after the (potentially moved) Upgrade card */}
-      <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center"><BarChart3 className="mr-2 h-5 w-5 text-primary" />Performance Overview</CardTitle>
-            <CardDescription>Summary of your profile views and engagement. {isPremiumCoach && <span className="text-sm text-green-500">(Premium Analytics Unlocked)</span>}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isPremiumCoach ? (
-             <p className="text-muted-foreground">Display premium analytics here...</p>
-          ) : (
-            <p className="text-muted-foreground">Profile views, message rates, and blog engagement statistics will appear here. Upgrade to Premium for advanced analytics.</p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Removed Performance Overview Card */}
     </div>
   );
 }
