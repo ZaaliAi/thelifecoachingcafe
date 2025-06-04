@@ -1,5 +1,3 @@
 {
-  "/browse-coaches/page": "app/browse-coaches/page.js",
-  "/dashboard/coach/page": "app/dashboard/coach/page.js",
   "/page": "app/page.js"
 }

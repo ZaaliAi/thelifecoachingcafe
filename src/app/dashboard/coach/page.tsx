@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink } from "lucide-react";
 import { useAuth, type User } from "@/lib/auth"; // Assuming User type can be imported from auth
-import { useEffect, useState } from "react"; // Removed useRef
+import { useEffect, useState } from "react";
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { loadStripe } from '@stripe/stripe-js';
-import { app } from '@/lib/firebase'; // Your Firebase app instance
+import { firebaseApp } from '@/lib/firebase'; // <--- CHANGED THIS LINE: 'app' is now 'firebaseApp'
 import { useToast } from "@/hooks/use-toast";
 
 // It's good practice to ensure the User type from useAuth includes subscriptionTier
@@ -17,6 +17,7 @@ interface AppUser extends User {
   subscriptionTier?: string; // free or premium
 }
 
+// ... rest of your file will follow after this import section
 export default function CoachDashboardPage() {
   const { user: authUser, loading } = useAuth(); // Removed refreshUserProfile
   const user = authUser as AppUser | null; // Cast to AppUser

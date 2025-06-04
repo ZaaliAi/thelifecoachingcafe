@@ -9,15 +9,14 @@ import { UserX, ShieldAlert, Loader2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { getAllUserProfilesForAdmin } from '@/lib/firestore';
+import { getAllUserProfilesForAdmin, unsuspendUserAccount, suspendUserAccount } from '@/lib/firestore';
 import { cn } from "@/lib/utils";
 import { format } from 'date-fns';
 
-// Firebase imports for calling Cloud Functions
-import { getFunctions, httpsCallable, FunctionsError } from "firebase/functions";
-import { firebaseApp as app } from "@/lib/firebase";
+// Firebase imports for calling Cloud Functions are currently commented out as suspend/unsuspend are client-side
+// import { httpsCallable, FunctionsError } from "firebase/functions";
+// import { functions as functionsClient } from "@/lib/firebase";
 
-// Interface for the user data expected by the admin page
 interface AdminUserView {
   id: string;
   email: string;
@@ -33,8 +32,8 @@ const escapeCsvValue = (value: any): string => {
     return '';
   }
   const stringValue = String(value);
-  // Ensure special characters in strings are properly escaped for the includes method
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\\n') || stringValue.includes('\\r')) {
+  // Corrected: Check for actual newline characters using '\n' and '\r'
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
     return `"${stringValue.replace(/"/g, '""')}"`;
   }
   return stringValue;
@@ -49,14 +48,14 @@ const handleDownloadCSV = (users: AdminUserView[]) => {
       user.id,
       user.email,
       user.status,
-      format(new Date(user.createdAt), 'yyyy-MM-dd'),
+      user.createdAt ? format(new Date(user.createdAt), 'yyyy-MM-dd') : '', // Added check for user.createdAt
       user.name || '',
       user.role || '',
     ];
     return rowData.map(escapeCsvValue).join(',');
   });
-  // Ensure newline characters in the join method are properly escaped
-  const csvContent = [headerRow, ...dataRows].join('\\r\\n');
+  // Corrected: Join with a literal newline character '\n'
+  const csvContent = [headerRow, ...dataRows].join('\n'); // Using '\n' for standard newlines
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
@@ -101,15 +100,12 @@ const AdminUsersPage = () => {
     fetchUsers();
   }, []);
 
- const handleUnsuspend = async (userId: string) => {
+  const handleUnsuspend = async (userId: string) => {
     setProcessingUserId(userId);
     setIsProcessing(true);
     try {
-      const functions = getFunctions(app);
-      const unsuspendUserFunction = httpsCallable(functions, 'unsuspendUser');
-
-      console.log(`Calling 'unsuspendUser' Firebase function for userId: ${userId}`);
-      await unsuspendUserFunction({ userId: userId });
+      console.log(`Calling 'unsuspendUserAccount' client-side for userId: ${userId}`);
+      await unsuspendUserAccount(userId);
 
       setUsers(prevUsers =>
         prevUsers.map(user =>
@@ -123,27 +119,9 @@ const AdminUsersPage = () => {
       });
 
     } catch (error: unknown) {
-      console.error("Error unsuspending user via Firebase function:", error);
+      console.error("Error unsuspending user client-side:", error);
       let errorMessage = "Failed to unsuspend user. Please try again.";
-
-      if (error instanceof FunctionsError) {
-        switch (error.code) {
-          case 'unauthenticated':
-            errorMessage = "Authentication error. Please ensure you are logged in as an admin.";
-            break;
-          case 'permission-denied':
-            errorMessage = "Permission denied. You may not have the necessary admin rights.";
-            break;
-          case 'invalid-argument':
-            errorMessage = "Invalid data sent to the server. Please contact support.";
-            break;
-          case 'not-found':
-            errorMessage = "User not found or operation not applicable.";
-            break;
-          default:
-            errorMessage = error.message || `An unexpected Firebase error occurred (Code: ${error.code}).`;
-        }
-      } else if (error instanceof Error) {
+       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;
@@ -151,10 +129,9 @@ const AdminUsersPage = () => {
         try {
           errorMessage = JSON.stringify(error);
         } catch {
-          errorMessage = "An unknown and unstringifiable error occurred.";
+          errorMessage = "An unknown and unstringifiable error occurred while unsuspending.";
         }
       }
-
       toast({
         title: "Error Unsuspending User",
         description: errorMessage,
@@ -170,11 +147,8 @@ const AdminUsersPage = () => {
     setProcessingUserId(userId);
     setIsProcessing(true);
     try {
-      const functions = getFunctions(app);
-      const suspendUserFunction = httpsCallable(functions, 'suspendUser');
-
-      console.log(`Calling 'suspendUser' Firebase function for userId: ${userId}`);
-      await suspendUserFunction({ userId: userId });
+      console.log(`Calling 'suspendUserAccount' client-side for userId: ${userId}`);
+      await suspendUserAccount(userId);
 
       setUsers(prevUsers =>
         prevUsers.map(user =>
@@ -188,27 +162,10 @@ const AdminUsersPage = () => {
       });
 
     } catch (error: unknown) {
-      console.error("Error suspending user via Firebase function:", error);
+      console.error("Error suspending user client-side:", error);
       let errorMessage = "Failed to suspend user. Please try again.";
 
-      if (error instanceof FunctionsError) {
-        switch (error.code) {
-          case 'unauthenticated':
-            errorMessage = "Authentication error. Please ensure you are logged in as an admin.";
-            break;
-          case 'permission-denied':
-            errorMessage = "Permission denied. You may not have the necessary admin rights.";
-            break;
-          case 'invalid-argument':
-            errorMessage = "Invalid data sent to the server. Please contact support.";
-            break;
-          case 'not-found':
-            errorMessage = "User not found or operation not applicable.";
-            break;
-          default:
-            errorMessage = error.message || `An unexpected Firebase error occurred (Code: ${error.code}).`;
-        }
-      } else if (error instanceof Error) {
+      if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;
@@ -216,7 +173,7 @@ const AdminUsersPage = () => {
         try {
           errorMessage = JSON.stringify(error);
         } catch {
-          errorMessage = "An unknown and unstringifiable error occurred.";
+          errorMessage = "An unknown and unstringifiable error occurred while suspending.";
         }
       }
 
@@ -359,14 +316,14 @@ const AdminUsersPage = () => {
                               Suspend
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent> 
-                            <AlertDialogHeader> 
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
                               <AlertDialogTitle>Are you sure you want to suspend this user?</AlertDialogTitle>
                               <AlertDialogDescription>
                                 This action will suspend the user&apos;s account, preventing them from logging in.
                               </AlertDialogDescription>
-                            </AlertDialogHeader> 
-                            <AlertDialogFooter> 
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleSuspend(user.id)} className="bg-red-600 hover:bg-red-700">Suspend</AlertDialogAction>
                             </AlertDialogFooter>

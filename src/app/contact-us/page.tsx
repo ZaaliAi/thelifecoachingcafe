@@ -1,16 +1,15 @@
 "use client";
 
-import { Mail, MessageSquare, Loader2 } from 'lucide-react'; // Added MessageSquare, Loader2
+import { Mail, MessageSquare, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '@/lib/firebase'; // Your Firebase app instance
+import { firebaseApp } from '@/lib/firebase'; // <--- CHANGED THIS LINE
 import { useToast } from "@/hooks/use-toast";
 
 export default function ContactUsPage() {
   const { toast } = useToast();
   const companyEmail = "hello@thelifecoachingcafe.com";
-  const companyPhone = "+1 (555) 123-4567";    // Placeholder - will be removed from display
-  // const companyAddress = "123 Coaching Lane, Suite 100, Knowledgetown, USA 12345"; // Placeholder - companyAddress is not used anymore
+  const companyPhone = "+1 (555) 123-4567"; // Placeholder - will be removed from display
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -18,6 +17,7 @@ export default function ContactUsPage() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
   return (
     <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <header className="mb-12 text-center">
@@ -49,8 +49,8 @@ export default function ContactUsPage() {
               <p className="text-muted-foreground mb-4">
                 Need immediate assistance? Chat with our support team.
               </p>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 disabled // Placeholder: enable when live chat is implemented
                 className="inline-flex w-full justify-center rounded-md border border-transparent bg-green-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-70"
               >
@@ -60,11 +60,9 @@ export default function ContactUsPage() {
           </div>
         </section>
 
-        {/* Removed Visit Our Office Section */}
-        
         <section>
           <h2 className="text-2xl font-semibold text-primary mb-6 text-center">Send Us a Message</h2>
-          <form 
+          <form
             className="space-y-6 bg-card p-8 rounded-lg shadow-lg"
             onSubmit={async (e) => {
               e.preventDefault();
@@ -72,11 +70,12 @@ export default function ContactUsPage() {
               setStatusMessage(null); // Clear previous status
 
               try {
-                const functions = getFunctions(app);
+                // Use firebaseApp here as it's the imported name
+                const functions = getFunctions(firebaseApp); 
                 const sendContactMessage = httpsCallable(functions, 'sendContactMessage');
 
                 const result = await sendContactMessage({ name, email, subject, message });
-                
+
                 // Assuming the callable function returns a success indicator in result.data
                 if (result.data && (result.data as any).success) {
                   setStatusMessage("Message sent successfully! We will get back to you shortly.");
@@ -103,47 +102,47 @@ export default function ContactUsPage() {
           >
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-foreground mb-1">Full Name</label>
-              <input 
-                type="text" 
-                name="name" 
-                id="name" 
-                autoComplete="name" 
+              <input
+                type="text"
+                name="name"
+                id="name"
+                autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="Your Full Name"
               />
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">Email Address</label>
-              <input 
-                type="email" 
-                name="email" 
-                id="email" 
-                autoComplete="email" 
+              <input
+                type="email"
+                name="email"
+                id="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="you@example.com"
               />
             </div>
             <div>
               <label htmlFor="subject" className="block text-sm font-medium text-foreground mb-1">Subject</label>
-              <input 
-                type="text" 
-                name="subject" 
-                id="subject" 
+              <input
+                type="text"
+                name="subject"
+                id="subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm" 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="How can we help?"
               />
             </div>
             <div>
               <label htmlFor="message" className="block text-sm font-medium text-foreground mb-1">Message</label>
-              <textarea 
-                id="message" 
-                name="message" 
+              <textarea
+                id="message"
+                name="message"
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -157,9 +156,9 @@ export default function ContactUsPage() {
               </p>
             )}
             <div>
-              <button 
+              <button
                 type="submit"
-                disabled={isLoading} 
+                disabled={isLoading}
                 className="inline-flex w-full justify-center rounded-md border border-transparent bg-primary py-2.5 px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50"
               >
                 {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : 'Send Message'}

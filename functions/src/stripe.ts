@@ -22,14 +22,14 @@ interface CreateStripePortalLinkData {
 }
 
 // Use functions.config() to access environment configuration set by `firebase functions:config:set`
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripeSecretKey = process.env.STRIPE_SECRETKEY; // MODIFIED
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOKSECRET; // MODIFIED
 
 let stripe: Stripe | undefined;
 
 if (!stripeSecretKey) {
   console.error(
-    'CRITICAL_ERROR: STRIPE_SECRET_KEY is not configured in environment variables. Stripe functions WILL FAIL.'
+    'CRITICAL_ERROR: STRIPE_SECRETKEY is not configured in environment variables. Stripe functions WILL FAIL.' // MODIFIED
   );
 } else {
   try {
@@ -108,7 +108,7 @@ export const stripeWebhookHandler = functions.https.onRequest(
         return;
     }
     if (!stripeWebhookSecret) {
-      console.error('CRITICAL_ERROR: STRIPE_WEBHOOK_SECRET not configured in Firebase Functions config. Webhook will fail. Run: firebase functions:config:set stripe.webhooksecret="YOUR_KEY"');
+      console.error('CRITICAL_ERROR: STRIPE_WEBHOOKSECRET not configured in Firebase Functions config. Webhook will fail. Run: firebase functions:config:set stripe.webhooksecret="YOUR_KEY"'); // MODIFIED
       res.status(500).send('Webhook config error: Secret not set on server.');
       return;
     }

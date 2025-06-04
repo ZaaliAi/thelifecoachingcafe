@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address.'),
@@ -21,21 +22,40 @@ export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { toast } = useToast();
+  console.log("ForgotPasswordPage rendering. Submitted state:", submitted, "IsLoading state:", isLoading); // Log for render
 
   const { register, handleSubmit, formState: { errors } } = useForm<ForgotPasswordFormData>({
     resolver: zodResolver(forgotPasswordSchema),
   });
 
-  const onSubmit: SubmitHandler<ForgotPasswordFormData> = async (data) => {
+  const onSubmit: SubmitHandler<ForgotPasswordFormData> = async (data: { email: string; }) => {
+    console.log("Attempting password reset for:", data.email);
     setIsLoading(true);
-    // Simulate API call for password reset
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
-    setSubmitted(true);
-    toast({
-      title: "Password Reset Email Sent",
-      description: `If an account exists for ${data.email}, you will receive password reset instructions.`,
-    });
+    try {
+      const auth = getAuth();
+      console.log("Before calling sendPasswordResetEmail for:", data.email);
+      await sendPasswordResetEmail(auth, data.email);
+      console.log("After calling sendPasswordResetEmail (success) for:", data.email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: (() => {
+          console.log("Success toast description function called for:", data.email);
+          return `If an account exists for ${data.email}, you will receive password reset instructions. Please check your inbox (and spam folder).`;
+        })(),
+      });
+      setSubmitted(true);
+      console.log("setSubmitted(true) called. Submitted state should be true now.");
+    } catch (error: any) {
+      console.error("Password reset error (full object):", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      toast({
+        title: "Error Sending Reset Email",
+        description: error.message || "An unexpected error occurred. Please ensure you are online and try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      console.log("In finally block. setIsLoading(false) called.");
+    }
   };
 
   return (
@@ -47,8 +67,7 @@ export default function ForgotPasswordPage() {
           <CardDescription>
             {submitted 
               ? "Check your email for reset instructions." 
-              : "Enter your email address and we'll send you a link to reset your password."
-            }
+              : "Enter your email address and we'll send you a link to reset your password."}
           </CardDescription>
         </CardHeader>
         <CardContent>
