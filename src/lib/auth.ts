@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setError(null);
         if (firebaseUserAuth) {
           try {
-            const userDocRef = doc(db, 'users', firebaseUserAuth.uid);
+            const userDocRef = doc(db, 'users', firebaseUserAuth.uid); // Reverted to 'users'
             const userDocSnap = await getDoc(userDocRef);
             if (userDocSnap.exists()) {
               const firestoreProfile = userDocSnap.data() as FirestoreUserProfile;
@@ -130,7 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ...additionalData, // Spread additional data like planId or other initial settings
       };
 
-      await setDoc(doc(db, "users", userCredential.user.uid), userProfile);
+      await setDoc(doc(db, "users", userCredential.user.uid), userProfile); // Reverted to "users"
       
       // The onAuthStateChanged listener will pick up the new user and set the user state
       // No need to call setUser directly here unless you want immediate state update before listener fires
