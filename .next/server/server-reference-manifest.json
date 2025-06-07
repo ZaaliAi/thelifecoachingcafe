@@ -1,5 +1,17 @@
 {
-  "node": {},
+  "node": {
+    "4030c4b22ac054737b4e3926ee179246ca76c90d00": {
+      "workers": {
+        "app/register-coach/page": {
+          "moduleId": "[project]/.next-internal/server/app/register-coach/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/suggest-coach-specialties.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/register-coach/page": "action-browser"
+      }
+    }
+  },
   "edge": {},
   "encryptionKey": "y2Qvjke+mgsEcgq4EFQ4a1z0zveFrQDrhL7Fm5+3mw4="
 }

@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth';
+import AnnouncementBar from '@/components/AnnouncementBar'; // Added import
 import Script from 'next/script';
 
 const geistSans = Geist({
@@ -47,6 +48,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}>
         <AuthProvider>
+          <AnnouncementBar /> {/* Added AnnouncementBar component */}
           <Header />
           <main className="flex-grow container mx-auto px-4 py-8 sm:px-6 lg:px-8">
             {children}
