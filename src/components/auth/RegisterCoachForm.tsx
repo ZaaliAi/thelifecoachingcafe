@@ -15,7 +15,7 @@ import { suggestCoachSpecialties, type SuggestCoachSpecialtiesOutput } from '@/a
 import { debounce } from 'lodash';
 import NextImage from 'next/image';
 import Link from 'next/link';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type SignUpInput } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { uploadProfileImage } from '@/services/imageUpload';
 import type { FirestoreUserProfile } from '@/types';
@@ -61,7 +61,7 @@ type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   const router = useRouter();
-  const { registerWithEmailAndPassword, loading: authLoading } = useAuth();
+  const { signup, loading: authLoading } = useAuth();
   const isFreeTier = !planId; // If planId is null, undefined, or an empty string, it's a free tier.
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
@@ -213,14 +213,13 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         toast({ title: 'Uploading profile image...', description: 'Please wait.' });
       }
       
-      const registeredUser = await registerWithEmailAndPassword(
+      const registeredUser = await signup(
+        data.name,
         data.email,
         data.password,
-        data.name,
         'coach',
         additionalDataForAuth
       );
-
       if (!registeredUser || !registeredUser.uid) {
         throw new Error("User registration failed, UID not returned.");
       }
@@ -231,8 +230,8 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
       }
       
-      toast({
-        title: 'Registration Successful!',
+ toast({
+ title: 'Account Submitted for Review',
         description: 'Your coach account has been created.',
         variant: 'success',
       });
@@ -278,7 +277,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.error("Error clearing local storage:", error);
         // Non-critical, so don't let this break the flow
       }
-      router.push('/dashboard/coach/profile');
+ router.push('/');
     } catch (error: any) {
       console.error('Error during coach registration process:', error);
       toast({
