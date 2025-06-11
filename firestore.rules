@@ -62,14 +62,17 @@ service cloud.firestore {
 
     // Rules for messages
     match /messages/{messageId} {
-      // Allow read access if the user is the sender or the recipient.
-      allow read: if request.auth.uid == resource.data.recipientId || request.auth.uid == resource.data.senderId;
+      // Allow read access if the user is the sender, the recipient, or an admin.
+      allow read: if request.auth.uid == resource.data.recipientId || request.auth.uid == resource.data.senderId || isAdmin();
+
+      // Allow admins to list all messages for the log view.
+      allow list: if isAdmin();
 
       // Allow users to create messages if they are the sender.
       allow create: if request.auth.uid == request.resource.data.senderId;
 
-      // Allow the recipient to update the message (e.g., to mark it as "read").
-      allow update: if request.auth.uid == resource.data.recipientId;
+      // Allow the recipient or an admin to update the message (e.g., to mark it as "read").
+      allow update: if request.auth.uid == resource.data.recipientId || isAdmin();
     }
 
     // Allow public read access to products for the pricing page
