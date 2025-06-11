@@ -118,9 +118,10 @@ export default function CoachProfilePage() {
           socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
           availability: Array.isArray(coachData.availability) ? coachData.availability : [], 
         });
+        // Always set keywords and certifications after reset, regardless of profile image
+        setValue('keywords', Array.isArray(coachData.keywords) ? coachData.keywords.join(', ') : (coachData.keywords || ''));
+        setValue('certifications', Array.isArray(coachData.certifications) ? coachData.certifications.join(', ') : (coachData.certifications || ''));
         if (coachData.profileImageUrl) {
-          setValue('keywords', Array.isArray(coachData.keywords) ? coachData.keywords.join(', ') : (coachData.keywords || ''));
-          setValue('certifications', Array.isArray(coachData.certifications) ? coachData.certifications.join(', ') : (coachData.certifications || ''));
           setImagePreviewUrl(coachData.profileImageUrl);
         }
         const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
