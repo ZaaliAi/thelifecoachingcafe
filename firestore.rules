@@ -1,125 +1,61 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isNotSuspended() {
-      // Ensure the user is authenticated and their document exists.
-      // These checks might be redundant if the calling rule already verifies them,
-      // but it's safer to include them.
-      return request.auth != null &&
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             (
-               // Case 1: The 'status' field does NOT exist.
-               // In this case, the user is considered active (not suspended).
-               !('status' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
-               // Case 2: The 'status' field DOES exist AND is not 'suspended'.
-               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'suspended'
-             );
+    // Helper function to check if a user has the 'admin' role
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Blog posts: Public read, only authenticated users can write
-    match /posts/{postId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Helper function to check if a user is the owner of a document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Helper function to check if a user has the 'coach' role
+    function isCoach() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach';
     }
 
-    // User profiles
+    // Rule for user profiles
     match /users/{userId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == userId; // New user creating their own profile
-      allow update: if request.auth != null &&
-                       (
-                         (request.auth.uid == userId && isNotSuspended()) || // User updating their own profile
-                         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') // Admin updating any profile
-                       );
-      allow delete: if request.auth != null &&
-                       (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'); // Only admin can delete
-    }
-    
-    // Stripe Products collection: Public read for products and their prices
-    // Writes should be restricted (typically handled by the Stripe extension with admin-like privileges or specific service accounts)
-    match /products/{productId} {
-      allow read: if true;
-      // Example: Allow write only by admins for manual overrides, though Stripe extension handles sync.
-      allow write: if request.auth != null && 
-                      (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-
-      match /prices/{priceId} {
-        allow read: if true;
-        // Example: Allow write only by admins for manual overrides.
-        allow write: if request.auth != null && 
-                        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      }
+      // Allow reading a profile if:
+      // 1. It's an approved coach profile (for the public "Browse Coaches" page)
+      // 2. You are the owner of the profile (for your own dashboard)
+      // 3. You are an admin
+      allow read: if (resource.data.role == 'coach' && resource.data.status == 'approved') || isOwner(userId) || isAdmin();
+      
+      // Allow writing to a profile if:
+      // 1. You are the owner (so coaches can update their own profiles)
+      // 2. You are an admin
+      allow write: if isOwner(userId) || isAdmin();
     }
 
-    // Customers collection (for Stripe customer data linked to users)
-    // Users should only be able to read their own customer data.
-    // Creation and updates are typically handled by the Stripe extension.
-    match /customers/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      // Deny client-side creation and deletion, should be handled by extension
-      allow create, delete: if false; 
-    }
-    
-    // Subscriptions and Payments subcollections under customers
-    // Users should only be able to read their own subscriptions/payments.
-    match /customers/{userId}/{paymentCollection}/{paymentId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        // Deny client-side mutations, should be handled by extension/Stripe webhooks.
-        allow create, update, delete: if false;
-    }
-
-    // Messages Rules
-    match /messages/{messageId} { 
-      allow read: if request.auth != null &&
-                     (resource.data.senderId == request.auth.uid ||
-                      resource.data.recipientId == request.auth.uid ||
-                      (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
-      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid && isNotSuspended();
-      allow update: if request.auth != null &&
-                     (resource.data.recipientId == request.auth.uid ||
-                     (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' && 
-                      request.resource.data.keys().hasOnly(['read'])));
-    }
-
-    match /messages { 
-      allow list: if request.auth != null &&
-                     (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
-
-    // Conversations
-    match /conversations/{conversationId} {
-      allow create: if request.auth != null && isNotSuspended() && 
-                       request.resource.data.members != null &&
-                       request.auth.uid in request.resource.data.members &&
-                       (conversationId.split('_')[0] == request.auth.uid || conversationId.split('_')[1] == request.auth.uid);
-      allow update: if request.auth != null && isNotSuspended() && 
-                       resource.data.members != null &&
-                       request.auth.uid in resource.data.members;
-      allow read: if request.auth != null &&
-                     resource.data.members != null &&
-                     request.auth.uid in resource.data.members;
-      allow delete: if false;
-    }
-
-    // Blogs
+    // Rule for blog posts
     match /blogs/{blogId} {
-      allow read: if true;
-      allow write: if request.auth != null && isNotSuspended();
+      // Allow public to read posts only if they are "published"
+      allow read: if resource.data.status == 'published';
+
+      // **This is the improved rule:**
+      // Only allow a user to create a blog post if they are a coach
+      allow create: if isCoach();
+      
+      // Allow updating or deleting a post if:
+      // 1. You are the author of the post
+      // 2. You are an admin
+      allow update, delete: if request.auth.uid == resource.data.authorId || isAdmin();
     }
 
-    // User favorites
-    // Each document ID is a user UID.
-    // Each document contains a list of favorited coach UIDs.
-    match /favorites/{userId} {
-      allow read, create, update, delete: if request.auth != null && request.auth.uid == userId && isNotSuspended();
+    // Rule for messages
+    match /messages/{messageId} {
+      // Allow reading or creating a message if:
+      // 1. You are the sender or recipient
+      // 2. You are an admin (for the message logs)
+      allow read, create: if request.auth.uid == request.resource.data.senderId || request.auth.uid == request.resource.data.recipientId || isAdmin();
+      
+      // Allow updating a message only if you are the recipient marking it as "read"
+      allow update: if request.auth.uid == resource.data.recipientId && request.resource.data.read == true;
     }
   }
 }
