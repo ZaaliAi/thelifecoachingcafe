@@ -37,7 +37,6 @@ service cloud.firestore {
       // Allow public to read posts only if they are "published"
       allow read: if resource.data.status == 'published';
 
-      // **This is the improved rule:**
       // Only allow a user to create a blog post if they are a coach
       allow create: if isCoach();
       
@@ -56,6 +55,16 @@ service cloud.firestore {
       
       // Allow updating a message only if you are the recipient marking it as "read"
       allow update: if request.auth.uid == resource.data.recipientId && request.resource.data.read == true;
+    }
+
+    // Allow public read access to products for the pricing page
+    match /products/{productId} {
+      allow read: if true;
+
+      // Public can also read the prices nested under a product
+      match /prices/{priceId} {
+        allow read: if true;
+      }
     }
   }
 }
