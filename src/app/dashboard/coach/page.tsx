@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { loadStripe } from '@stripe/stripe-js';
-import { firebaseApp } from '@/lib/firebase'; // <--- CHANGED THIS LINE: 'app' is now 'firebaseApp'
+import { firebaseApp } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
 
 // It's good practice to ensure the User type from useAuth includes subscriptionTier
@@ -75,7 +75,7 @@ export default function CoachDashboardPage() {
     }
     setIsUpgrading(true);
     try {
-      const functions = getFunctions(app);
+      const functions = getFunctions(firebaseApp);
       const createCheckoutSession = httpsCallable(functions, 'createCheckoutSessionCallable');
 
       const successUrl = `${window.location.origin}/payment-success?upgrade=true&session_id={CHECKOUT_SESSION_ID}`;
@@ -200,11 +200,12 @@ export default function CoachDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <ul className="list-disc list-inside space-y-1 mb-6 text-indigo-50">
-              <li>Priority listing in search results</li>
-              <li>Enhanced profile customization options</li>
-              <li>Advanced analytics on your posts and profile</li>
-              <li>Direct support from our team</li>
+            <ul className="list-disc list-inside space-y-2 mb-6 text-indigo-50">
+              <li>Add a Profile Picture to build trust</li>
+              <li>Get a Premium Badge on your profile and cards</li>
+              <li>Link to your personal website to drive traffic</li>
+              <li>Embed an introductory video to engage visitors</li>
+              <li>Display your social media links to grow your brand</li>
             </ul>
             <Button 
               onClick={handleUpgrade} 
