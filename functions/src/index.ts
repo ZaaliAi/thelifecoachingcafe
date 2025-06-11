@@ -1,9 +1,10 @@
+
 // v1 import for auth and onCall triggers
 import * as functions from 'firebase-functions';
 // v2 imports for new Firestore and HTTPS triggers
-import { onDocumentCreated, onDocumentWritten, FirestoreEvent, Change, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, FirestoreEvent, Change, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase-functions/v2/firestore';
 import { HttpsError, CallableRequest } from 'firebase-functions/v2/https';
-// import { onUserCreate, AuthEvent } from "firebase-functions/v2/identity"; // Removed for now
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import * as nodemailer from 'nodemailer';
 
@@ -39,6 +40,54 @@ function getSmtpTransporter() {
     },
   });
 }
+
+// --- Standard User Welcome Email ---
+export const onUserSignupWelcomeEmail = onDocumentCreated('users/{userId}', async (event) => {
+    const snap = event.data;
+    if (!snap) {
+        functions.logger.log('No data associated with user creation event.');
+        return null;
+    }
+
+    const userData = snap.data();
+    const userRole = userData.role;
+
+    // We only want to send this to standard 'users', not 'coaches'
+    if (userRole !== 'user') {
+        functions.logger.log(`Skipping standard welcome email for user ${snap.id} because their role is '${userRole}'.`);
+        return null;
+    }
+
+    const userEmail = userData.email;
+    const displayName = userData.name || userData.email?.split('@')[0] || 'there';
+
+    if (!userEmail) {
+        functions.logger.warn(`User ${snap.id} created without an email address. Skipping welcome email.`);
+        return null;
+    }
+
+    try {
+        const transporter = getSmtpTransporter();
+        const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: userEmail,
+            subject: 'Welcome to The Life Coaching Cafe!',
+            html: `
+              <p>Hi ${displayName},</p>
+              <p>Welcome to The Life Coaching Cafe! We're thrilled to have you join our community.</p>
+              <p>Explore our coaches, read insightful blog posts, and start your journey towards personal growth.</p>
+              <p>Get started here: <a href="https://thelifecoachingcafe.com/browse-coaches">Find Your Coach</a></p>
+              <p>Best regards,</p>
+              <p>The Life Coaching Cafe Team</p>
+            `,
+        };
+        await transporter.sendMail(mailOptions);
+        functions.logger.log(`Standard welcome email sent to new user: ${userEmail}`);
+    } catch (error) {
+        functions.logger.error(`Error sending welcome email to ${userEmail}:`, error);
+    }
+    return null;
+});
 
 // --- Suspend User (Callable, v1) ---
 export const suspendUser = functions.https.onCall(async (request: CallableRequest<{ userId: string }>) => {
@@ -113,50 +162,6 @@ export const unsuspendUser = functions.https.onCall(async (request: CallableRequ
     throw new HttpsError('internal', `Failed to unsuspend user: ${error.message || 'An unknown error occurred.'}`);
   }
 });
-
-// --- User Signs Up - Standard Welcome Email (REMOVED FOR NOW) ---
-// export const onUserSignupWelcomeEmail = onUserCreate( 
-//   async (event: AuthEvent<admin.auth.UserRecord>) => {
-//     const user = event.data; 
-//     const userEmail = user.email;
-//     let displayName = user.displayName || user.email?.split('@')[0] || 'there';
-
-//     if (!userEmail) {
-//       functions.logger.warn('User signed up without an email address, skipping welcome email.');
-//       return null;
-//     }
-
-//     try {
-//       const userProfileDoc = await firestore.collection('users').doc(user.uid).get();
-//       if (userProfileDoc.exists) {
-//         const userProfileData = userProfileDoc.data();
-//         if (userProfileData && userProfileData.name) {
-//           displayName = userProfileData.name;
-//         }
-//       }
-
-//       const transporter = getSmtpTransporter();
-//       const mailOptions = {
-//         from: process.env.SMTP_USER,
-//         to: userEmail,
-//         subject: 'Welcome to The Life Coaching Cafe!',
-//         html: `
-//           <p>Hi ${displayName},</p>
-//           <p>Welcome to The Life Coaching Cafe! We're thrilled to have you join our community.</p>
-//           <p>Explore our coaches, read insightful blog posts, and start your journey towards personal growth.</p>
-//           <p>Get started here: <a href="https://coachconnect-897af.web.app">Your Website Link</a></p>
-//           <p>Best regards,</p>
-//           <p>The Life Coaching Cafe Team</p>
-//         `,
-//       };
-//       await transporter.sendMail(mailOptions);
-//       functions.logger.log('Standard welcome email sent to new user: ' + userEmail);
-//     } catch (error) {
-//       functions.logger.error(`Error sending welcome email to ${userEmail}:`, error);
-//     }
-//     return null;
-//   }
-// );
 
 // --- Coach Signs Up - Welcome Email (In Review, Firestore v2) ---
 export const onCoachSignupReviewEmail = onDocumentWritten(
