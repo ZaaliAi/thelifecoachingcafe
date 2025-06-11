@@ -2,8 +2,8 @@
 "use client";
 
 import type { User, UserRole, FirestoreUserProfile, CoachStatus } from '@/types';
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react'; // Removed useCallback
-import { auth } from './firebase'; // Correctly imports auth from firebase.ts
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { auth } from './firebase'; 
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -13,61 +13,60 @@ import {
   type User as FirebaseUser
 } from 'firebase/auth';
 import { setUserProfile, getUserProfile } from './firestore';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore'; // Added for potential role update
-import { db } from './firebase'; // Added for doc reference
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore'; 
+import { db } from './firebase'; 
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<void>;
-  signup: (name: string, email: string, pass: string, role: UserRole) => Promise<UserRole | null>;
+  signup: (name: string, email: string, pass: string, role: UserRole, additionalData?: Partial<FirestoreUserProfile>) => Promise<FirebaseUser | null>;
   logout: () => Promise<void>;
   loading: boolean;
-  getFirebaseAuthToken: () => Promise<string | null>; // New function
+  getFirebaseAuthToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SIGNUP_ROLE_KEY = 'coachconnect-signup-role';
 const SIGNUP_NAME_KEY = 'coachconnect-signup-name';
+const SIGNUP_ADDITIONAL_DATA_KEY = 'coachconnect-signup-additionaldata';
 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [firebaseUserSt, setFirebaseUserSt] = useState<FirebaseUser | null>(null); // State for Firebase User
+  const [firebaseUserSt, setFirebaseUserSt] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     console.log("[AuthProvider] Mounting onAuthStateChanged listener.");
     const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser: FirebaseUser | null) => {
       console.log("[AuthProvider] onAuthStateChanged event. Firebase user:", currentFirebaseUser ? currentFirebaseUser.uid : 'null');
-      setFirebaseUserSt(currentFirebaseUser); // Store the Firebase user
+      setFirebaseUserSt(currentFirebaseUser);
 
       if (currentFirebaseUser) {
         if (!currentFirebaseUser.email || typeof currentFirebaseUser.email !== 'string' || currentFirebaseUser.email.trim() === '') {
           console.error("[AuthProvider] CRITICAL: Firebase user object (UID: " + currentFirebaseUser.uid + ") has an invalid or missing email during onAuthStateChanged. Aborting profile processing.");
-          setUser(null); // Clear any potentially bad state
+          setUser(null); 
           setLoading(false);
-          return; // Stop processing if email is invalid
+          return; 
         }
         const validEmail = currentFirebaseUser.email;
 
-        let determinedRole: UserRole = 'user'; // Default role
+        let determinedRole: UserRole = 'user'; 
         let userName = currentFirebaseUser.displayName || validEmail.split('@')[0] || 'User';
         let profileNeedsCreationDueToSignup = false;
 
-        // Check for admin email first
         if (validEmail === 'hello@thelifecoachingcafe.com') {
           determinedRole = 'admin';
-          userName = 'Admin User'; // Or fetch name from Firestore if preferred
+          userName = 'Admin User'; 
           console.log(`[AuthProvider] Admin email detected: ${validEmail}, role set to 'admin'.`);
         } else {
-          // Check localStorage for role set during signup process
           const signupRole = localStorage.getItem(SIGNUP_ROLE_KEY) as UserRole | null;
           const signupName = localStorage.getItem(SIGNUP_NAME_KEY);
           if (signupRole) {
             determinedRole = signupRole;
             if (signupName) userName = signupName;
-            profileNeedsCreationDueToSignup = true; // Flag that Firestore profile creation is expected
+            profileNeedsCreationDueToSignup = true; 
             console.log(`[AuthProvider] Role from localStorage: ${determinedRole} for ${validEmail}`);
           }
         }
@@ -77,50 +76,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if (userProfile) {
             console.log(`[AuthProvider] Existing Firestore profile found for ${validEmail}:`, JSON.stringify(userProfile, null, 2));
-            // If admin logs in, and their Firestore role is somehow different, update it.
-            // This is a safety check.
             if (validEmail === 'hello@thelifecoachingcafe.com' && userProfile.role !== 'admin') {
               console.warn(`[AuthProvider] Admin ${validEmail} had role '${userProfile.role}' in Firestore. Updating to 'admin'.`);
               const userDocRef = doc(db, "users", currentFirebaseUser.uid);
               await updateDoc(userDocRef, { role: 'admin', updatedAt: serverTimestamp() });
-              userProfile.role = 'admin'; // Update local copy
+              userProfile.role = 'admin'; 
             }
             
             const appUser: User = {
               id: currentFirebaseUser.uid,
-              email: userProfile.email || validEmail, // Prefer Firestore email, fallback to auth email
-              role: userProfile.role,   // Use role from Firestore profile
-              name: userProfile.name || userName, // Prefer Firestore name
+              email: userProfile.email || validEmail, 
+              role: userProfile.role,   
+              name: userProfile.name || userName, 
               profileImageUrl: userProfile.profileImageUrl || currentFirebaseUser.photoURL || undefined,
             };
-            // Ensure subscriptionTier is included for coaches
             if (appUser.role === 'coach' && userProfile.subscriptionTier) {
               appUser.subscriptionTier = userProfile.subscriptionTier;
             }
             setUser(appUser);
             console.log("[AuthProvider] App user context SET from existing Firestore profile:", JSON.stringify(appUser, null, 2));
-            if (profileNeedsCreationDueToSignup) {
+            if (profileNeedsCreationDueToSignup) { // Clear keys if profile was expected to be created but found
               localStorage.removeItem(SIGNUP_ROLE_KEY);
               localStorage.removeItem(SIGNUP_NAME_KEY);
+              localStorage.removeItem(SIGNUP_ADDITIONAL_DATA_KEY);
             }
           } else if (profileNeedsCreationDueToSignup || validEmail === 'hello@thelifecoachingcafe.com') {
-            // Create profile if it's a new signup or if it's the admin user and their profile is missing
             console.log(`[AuthProvider] No Firestore profile for ${validEmail} (UID: ${currentFirebaseUser.uid}). Creating profile with role: ${determinedRole}, name: ${userName}.`);
+            
+            let signupAdditionalData: Partial<FirestoreUserProfile> = {};
+            const storedAdditionalData = localStorage.getItem(SIGNUP_ADDITIONAL_DATA_KEY);
+            if (storedAdditionalData) {
+              try {
+                signupAdditionalData = JSON.parse(storedAdditionalData);
+                console.log("[AuthProvider] Successfully parsed additional signup data:", signupAdditionalData);
+              } catch (e) {
+                console.error("[AuthProvider] Error parsing additional signup data from localStorage:", e);
+              }
+              localStorage.removeItem(SIGNUP_ADDITIONAL_DATA_KEY); // Clean up after attempting to read
+            }
             
             const initialProfileData: Partial<Omit<FirestoreUserProfile, 'id' | 'createdAt' | 'updatedAt'>> = {
               name: userName,
               email: validEmail,
               role: determinedRole,
-              profileImageUrl: currentFirebaseUser.photoURL || null, // Explicitly null if no photoURL
+              profileImageUrl: currentFirebaseUser.photoURL || null,
+              // Default coach fields (will be overridden by signupAdditionalData if present)
+              ...(determinedRole === 'coach' && {
+                subscriptionTier: 'free', // Default, might be overridden by signupAdditionalData
+                status: 'pending_approval', // Default, might be overridden
+              }),
+              ...signupAdditionalData, // Spread the additional data from the form
             };
-
-            if (determinedRole === 'coach') {
-              initialProfileData.subscriptionTier = 'free';
-              initialProfileData.status = 'pending_approval';
-            }
             
             console.log("[AuthProvider] Calling setUserProfile for new user with initialProfileData:", JSON.stringify(initialProfileData, null, 2));
-            await setUserProfile(currentFirebaseUser.uid, initialProfileData); // This creates the doc with timestamps
+            await setUserProfile(currentFirebaseUser.uid, initialProfileData); 
             
             const appUser: User = { 
               id: currentFirebaseUser.uid, 
@@ -129,18 +138,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               name: userName,
               profileImageUrl: initialProfileData.profileImageUrl || undefined,
             };
-            // Ensure subscriptionTier is included for newly created coach profiles
             if (appUser.role === 'coach' && initialProfileData.subscriptionTier) {
-              appUser.subscriptionTier = initialProfileData.subscriptionTier;
+              appUser.subscriptionTier = initialProfileData.subscriptionTier as 'free' | 'premium' | 'enterprise';
             }
             setUser(appUser);
             console.log("[AuthProvider] New Firestore profile created & app user context SET:", JSON.stringify(appUser, null, 2));
             localStorage.removeItem(SIGNUP_ROLE_KEY);
             localStorage.removeItem(SIGNUP_NAME_KEY);
+            // SIGNUP_ADDITIONAL_DATA_KEY already removed above
           } else {
-            // User is authenticated with Firebase Auth but has no Firestore profile and isn't a fresh signup.
-            // This state should ideally not be common if signup flow is robust.
-            // We might create a default 'user' profile or log an anomaly.
             console.warn(`[AuthProvider] User ${validEmail} (UID: ${currentFirebaseUser.uid}) is authenticated but has no Firestore profile and not a flagged new signup. Setting role to 'user' by default and creating profile.`);
              const defaultProfileData: Partial<Omit<FirestoreUserProfile, 'id' | 'createdAt' | 'updatedAt'>> = {
               name: userName,
@@ -162,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[AuthProvider] No Firebase user, app user context set to null.");
         localStorage.removeItem(SIGNUP_ROLE_KEY); 
         localStorage.removeItem(SIGNUP_NAME_KEY);
+        localStorage.removeItem(SIGNUP_ADDITIONAL_DATA_KEY);
       }
       setLoading(false);
       console.log("[AuthProvider] Loading state set to false.");
@@ -178,7 +185,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log(`[AuthProvider] loginUser attempting for ${email}`);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will handle setting the user state and role based on Firestore data
       console.log(`[AuthProvider] Firebase signInWithEmailAndPassword successful for ${email}. Waiting for onAuthStateChanged.`);
     } catch (error: any) {
       setLoading(false); 
@@ -187,31 +193,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signupUser = async (name: string, email: string, pass: string, role: UserRole): Promise<UserRole | null> => {
+  const signupUser = async (name: string, email: string, pass: string, role: UserRole, additionalData?: Partial<FirestoreUserProfile>): Promise<FirebaseUser | null> => {
     setLoading(true);
     console.log(`[AuthProvider] signupUser: Attempting for ${email} as ${role} with name: ${name}`);
     try {
-      // Store intended role and name to be picked up by onAuthStateChanged
       localStorage.setItem(SIGNUP_ROLE_KEY, role);
-      localStorage.setItem(SIGNUP_NAME_KEY, name); // Store the name from form
+      localStorage.setItem(SIGNUP_NAME_KEY, name);
+      if (additionalData) {
+        localStorage.setItem(SIGNUP_ADDITIONAL_DATA_KEY, JSON.stringify(additionalData));
+        console.log('[AuthProvider] Stored additional signup data to localStorage:', additionalData);
+      } else {
+        localStorage.removeItem(SIGNUP_ADDITIONAL_DATA_KEY); // Clear if no data, though form should send it
+      }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       const newFirebaseUser = userCredential.user;
       console.log(`[AuthProvider] signupUser: Firebase Auth user CREATED: ${newFirebaseUser.uid} for email ${email}`);
 
-      // Update Firebase Auth profile (displayName might take time to reflect in newFirebaseUser object immediately)
       await updateFirebaseProfile(newFirebaseUser, { displayName: name });
       console.log(`[AuthProvider] signupUser: Firebase Auth profile updated with displayName: ${name}`);
       
-      // The onAuthStateChanged listener will now handle Firestore profile creation
-      // using the details from localStorage and the newFirebaseUser object.
-      // We return the role for immediate redirection logic on the signup page.
-      return role;
+      // onAuthStateChanged will handle Firestore profile creation using localStorage data.
+      return newFirebaseUser; // Return the full FirebaseUser object
     } catch (error: any) {
       setLoading(false);
       console.error("[AuthProvider] Firebase signup error:", error.code, error.message);
       localStorage.removeItem(SIGNUP_ROLE_KEY); 
       localStorage.removeItem(SIGNUP_NAME_KEY);
+      localStorage.removeItem(SIGNUP_ADDITIONAL_DATA_KEY);
       throw error; 
     }
   };
@@ -222,7 +231,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       console.log("[AuthProvider] Firebase signOut successful.");
-      // User state will be set to null by onAuthStateChanged
     } catch (error: any) {
       console.error("[AuthProvider] Firebase logout error:", error);
       setLoading(false); 

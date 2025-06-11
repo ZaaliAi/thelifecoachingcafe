@@ -1836,6 +1836,10 @@ body {
   max-height: 120px;
 }
 
+.max-h-\[85vh\] {
+  max-height: 85vh;
+}
+
 .max-h-\[calc\(100vh-80px\)\] {
   max-height: calc(100vh - 80px);
 }
@@ -2483,6 +2487,14 @@ body {
   border-bottom-right-radius: 0;
 }
 
+.rounded-tl-none {
+  border-top-left-radius: 0;
+}
+
+.rounded-tr-none {
+  border-top-right-radius: 0;
+}
+
 .border {
   border-width: 1px;
 }
@@ -2511,16 +2523,16 @@ body {
   border-left-width: 1px;
 }
 
+.border-l-2 {
+  border-left-width: 2px;
+}
+
 .border-r {
   border-right-width: 1px;
 }
 
 .border-t {
   border-top-width: 1px;
-}
-
-.border-l-2 {
-  border-left-width: 2px;
 }
 
 .border-dashed {
@@ -2917,6 +2929,10 @@ body {
   padding: .25rem;
 }
 
+.p-1\.5 {
+  padding: .375rem;
+}
+
 .p-2 {
   padding: .5rem;
 }
@@ -2939,10 +2955,6 @@ body {
 
 .p-\[1px\] {
   padding: 1px;
-}
-
-.p-1\.5 {
-  padding: .375rem;
 }
 
 .px-0 {
@@ -3023,6 +3035,11 @@ body {
 .py-2\.5 {
   padding-top: .625rem;
   padding-bottom: .625rem;
+}
+
+.py-20 {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
 }
 
 .py-3 {
@@ -3247,12 +3264,12 @@ body {
   letter-spacing: .025em;
 }
 
-.tracking-widest {
-  letter-spacing: .1em;
-}
-
 .tracking-wider {
   letter-spacing: .05em;
+}
+
+.tracking-widest {
+  letter-spacing: .1em;
 }
 
 .text-\[\#0077b5\] {
@@ -3490,11 +3507,6 @@ body {
 .text-yellow-800 {
   --tw-text-opacity: 1;
   color: rgb(133 77 14 / var(--tw-text-opacity, 1));
-}
-
-.text-gray-200 {
-  --tw-text-opacity: 1;
-  color: rgb(229 231 235 / var(--tw-text-opacity, 1));
 }
 
 .underline {
@@ -4082,6 +4094,10 @@ body {
   color: hsl(var(--primary) / .8);
 }
 
+.hover\:text-secondary:hover {
+  color: hsl(var(--secondary));
+}
+
 .hover\:text-sidebar-accent-foreground:hover {
   color: hsl(var(--sidebar-accent-foreground));
 }
@@ -4094,10 +4110,6 @@ body {
 .hover\:text-yellow-700:hover {
   --tw-text-opacity: 1;
   color: rgb(161 98 7 / var(--tw-text-opacity, 1));
-}
-
-.hover\:text-secondary:hover {
-  color: hsl(var(--secondary));
 }
 
 .hover\:underline:hover {
@@ -4788,6 +4800,10 @@ body {
   background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));
 }
 
+.dark\:bg-gray-800\/50:is(.dark *) {
+  background-color: #1f293780;
+}
+
 .dark\:bg-gray-900:is(.dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(17 24 39 / var(--tw-bg-opacity, 1));
@@ -4801,10 +4817,6 @@ body {
 .dark\:bg-red-700:is(.dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(185 28 28 / var(--tw-bg-opacity, 1));
-}
-
-.dark\:bg-gray-800\/50:is(.dark *) {
-  background-color: #1f293780;
 }
 
 .dark\:text-gray-100:is(.dark *) {

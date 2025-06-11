@@ -460,6 +460,7 @@ __turbopack_context__.s({
     "getFeaturedCoaches": (()=>getFeaturedCoaches),
     "getFirestoreBlogPost": (()=>getFirestoreBlogPost),
     "getFirestoreBlogPostBySlug": (()=>getFirestoreBlogPostBySlug),
+    "getMessagesForConversation": (()=>getMessagesForConversation),
     "getMessagesForUser": (()=>getMessagesForUser),
     "getMyBlogPosts": (()=>getMyBlogPosts),
     "getPendingBlogPostCount": (()=>getPendingBlogPostCount),
@@ -902,6 +903,16 @@ async function getMessagesForUser(userId, otherPartyId, messageLimit = 30) {
     combinedMessages.sort((a, b)=>otherPartyId ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime() : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return combinedMessages.slice(0, otherPartyId ? undefined : 50);
 }
+async function getMessagesForConversation(conversationId) {
+    if (!conversationId) {
+        console.error("getMessagesForConversation: conversationId is required.");
+        return [];
+    }
+    const messagesRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["collection"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], "messages");
+    const q = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["query"])(messagesRef, (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["where"])("conversationId", "==", conversationId), (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["orderBy"])("timestamp", "asc"));
+    const querySnapshot = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getDocs"])(q);
+    return querySnapshot.docs.map((docSnapshot)=>mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id));
+}
 async function getAllMessagesForAdmin(count = 50) {
     const messagesCollection = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["collection"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], "messages");
     const q = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["query"])(messagesCollection, (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["orderBy"])("timestamp", "desc"), (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["limit"])(count));
@@ -996,12 +1007,6 @@ async function getCoachBlogStats(coachId) {
 async function addCoachToFavorites(userId, coachId) {
     if (!userId || !coachId) throw new Error("User ID and Coach ID are required.");
     const userDocRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["doc"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$firebase$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"], "users", userId);
-    // Optional: Check if coach exists and is approved before adding
-    // const coachProfile = await getCoachById(coachId);
-    // if (!coachProfile || coachProfile.status !== 'approved') {
-    //   console.warn(`Attempted to favorite a non-existent or non-approved coach (ID: ${coachId}).`);
-    //   return; // Or throw an error
-    // }
     await (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["updateDoc"])(userDocRef, {
         favoriteCoachIds: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["arrayUnion"])(coachId),
         updatedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$firebase$2f$firestore$2f$dist$2f$index$2e$node$2e$mjs__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["serverTimestamp"])()

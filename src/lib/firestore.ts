@@ -1,7 +1,7 @@
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
   serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer,
-  Timestamp, arrayUnion, arrayRemove, documentId // Changed FieldPath to documentId import
+  Timestamp, arrayUnion, arrayRemove, documentId
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage } from '@/types';
@@ -438,6 +438,17 @@ export async function getMessagesForUser(userId: string, otherPartyId?: string |
   return combinedMessages.slice(0, otherPartyId ? undefined : 50);
 }
 
+export async function getMessagesForConversation(conversationId: string): Promise<MessageType[]> {
+    if (!conversationId) {
+        console.error("getMessagesForConversation: conversationId is required.");
+        return [];
+    }
+    const messagesRef = collection(db, "messages");
+    const q = query(messagesRef, where("conversationId", "==", conversationId), orderBy("timestamp", "asc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(docSnapshot => mapMessageFromFirestore(docSnapshot.data(), docSnapshot.id));
+}
+
 export async function getAllMessagesForAdmin(count = 50): Promise<MessageType[]> {
   const messagesCollection = collection(db, "messages");
   const q = query(messagesCollection, orderBy("timestamp", "desc"), firestoreLimit(count));
@@ -536,12 +547,6 @@ export async function getCoachBlogStats(coachId: string): Promise<{ pending: num
 export async function addCoachToFavorites(userId: string, coachId: string): Promise<void> {
   if (!userId || !coachId) throw new Error("User ID and Coach ID are required.");
   const userDocRef = doc(db, "users", userId);
-  // Optional: Check if coach exists and is approved before adding
-  // const coachProfile = await getCoachById(coachId);
-  // if (!coachProfile || coachProfile.status !== 'approved') {
-  //   console.warn(`Attempted to favorite a non-existent or non-approved coach (ID: ${coachId}).`);
-  //   return; // Or throw an error
-  // }
   await updateDoc(userDocRef, {
     favoriteCoachIds: arrayUnion(coachId),
     updatedAt: serverTimestamp()
@@ -574,7 +579,7 @@ export async function getFavoriteCoaches(userId: string): Promise<Coach[]> {
     if (batchIds.length > 0) {
       const q = query(
         collection(db, "users"),
-        where(documentId(), "in", batchIds), // Changed to use documentId() directly
+        where(documentId(), "in", batchIds), 
         where("role", "==", "coach"),
         where("status", "==", "approved") 
       );

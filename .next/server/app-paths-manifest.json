@@ -1,6 +1,7 @@
 {
+  "/dashboard/admin/messages/[conversationId]/page": "app/dashboard/admin/messages/[conversationId]/page.js",
+  "/dashboard/admin/messages/page": "app/dashboard/admin/messages/page.js",
+  "/dashboard/admin/page": "app/dashboard/admin/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/page": "app/page.js",
-  "/pricing/page": "app/pricing/page.js",
-  "/register-coach/page": "app/register-coach/page.js"
+  "/page": "app/page.js"
 }
