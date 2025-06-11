@@ -57,6 +57,7 @@ export default function ConversationThreadClient() {
 
       let fetchedProfile: FirestoreUserProfile | null = null;
       try {
+        console.log("[ConversationThreadClient] Attempting to fetch otherPartyProfile. user.id:", user.id, "otherPartyId:", otherPartyId, "conversationId:", conversationId);
         fetchedProfile = await getUserProfile(otherPartyId);
         setOtherPartyProfile(fetchedProfile);
         if (!fetchedProfile) {
