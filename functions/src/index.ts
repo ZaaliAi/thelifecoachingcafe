@@ -77,6 +77,7 @@ export const onUserSignupWelcomeEmail = onDocumentCreated('users/{userId}', asyn
               <p>Welcome to The Life Coaching Cafe! We're thrilled to have you join our community.</p>
               <p>Explore our coaches, read insightful blog posts, and start your journey towards personal growth.</p>
               <p>Get started here: <a href="https://thelifecoachingcafe.com/browse-coaches">Find Your Coach</a></p>
+              <p>You can sign in to your account here: <a href="https://thelifecoachingcafe.com/login">Sign In</a></p>
               <p>Best regards,</p>
               <p>The Life Coaching Cafe Team</p>
             `,
