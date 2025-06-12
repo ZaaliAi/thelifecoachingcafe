@@ -23,6 +23,8 @@ import { Badge } from '@/components/ui/badge';
 import getStripe from '@/lib/stripe';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
+// Import Checkbox
+import { Checkbox } from '@/components/ui/checkbox';
 
 const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RURVlG6UVJU45QN1mByj8Fc";
 const LOCAL_STORAGE_KEY = 'registerCoachFormData';
@@ -36,6 +38,7 @@ const availabilitySlotSchema = z.object({
   time: z.string().min(1, 'Time is required.').max(50, 'Time seems too long.'),
 });
 
+// Update: Add terms (must be true) to the schema
 const coachRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
@@ -52,6 +55,11 @@ const coachRegistrationSchema = z.object({
   socialLinkPlatform: z.string().optional(),
   socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
   availability: z.array(availabilitySlotSchema).min(1, "Please add at least one availability slot.").optional().default([]),
+  terms: z.literal(true, {
+    errorMap: () => ({
+      message: 'You must accept the Terms and Conditions.',
+    }),
+  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -82,11 +90,11 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         localStorage.removeItem('coachFormUpgradeAttempt'); // Clear the flag
         if (storedDataString) {
           console.log('Loading form data from local storage (upgrade attempt)'); // Debug
-          return JSON.parse(storedDataString);
+          return { ...JSON.parse(storedDataString), terms: false };
         }
       } else if (!planId && storedDataString) { // If it's free tier (no planId) and data exists
         console.log('Loading form data from local storage (free tier session)'); // Debug
-        return JSON.parse(storedDataString);
+        return { ...JSON.parse(storedDataString), terms: false };
       }
     } catch (error) {
       console.error("Error loading/parsing data from local storage:", error);
@@ -109,6 +117,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       socialLinkPlatform: '',
       socialLinkUrl: '',
       availability: [],
+      terms: false, // <-- Add initial value for terms
     };
   };
 
@@ -230,8 +239,8 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
       }
       
- toast({
- title: 'Account Submitted for Review',
+      toast({
+        title: 'Account Submitted for Review',
         description: 'Your coach account has been created.',
         variant: 'success',
       });
@@ -277,7 +286,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.error("Error clearing local storage:", error);
         // Non-critical, so don't let this break the flow
       }
- router.push('/');
+      router.push('/');
     } catch (error: any) {
       console.error('Error during coach registration process:', error);
       toast({
@@ -351,7 +360,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     router.push(`/register-coach?planId=${YOUR_DEFAULT_PREMIUM_PRICE_ID}`);
   };
 
- return (
+  return (
     <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8 max-w-3xl bg-background">
       <section className="mb-12 text-center py-8 px-6 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 shadow-lg border border-border/20">
         <div className="flex items-center justify-center mb-4">
@@ -527,12 +536,6 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                     )}
                 </div>
                 {errors.profileImageUrl && <p className="text-sm text-destructive mt-1">{errors.profileImageUrl.message}</p>}
-                {/* <p className="text-xs text-muted-foreground text-center mt-2">
-                    <span>A professional profile picture significantly increases your visibility. Recommended: Square (1:1), JPG/PNG. Max 2MB.</span>
-                    {!planId && (
-                        <span className="ml-1"> This is a premium feature. <Link href="/pricing" className="underline text-primary hover:text-primary/80">Upgrade to Premium</Link> to enable.</span>
-                    )}
-                </p> */}
             </div>
 
             <div className="space-y-2">
@@ -610,7 +613,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             <CardTitle className="flex items-center text-2xl font-semibold text-primary">
               <CalendarDays className="mr-3 h-7 w-7" /> Your Availability
             </CardTitle>
-            <CardDescription className="mt-1">{'Let clients know when you&apos;re available. You can update your availability anytime in Coach dashboard'}</CardDescription>
+            <CardDescription className="mt-1">{'Let clients know when you\'re available. You can update your availability anytime in Coach dashboard'}</CardDescription>
           </CardHeader>
           <CardContent className="p-6 grid gap-6">
             <div className="space-y-4">
@@ -660,6 +663,35 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             )}
           </CardContent>
         </Card>
+
+        {/* Terms and Conditions Checkbox */}
+        <div className="flex items-start gap-3 p-4 border border-border/20 rounded-lg bg-muted/20">
+          <Controller
+            name="terms"
+            control={control}
+            render={({ field }) => (
+              <Checkbox
+                id="terms"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            )}
+          />
+          <div>
+            <Label htmlFor="terms" className="font-medium text-base cursor-pointer">
+              I agree to the{' '}
+              <Link href="/terms-and-conditions" target="_blank" className="underline text-primary hover:text-primary/80">
+                Terms and Conditions
+              </Link>
+              .
+            </Label>
+            {errors.terms && (
+              <p className="text-sm text-destructive mt-1">
+                {errors.terms.message}
+              </p>
+            )}
+          </div>
+        </div>
 
         <Button type="submit" className="w-full py-3 text-lg font-semibold tracking-wide shadow-lg hover:shadow-xl transition-shadow duration-200 ease-in-out" disabled={isSubmitting || authLoading || isAiLoading} size="lg">
           {isSubmitting || authLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UserPlus className="mr-2 h-5 w-5" />}

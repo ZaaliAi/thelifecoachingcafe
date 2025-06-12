@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'; // Removed useSearchParams
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 // Removed RadioGroup, RadioGroupItem imports
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, UserPlus } from 'lucide-react';
@@ -21,6 +22,9 @@ const signupSchema = z.object({
   email: z.string().email('Invalid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
   confirmPassword: z.string(),
+  terms: z.boolean().refine(val => val === true, {
+    message: "You must accept the terms and conditions.",
+  }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -42,6 +46,7 @@ function SignupFormContent() {
       // Removed role from defaultValues
       name: '',
       email: '',
+      terms: false,
     }
   });
 
@@ -137,6 +142,12 @@ function SignupFormContent() {
               <Input id="confirmPassword" type="password" {...register('confirmPassword')} className={errors.confirmPassword ? 'border-destructive' : ''} />
               {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
             </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox id="terms" {...register('terms')} />
+            <Label htmlFor="terms">I agree to the <Link href="/terms-and-conditions" className="text-primary underline">terms and conditions</Link></Label>
+            {errors.terms && <p className="text-sm text-destructive">{errors.terms.message}</p>}
           </div>
 
           {/* Removed Role Selection RadioGroup */}
