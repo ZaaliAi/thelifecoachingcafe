@@ -191,7 +191,6 @@ export default function PricingPage() {
   return (
     <main className="space-y-12 py-8 md:py-12 container mx-auto px-4 sm:px-6 lg:px-8">
       <section className="text-center">
-        <Crown className="mx-auto h-12 w-12 text-primary mb-4" />
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Subscription Plans</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
           Choose the best plan to grow your Life Coach practice and connect with clients seeking personal development.
@@ -228,31 +227,31 @@ export default function PricingPage() {
 
         {/* Premium Tier Card */}
         {premiumProduct && premiumPrice ? (
-          <Card key={premiumProduct.id} className="flex flex-col shadow-lg shadow-xl border-2 border-primary relative overflow-hidden bg-primary/5">
-            <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-bl-md">
+          <Card key={premiumProduct.id} className="flex flex-col shadow-lg shadow-xl border-2 border-custom-gold relative overflow-hidden bg-gradient-to-br from-light-gold-bg to-white">
+            <div className="absolute top-0 right-0 bg-custom-gold text-black px-3 py-1 text-sm font-semibold rounded-bl-md">
               Most Popular
             </div>
-            <CardHeader className="bg-primary text-primary-foreground p-6">
-              <CardTitle className="text-2xl flex items-center text-primary-foreground">
-                <Crown className="mr-3 h-7 w-7 text-primary-foreground" />
+            <CardHeader className="bg-custom-gold text-black p-6">
+              <CardTitle className="text-2xl flex items-center text-black">
+                <Crown className="mr-3 h-7 w-7 text-black" />
                 {premiumProduct.name || 'Premium Plan'}
               </CardTitle>
-                <CardDescription className="text-primary-foreground/90">{premiumDisplayDescription}</CardDescription>
+                <CardDescription className="text-black/80">{premiumDisplayDescription}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-grow space-y-4">
+            <CardContent className="flex-grow space-y-4 p-6">
               <p className="text-3xl font-bold">
                 £{premiumPriceAmount} <span className="text-sm font-normal text-muted-foreground">/ month</span>
               </p>
               <ul className="space-y-2">
                 {premiumFeatures.map((feature, index) => (
                   <li key={index} className="flex items-center">
-                    <Check className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
+                    <Check className="h-5 w-5 text-custom-gold mr-2 flex-shrink-0" />
                     <span className="text-foreground">{feature}</span>
                   </li>
                 ))}
               </ul>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="p-6">
               {userId ? (
                 <SubscribeButton
                   priceId={premiumPrice.id}
@@ -260,7 +259,7 @@ export default function PricingPage() {
                   buttonText={`Upgrade to ${premiumProduct.name || 'Premium'}`}
                 />
               ) : (
-                <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Button asChild size="lg" className="w-full bg-custom-gold hover:bg-yellow-600 text-black">
                   <Link href={`/register-coach?planId=${premiumPrice.id}`}>Sign Up for {premiumProduct.name || 'Premium'}</Link>
                 </Button>
               )}
