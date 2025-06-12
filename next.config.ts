@@ -2,6 +2,14 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: '/__/auth/:path*',
+        destination: '/__/auth/action',
+      },
+    ];
+  },
   // output: 'export', // This line is now commented out
   // Your existing config options (like typescript, eslint, images) should remain
   // If they were here before, keep them. If not, this is a typical setup.
