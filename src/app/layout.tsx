@@ -45,6 +45,7 @@ export default function RootLayout({
             gtag('config', 'G-V6RRT1QKXE');
           `}
         </Script>
+        <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}>
         <AuthProvider>

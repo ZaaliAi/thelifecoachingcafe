@@ -1,56 +1,8 @@
 {
   "app": {
-    "[project]/src/app/dashboard/admin/messages/[conversationId]/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/admin/messages/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/admin/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/coach/messages/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/coach/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/coach/profile/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/messages/[conversationId]/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/user/messages/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/dashboard/user/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/login/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
     "[project]/src/app/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/pricing/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
-    ],
-    "[project]/src/app/register-coach/page": [
-      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2",
-      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2"
+      "static/media/or3nQ6H_1_WfwkMZI_qYFrcdmhHkjko-s.p.be19f591.woff2",
+      "static/media/gyByhwUxId8gMEwcGFWNOITd-s.p.da1ebef7.woff2"
     ]
   },
   "appUsingSizeAdjust": true,
