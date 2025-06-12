@@ -1,22 +1,20 @@
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form'; // Removed Controller
+import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Removed useSearchParams
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-// Removed RadioGroup, RadioGroupItem imports
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '@/lib/auth'; 
+import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 
-// Updated schema: removed role
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
@@ -30,34 +28,27 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
-// SignupFormData type will be inferred from the updated schema
 type SignupFormData = z.infer<typeof signupSchema>;
 
 function SignupFormContent() {
   const [isLoading, setIsLoading] = useState(false);
-  const { user, loading: authLoading, signup } = useAuth(); // Changed from registerWithEmailAndPassword to signup
+  const { user, loading: authLoading, signup } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  // Removed searchParams and initialRole logic
 
-  const { register, handleSubmit, formState: { errors } } = useForm<SignupFormData>({
+  const { control, register, handleSubmit, formState: { errors } } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      // Removed role from defaultValues
       name: '',
       email: '',
       terms: false,
     }
   });
 
-  // Removed useEffect for setting initialRole
-
   useEffect(() => {
     if (!authLoading && user) {
-      // Redirect if user is already logged in and on signup page
-      // Ensure router.pathname is checked safely
       if (router && typeof router.pathname === 'string' && !router.pathname.includes('/dashboard')) {
-        router.push('/dashboard/user'); // Default to user dashboard
+        router.push('/dashboard/user');
       }
     }
   }, [user, authLoading, router]);
@@ -65,30 +56,27 @@ function SignupFormContent() {
   const onSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setIsLoading(true);
     try {
-      // Call signup with role hardcoded to 'user'
-      await signup(data.name, data.email, data.password, 'user'); // Changed from registerWithEmailAndPassword
+      await signup(data.name, data.email, data.password, 'user');
       
       toast({ title: "Account Created!", description: `Welcome, ${data.name}! Please wait while we redirect you.` });
 
-      // Always redirect to user dashboard
       router.push('/dashboard/user');
 
     } catch (error: any) {
       let errorMessage = "Signup failed. Please try again.";
-      if (error && typeof error.code === 'string') { // More robust error checking
+      if (error && typeof error.code === 'string') {
         if (error.code === 'auth/email-already-in-use') {
           errorMessage = "This email is already registered. Please try logging in or use a different email.";
         } else if (error.code === 'auth/weak-password') {
           errorMessage = "The password is too weak. Please choose a stronger password.";
-        } else if (error.message) { // Ensure error.message is a string
+        } else if (error.message) {
           errorMessage = `Signup error: ${String(error.message)} (Code: ${error.code})`;
         }
-      } else if (error && error.message) { // Fallback if error.code is not available
+      } else if (error && error.message) {
          errorMessage = String(error.message);
-      } else if (typeof error === 'string') { // If error itself is a string
+      } else if (typeof error === 'string') {
         errorMessage = error;
       }
-      // Ensure description is always a string
       toast({
         title: "Signup Failed",
         description: String(errorMessage),
@@ -112,7 +100,6 @@ function SignupFormContent() {
       <CardHeader className="text-center">
         <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
         <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>
-        {/* Updated CardDescription */}
         <CardDescription>
           Join The Life Coaching Cafe today to find your ideal life coach.
         </CardDescription>
@@ -144,13 +131,26 @@ function SignupFormContent() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox id="terms" {...register('terms')} />
-            <Label htmlFor="terms">I agree to the <Link href="/terms-and-conditions" className="text-primary underline">terms and conditions</Link></Label>
-            {errors.terms && <p className="text-sm text-destructive">{errors.terms.message}</p>}
-          </div>
-
-          {/* Removed Role Selection RadioGroup */}
+          <Controller
+            name="terms"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="terms"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  className="mt-1"
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label htmlFor="terms" className="cursor-pointer">
+                    I agree to the <Link href="/terms-and-conditions" className="text-primary underline hover:text-primary/90">terms and conditions</Link>.
+                  </Label>
+                  {errors.terms && <p className="text-sm text-destructive">{errors.terms.message}</p>}
+                </div>
+              </div>
+            )}
+          />
 
           <Button type="submit" disabled={isLoading || authLoading} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
             {isLoading || authLoading ? (

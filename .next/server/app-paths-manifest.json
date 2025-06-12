@@ -1,6 +1,9 @@
 {
   "/browse-coaches/page": "app/browse-coaches/page.js",
   "/coach/[id]/page": "app/coach/[id]/page.js",
+  "/dashboard/user/page": "app/dashboard/user/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/page": "app/page.js"
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/signup/page": "app/signup/page.js"
 }
