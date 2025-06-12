@@ -1,22 +1,24 @@
+
 import { getUserProfile } from "@/lib/firestore";
 import { mockCoaches } from "@/data/mock";
 import CoachProfile from "@/components/CoachProfile"; // Import the new client component
 import type { Coach, FirestoreTimestamp } from "@/types"; // Assuming FirestoreTimestamp is defined in your types
 import { notFound } from 'next/navigation';
 import { Timestamp } from 'firebase/firestore'; // Import Timestamp for type checking
+import { getAllCoachIds } from "@/lib/firestore";
+
+export const revalidate = 3600; // Revalidate every hour
 
 // Function to generate static params
 export async function generateStaticParams() {
-  // You might want to fetch actual coach IDs here if mockCoaches isn't exhaustive
-  // or if you want this to be truly dynamic based on your Firestore data.
-  // For now, using mockCoaches as per original.
-  return mockCoaches.map((coach) => ({
-    id: coach.id,
+  const coachIds = await getAllCoachIds();
+  return coachIds.map((id) => ({
+    id,
   }));
 }
 
 interface PageProps {
-  params: { id: string }; 
+  params: { id: string };
 }
 
 // Helper function to check if a value is a Firestore Timestamp
