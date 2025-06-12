@@ -1,8 +1,7 @@
-// src/app/pricing/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, getDocs, query, where, orderBy, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, DocumentData } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth'; 
 import SubscribeButton from '@/components/SubscribeButton';
@@ -14,7 +13,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Check, Crown, Users, Loader2, Minus, CheckCircle2, XCircle } from "lucide-react";
+import { Check, Crown, Users, Loader2, Minus, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 const freeFeatures = [
@@ -182,8 +181,18 @@ export default function PricingPage() {
     );
   }
 
+  // Find the premium product and its price
+  const premiumProduct = paidProducts.find(p => p.role === 'premium');
+  const premiumPrice = premiumProduct?.prices?.[0];
+  const premiumPriceAmount = typeof premiumPrice?.unit_amount === 'number' ? (premiumPrice.unit_amount / 100).toFixed(2) : 'N/A';
+
+  // Only show a description if it's not the default unwanted string
+  const premiumDisplayDescription = (premiumProduct?.description && premiumProduct?.description !== "Premium subscription for The Life Coaching Cafe.")
+    ? premiumProduct.description
+    : '';
+
   return (
-    <div className="space-y-12 py-8 md:py-12">
+    <main className="space-y-12 py-8 md:py-12 container mx-auto px-4 sm:px-6 lg:px-8">
       <section className="text-center">
         <Crown className="mx-auto h-12 w-12 text-primary mb-4" />
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Subscription Plans</h1>
@@ -192,7 +201,7 @@ export default function PricingPage() {
         </p>
       </section>
 
-      <section className={`grid md:grid-cols-${paidProducts.length > 0 ? '2' : '1'} gap-8 max-w-4xl mx-auto`}>
+      <section className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
         {/* Static Free Tier Card */}
         <Card className="flex flex-col shadow-lg">
           <CardHeader>
@@ -220,92 +229,56 @@ export default function PricingPage() {
           </CardFooter>
         </Card>
 
-        {!loadingProducts && paidProducts.length === 0 && !error && (
-             <Card className="flex flex-col shadow-lg items-center justify-center p-8 min-h-[300px]">
-                <p className="text-lg text-muted-foreground text-center">Premium plans are currently unavailable. Please check back later or contact support.</p>
-            </Card>
-        )}
-
-        {paidProducts.map((product) => {
-          const price = product.prices?.[0]; 
-          const isMostPopular = product.role === 'premium';
-          const defaultDescription = 'Unlock all premium features and maximize your reach.';
-          const displayDescription = (product.description && product.description !== 'Premium subscription for The Life Coaching Cafe.') ? product.description : defaultDescription;
-
-          if (!price) {
-            return null; 
-          }
-          if (product.role === 'free') return null; 
-
-          const features = product.role === 'premium' ? premiumFeatures : ['A single basic feature', 'Another basic feature'];
-          const isSpecialOffer = product.role === 'premium' && price.unit_amount === 999;
-
-          return (
-            <Card key={product.id} className={`flex flex-col shadow-lg ${isMostPopular ? 'shadow-xl border-2 border-primary relative overflow-hidden bg-primary/5' : ''}`}>
-              {isMostPopular && (
-                <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-bl-md">
-                    Most Popular
-                </div>
+        {/* Premium Tier Card */}
+        {premiumProduct && premiumPrice ? (
+          <Card key={premiumProduct.id} className="flex flex-col shadow-lg shadow-xl border-2 border-primary relative overflow-hidden bg-primary/5">
+            <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-bl-md">
+              Most Popular
+            </div>
+            <CardHeader className="bg-primary text-primary-foreground p-6">
+              <CardTitle className="text-2xl flex items-center text-primary-foreground">
+                <Crown className="mr-3 h-7 w-7 text-primary-foreground" />
+                {premiumProduct.name || 'Premium Plan'}
+              </CardTitle>
+              {premiumDisplayDescription && (
+                <CardDescription className="text-primary-foreground/90">{premiumDisplayDescription}</CardDescription>
               )}
-              <CardHeader className={`${isMostPopular ? 'bg-yellow-500 text-white p-6' : 'p-6'}`}>
-                <CardTitle className={`text-2xl flex items-center ${isMostPopular ? 'text-white' : ''}`}>
-                  <Crown className={`mr-3 h-7 w-7 ${isMostPopular ? 'text-white' : 'text-yellow-500'}`} /> 
-                  {product.name || 'Premium Plan'}
-                </CardTitle>
-                <CardDescription className={`${isMostPopular ? 'text-gray-100' : ''}`}>{displayDescription}</CardDescription>
-                {isMostPopular && (
-                  <p className={`text-sm mt-1 ${isMostPopular ? 'text-white' : 'text-muted-foreground'}`}>Ideal for established coaches aiming to maximize client reach and brand visibility.</p>
-                )}
-              </CardHeader>
-              <CardContent className="flex-grow space-y-4">
-                {(typeof price.unit_amount === 'number') ? (
-                  isSpecialOffer ? (
-                    <div className="my-2">
-                      <p className="text-lg font-normal text-muted-foreground line-through">
-                        Original: £19.99
-                      </p>
-                      <p className="text-4xl font-bold text-primary mt-1">
-                        £{(price.unit_amount / 100).toFixed(2)}
-                        <span className="text-base font-normal text-muted-foreground ml-1">/ {price.interval || 'one-time'}</span>
-                      </p>
-                      <p className="text-sm font-semibold text-red-600 animate-pulse mt-1">
-                        Limited Time Offer!
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-3xl font-bold">
-                      £{(price.unit_amount / 100).toFixed(2)} 
-                      <span className="text-sm font-normal text-muted-foreground">/ {price.interval || 'one-time'}</span>
-                    </p>
-                  )
-                ) : (
-                  <p className="text-3xl font-bold">Price not available</p> 
-                )}
-                <ul className="space-y-2">
-                  {features.map((feature, index) => (
-                    <li key={index} className="flex items-center">
-                      <Check className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              <CardFooter>
-                {userId ? (
-                  <SubscribeButton 
-                    priceId={price.id}
-                    userId={userId} 
-                    buttonText={`Upgrade to ${product.name || 'Premium'}`}
-                  />
-                ) : (
-                  <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href={`/register-coach?planId=${price.id}`}>Sign Up for {product.name || 'Premium'}</Link>
-                  </Button>
-                )}
-              </CardFooter>
+              <p className="text-sm mt-1 text-white">Ideal for established coaches aiming to maximize client reach and brand visibility.</p>
+            </CardHeader>
+            <CardContent className="flex-grow space-y-4">
+              <p className="text-3xl font-bold">
+                £{premiumPriceAmount} <span className="text-sm font-normal text-muted-foreground">/ month</span>
+              </p>
+              <ul className="space-y-2">
+                {premiumFeatures.map((feature, index) => (
+                  <li key={index} className="flex items-center">
+                    <Check className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
+                    <span className="text-foreground">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            <CardFooter>
+              {userId ? (
+                <SubscribeButton
+                  priceId={premiumPrice.id}
+                  userId={userId}
+                  buttonText={`Upgrade to ${premiumProduct.name || 'Premium'}`}
+                />
+              ) : (
+                <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Link href={`/register-coach?planId=${premiumPrice.id}`}>Sign Up for {premiumProduct.name || 'Premium'}</Link>
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        ) : (
+          !loadingProducts && paidProducts.length > 0 && !error && ( // Fallback if premium product/price isn't found despite products existing
+            <Card className="flex flex-col shadow-lg items-center justify-center p-8 min-h-[300px]">
+              <p className="text-lg text-muted-foreground text-center">Premium plan details are currently unavailable. Please check back later or contact support.</p>
             </Card>
-          );
-        })} 
+          )
+        )}
       </section>
 
       {/* Feature Comparison Table Section */}
@@ -331,13 +304,13 @@ export default function PricingPage() {
                 <tr key={index} className={`${index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'}`}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{feature.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                    {feature.free ? 
-                      <Check className="h-6 w-6 text-green-500 mx-auto" /> : 
+                    {feature.free ?
+                      <Check className="h-6 w-6 text-green-500 mx-auto" /> :
                       <Minus className="h-6 w-6 text-gray-400 mx-auto" />}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-center border-l-2 border-primary bg-primary/5">
-                    {feature.premium ? 
-                      <CheckCircle2 className="h-6 w-6 text-primary mx-auto" /> : 
+                    {feature.premium ?
+                      <CheckCircle2 className="h-6 w-6 text-primary mx-auto" /> :
                       <Minus className="h-6 w-6 text-gray-400 mx-auto" />}
                   </td>
                 </tr>
@@ -370,15 +343,15 @@ export default function PricingPage() {
         </Accordion>
       </section>
 
-      <section className="text-center py-8 max-w-2xl mx-auto">
+      <section className="text-center py-8 md:py-12 max-w-2xl mx-auto">
         <h3 className="text-xl font-semibold mb-3">Need Help Choosing Your Coaching Plan?</h3>
         <p className="text-muted-foreground mb-4">
           If you're unsure which plan is right for your life coaching services, start with the Free tier. You can always upgrade later from your coach dashboard to access premium features for coaching for mindset and confidence.
         </p>
         <Button variant="link" asChild>
-            <Link href="/contact-us">Contact Support</Link>
+          <Link href="/contact-us">Contact Support</Link>
         </Button>
       </section>
-    </div>
+    </main>
   );
 }
