@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // Default coach fields (will be overridden by signupAdditionalData if present)
               ...(determinedRole === 'coach' && {
                 subscriptionTier: 'free', // Default, might be overridden by signupAdditionalData
-                status: 'pending_approval', // Default, might be overridden
+                status: 'pending', // Default, might be overridden
               }),
               ...signupAdditionalData, // Spread the additional data from the form
             };
