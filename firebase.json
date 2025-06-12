@@ -4,21 +4,15 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
-    "public": ".next",
+    "source": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "predeploy": [
-      "npm run build"
-    ]
+    "frameworksBackend": {
+      "region": "us-central1"
+    }
   },
   "functions": [
     {
@@ -32,9 +26,10 @@
         "*.local"
       ],
       "runtime": "nodejs20",
-"predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]    }
+      "predeploy": [
+        "npm --prefix "$RESOURCE_DIR" run build"
+      ]
+    }
   ],
   "emulators": {
     "auth": {
