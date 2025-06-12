@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, KeyRound, MailCheck, AlertCircle } from 'lucide-react'; // Assuming lucide-react for icons
+import { Loader2, KeyRound, MailCheck, AlertCircle } from 'lucide-react';
 
 function FirebaseActionHandler() {
   const router = useRouter();
@@ -22,7 +22,6 @@ function FirebaseActionHandler() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   
-  // For password reset
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [emailForReset, setEmailForReset] = useState<string | null>(null);
@@ -67,8 +66,6 @@ function FirebaseActionHandler() {
           .then(() => {
             setMessage("Your email has been verified successfully! You can now log in.");
             toast({ title: "Email Verified", description: "You can now log in with your email." });
-            // Optionally redirect to login or dashboard
-            // router.push('/login');
             setLoading(false);
           })
           .catch((err) => {
@@ -77,7 +74,6 @@ function FirebaseActionHandler() {
             setLoading(false);
           });
         break;
-      // Add other modes like 'recoverEmail' if needed
       default:
         setError("Unsupported action. Please check the link and try again.");
         setLoading(false);
@@ -109,7 +105,7 @@ function FirebaseActionHandler() {
       await confirmPasswordReset(auth, actionCode, newPassword);
       setMessage("Password has been reset successfully! You can now log in with your new password.");
       toast({ title: "Success", description: "Password reset successfully. Please log in." });
-      setVerifiedCode(false); // Prevent re-submission
+      setVerifiedCode(false); 
       router.push('/login');
     } catch (err: any) {
       console.error("Error confirming password reset:", err);
@@ -120,7 +116,7 @@ function FirebaseActionHandler() {
     }
   };
 
-  if (loading && !error && !message) { // Initial loading state
+  if (loading && !error && !message) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen py-12">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -144,7 +140,7 @@ function FirebaseActionHandler() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {loading && !error && ( // Loading during action processing (e.g. after submitting new password)
+          {loading && !error && (
              <div className="flex flex-col items-center justify-center py-6">
                 <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
                 <p>Please wait...</p>
@@ -160,7 +156,7 @@ function FirebaseActionHandler() {
             </div>
           )}
 
-          {!loading && !error && message && mode !== 'resetPassword' && ( // For verifyEmail success, etc.
+          {!loading && !error && message && mode !== 'resetPassword' && (
             <div className="text-center text-green-600 space-y-2">
               <MailCheck className="mx-auto h-8 w-8" />
               <p className="font-semibold">Success!</p>
@@ -201,7 +197,7 @@ function FirebaseActionHandler() {
             </form>
           )}
 
-          {!loading && !error && !verifiedCode && message && mode === 'resetPassword' && ( // After successful password reset
+          {!loading && !error && !verifiedCode && message && mode === 'resetPassword' && (
              <div className="text-center text-green-600 space-y-2">
                 <KeyRound className="mx-auto h-8 w-8" />
                 <p className="font-semibold">Success!</p>
@@ -216,7 +212,6 @@ function FirebaseActionHandler() {
   );
 }
 
-// It's good practice to wrap components that use useSearchParams with Suspense
 export default function FirebaseActionPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin" /> <p className='ml-4 text-lg'>Loading page...</p></div>}>
