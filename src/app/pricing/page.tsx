@@ -30,7 +30,7 @@ const premiumFeatures = [
   "Link to Personal Website",
   "Embed Intro Video URL",
   "Display Social Media Links",
-  "Priority Support (Coming Soon)",
+  "Coach Resources (Coming Soon)",
 ];
 
 const comparisonTableFeatures = [
@@ -43,7 +43,7 @@ const comparisonTableFeatures = [
   { name: "Link to Personal Website", free: false, premium: true },
   { name: "Embed Intro Video URL", free: false, premium: true },
   { name: "Display Social Media Links", free: false, premium: true },
-  { name: "Priority Support (Coming Soon)", free: false, premium: true },
+  { name: "Coach Resources (Coming Soon)", free: false, premium: true },
 ];
 
 const faqItems = [
@@ -186,10 +186,7 @@ export default function PricingPage() {
   const premiumPrice = premiumProduct?.prices?.[0];
   const premiumPriceAmount = typeof premiumPrice?.unit_amount === 'number' ? (premiumPrice.unit_amount / 100).toFixed(2) : 'N/A';
 
-  // Only show a description if it's not the default unwanted string
-  const premiumDisplayDescription = (premiumProduct?.description && premiumProduct?.description !== "Premium subscription for The Life Coaching Cafe.")
-    ? premiumProduct.description
-    : '';
+  const premiumDisplayDescription = "Ideal for established coaches aiming to maximize client reach and brand visibility.";
 
   return (
     <main className="space-y-12 py-8 md:py-12 container mx-auto px-4 sm:px-6 lg:px-8">
@@ -240,10 +237,7 @@ export default function PricingPage() {
                 <Crown className="mr-3 h-7 w-7 text-primary-foreground" />
                 {premiumProduct.name || 'Premium Plan'}
               </CardTitle>
-              {premiumDisplayDescription && (
                 <CardDescription className="text-primary-foreground/90">{premiumDisplayDescription}</CardDescription>
-              )}
-              <p className="text-sm mt-1 text-white">Ideal for established coaches aiming to maximize client reach and brand visibility.</p>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
               <p className="text-3xl font-bold">
