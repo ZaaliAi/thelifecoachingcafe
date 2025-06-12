@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/__/auth/:path*",
-      "destination": "/__/auth/action"
+      "destination": "/auth/action"
     }
   ]
 }
