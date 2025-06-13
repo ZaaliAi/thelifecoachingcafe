@@ -287,7 +287,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.error("Error clearing local storage:", error);
         // Non-critical, so don't let this break the flow
       }
-      router.push('/');
+      router.push('/dashboard/coach');
     } catch (error: any) {
       console.error('Error during coach registration process:', error);
       toast({
