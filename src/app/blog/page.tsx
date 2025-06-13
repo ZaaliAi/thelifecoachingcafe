@@ -10,7 +10,7 @@ import { getPublishedBlogPosts } from '@/lib/firestore'; // Assuming this fetche
 const ALL_CATEGORIES_VALUE = "_all_";
 
 async function getBlogPostsWithFilter(filters?: { category?: string, searchTerm?: string }): Promise<BlogPost[]> {
-  let posts = await getPublishedBlogPosts(); // Fetch all published posts first
+  let posts = await getPublishedBlogPosts(null); // Fetch all published posts first
 
   if (filters?.category && filters.category !== ALL_CATEGORIES_VALUE) {
     posts = posts.filter(post => post.tags?.includes(filters.category!));
@@ -28,7 +28,7 @@ async function getBlogPostsWithFilter(filters?: { category?: string, searchTerm?
 }
 
 async function getAllCategories(): Promise<string[]> {
-    const posts = await getPublishedBlogPosts(); // Consider fetching only tags for efficiency if possible
+    const posts = await getPublishedBlogPosts(null); // Consider fetching only tags for efficiency if possible
     const categories = Array.from(new Set(posts.flatMap(post => post.tags || []).filter(Boolean)));
     return categories;
 }

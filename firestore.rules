@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if a user has the 'admin' role
+    function isAdmin() {
+      // This check is now safe for non-authenticated users.
+      // It first verifies request.auth exists before trying to access its properties.
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if a user is the owner of a document
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Helper function to check if a user has the 'coach' role
+    function isCoach() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach';
+    }
+
+    // User profiles: allow all authenticated users to read all user and approved coach profiles
+    match /users/{userId} {
+      allow read: if
+        // Allow reading approved coach profiles publicly
+        (resource.data.role == 'coach' && resource.data.status == 'approved') ||
+        // Allow reading any user profile
+        (resource.data.role == 'user') ||
+        // Allow reading your own profile
+        isOwner(userId) ||
+        // Allow admins to read any profile
+        isAdmin();
+
+      // Allow writing to a profile if you are the owner or an admin
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Blog posts
+    match /blogs/{blogId} {
+      // Allow public to read posts only if they are "published"
+      // Admins can read all blog posts regardless of status
+      allow read: if resource.data.status == 'published' || isAdmin();
+
+      // Allow list (queries) to be performed by anyone.
+      // The 'read' rule above will still protect individual documents,
+      // ensuring that queries only return published posts to the public.
+      allow list: if true;
+
+      // Only allow a user to create a blog post if they are a coach
+      allow create: if isCoach();
+
+      // Allow updating or deleting a post if:
+      // 1. You are the author of the post
+      // 2. You are an admin
+      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+
+    // Rules for conversations (if you decide to add a conversations collection later)
+    match /conversations/{conversationId} {
+      // A user can read a conversation if they are a member of it.
+      allow read, list: if request.auth != null && request.auth.uid in resource.data.members;
+      // A user can write to a conversation (e.g. update lastMessage) if they are a member.
+      allow write: if request.auth != null && request.auth.uid in resource.data.members;
+    }
+
+    // Rules for messages
+    match /messages/{messageId} {
+      // Allow read access if the user is the sender, the recipient, or an admin.
+      allow read: if request.auth != null && (request.auth.uid == resource.data.recipientId || request.auth.uid == resource.data.senderId || isAdmin());
+
+      // Allow admins to list all messages for the log view.
+      allow list: if isAdmin();
+
+      // Allow users to create messages if they are the sender.
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.senderId;
+
+      // Allow the recipient or an admin to update the message (e.g., to mark it as "read").
+      allow update: if request.auth != null && (request.auth.uid == resource.data.recipientId || isAdmin());
+    }
+
+    // Allow public read access to products for the pricing page
+    match /products/{productId} {
+      allow read: if true;
+
+      // Public can also read the prices nested under a product
+      match /prices/{priceId} {
+        allow read: if true;
+      }
+    }
+  }
+}

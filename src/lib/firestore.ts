@@ -331,10 +331,19 @@ export async function getFirestoreBlogPostBySlug(slug: string): Promise<BlogPost
   return null;
 }
 
-export async function getPublishedBlogPosts(count = 10): Promise<BlogPost[]> {
-  const q = query(collection(db, "blogs"), where("status", "==", "published"), orderBy("createdAt", "desc"), firestoreLimit(count));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
+export async function getPublishedBlogPosts(count: number | null = 10): Promise<BlogPost[]> {
+    const queryConstraints: any[] = [
+        where("status", "==", "published"),
+        orderBy("createdAt", "desc")
+    ];
+
+    if (typeof count === 'number' && count > 0) {
+        queryConstraints.push(firestoreLimit(count));
+    }
+
+    const q = query(collection(db, "blogs"), ...queryConstraints);
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(docSnap => mapBlogPostFromFirestore(docSnap.data(), docSnap.id));
 }
 
 export async function getAllPublishedBlogPostSlugs(): Promise<string[]> {
