@@ -20,11 +20,11 @@ service cloud.firestore {
       return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach';
     }
 
-    // User profiles: allow all authenticated users to read all user and approved coach profiles
+    // User profiles: allow all authenticated users to read all user and coach profiles
     match /users/{userId} {
       allow read: if
-        // Allow reading approved coach profiles publicly
-        (resource.data.role == 'coach' && resource.data.status == 'approved') ||
+        // Allow reading coach profiles publicly
+        (resource.data.role == 'coach') ||
         // Allow reading any user profile
         (resource.data.role == 'user') ||
         // Allow reading your own profile

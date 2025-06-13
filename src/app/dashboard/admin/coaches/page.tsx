@@ -1,20 +1,20 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-// Button import removed as it's no longer used after removing the actions column and button
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Users, Loader2, Crown, ShieldQuestion, Hourglass, Star } from "lucide-react";
+import { Users, Loader2, Crown, Star } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from "@/components/ui/switch";
-import type { Coach, CoachStatus } from '@/types';
+import type { Coach } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { getAllCoaches, updateCoachSubscriptionTier, updateCoachStatus, updateCoachFeatureStatus } from '@/lib/firestore';
+import { getAllCoaches, updateCoachSubscriptionTier, updateCoachFeatureStatus } from '@/lib/firestore';
 
-type AdminCoachView = Coach & { status: CoachStatus };
+// The AdminCoachView type no longer needs a separate 'status' field from the Coach type, as it's part of the Coach type itself.
+type AdminCoachView = Coach & { isFeaturedOnHomepage?: boolean };
 
 export default function AdminManageCoachesPage() {
   const [coachesList, setCoachesList] = useState<AdminCoachView[]>([]);
@@ -24,10 +24,10 @@ export default function AdminManageCoachesPage() {
   const fetchCoaches = async () => {
     setIsLoading(true);
     try {
-      const allCoachesFromDb = await getAllCoaches({ includeAllStatuses: true } as any);
+      // We no longer need to pass includeAllStatuses, as we now want all coaches regardless of status.
+      const allCoachesFromDb = await getAllCoaches(); 
       const applications: AdminCoachView[] = allCoachesFromDb.map(coach => ({
         ...coach,
-        status: coach.status || 'pending_approval',
         isFeaturedOnHomepage: coach.isFeaturedOnHomepage || false,
       }));
       setCoachesList(applications);
@@ -42,21 +42,7 @@ export default function AdminManageCoachesPage() {
     fetchCoaches();
   }, []);
 
-  const handleStatusChange = async (coachId: string, newStatus: CoachStatus) => {
-    try {
-      await updateCoachStatus(coachId, newStatus);
-      setCoachesList(prev =>
-        prev.map(app => app.id === coachId ? { ...app, status: newStatus } : app)
-      );
-      toast({
-        title: `Coach Status Updated`,
-        description: `Coach ${coachesList.find(c => c.id === coachId)?.name}'s status set to ${newStatus === 'pending_approval' ? 'Pending' : newStatus.replace('_', ' ')}. `,
-      });
-    } catch (error) {
-      console.error("Failed to update coach status:", error);
-      toast({ title: "Update Failed", description: "Could not update coach status.", variant: "destructive" });
-    }
-  };
+  // handleStatusChange is no longer needed since the approval flow is removed.
 
   const handleSubscriptionTierChange = async (coachId: string, newTier: 'free' | 'premium') => {
     try {
@@ -91,33 +77,10 @@ export default function AdminManageCoachesPage() {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading coach applications...</div>;
+    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading coaches...</div>;
   }
 
-  const getStatusBadgeVariant = (status: CoachStatus) => {
-    switch (status) {
-      case 'approved': return 'default';
-      case 'pending_approval': return 'secondary';
-      case 'rejected': return 'destructive';
-      default: return 'outline';
-    }
-  };
-
-  const getStatusIcon = (status: CoachStatus) => {
-    switch (status) {
-      case 'approved': return <CheckCircle2 className="mr-1 h-4 w-4 text-green-500" />;
-      case 'pending_approval': return <Hourglass className="mr-1 h-4 w-4 text-yellow-500" />;
-      case 'rejected': return <XCircle className="mr-1 h-4 w-4 text-red-500" />;
-      default: return <ShieldQuestion className="mr-1 h-4 w-4 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusText = (status: CoachStatus) => {
-    if (status === 'pending_approval') {
-      return 'Pending';
-    }
-    return status.replace('_', ' ');
-  };
+  // The helper functions for status (getStatusBadgeVariant, getStatusIcon, getStatusText) are removed.
 
   return (
     <Card>
@@ -125,28 +88,27 @@ export default function AdminManageCoachesPage() {
         <CardTitle className="text-2xl flex items-center">
           <Users className="mr-3 h-7 w-7 text-primary" /> Manage Coaches
         </CardTitle>
-        <CardDescription>Review applications, approve coaches, manage subscriptions, and feature on homepage.</CardDescription>
+        <CardDescription>Manage coach subscriptions and feature them on the homepage.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>{/* Ensure no space/newline after this opening tag and before the first TableHead */}
-                <TableHead>Avatar</TableHead>{/* Ensure no space/newline before the next TableHead */}
-                <TableHead>Name</TableHead>{/* Ensure no space/newline */}
-                <TableHead>Email</TableHead>{/* Ensure no space/newline */}
-                <TableHead>App Status</TableHead>{/* Ensure no space/newline */}
-                <TableHead>Subscription</TableHead>{/* Ensure no space/newline */}
+              <TableRow>
+                <TableHead>Avatar</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Subscription</TableHead>
                 <TableHead className="text-center">Featured</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {coachesList.map((coach) => (
-                <TableRow key={coach.id}>{/* Ensure no space after this opening tag and before the first TableCell */}
+                <TableRow key={coach.id}>
                   <TableCell>
                     {coach.profileImageUrl ? (
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={coach.profileImageUrl} alt={coach.name} data-ai-hint={coach.dataAiHint as string || "person avatar"} />
+                        <AvatarImage src={coach.profileImageUrl} alt={coach.name} />
                         <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                     ) : (
@@ -154,7 +116,7 @@ export default function AdminManageCoachesPage() {
                         <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                     )}
-                  </TableCell>{/* Ensure no space/newline before the next TableCell */}
+                  </TableCell>
                   <TableCell className="font-medium whitespace-nowrap">
                     <Link
                       href={`/coach/${coach.id}`}
@@ -164,29 +126,9 @@ export default function AdminManageCoachesPage() {
                     >
                       {coach.name}
                     </Link>
-                  </TableCell>{/* Ensure no space/newline */}
-                  <TableCell className="whitespace-nowrap">{coach.email || 'N/A'}</TableCell>{/* Ensure no space/newline */}
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusBadgeVariant(coach.status)} className="capitalize flex items-center whitespace-nowrap">
-                        {getStatusIcon(coach.status)}
-                        {getStatusText(coach.status)}
-                      </Badge>
-                      <Select
-                        value={coach.status}
-                        onValueChange={(value: CoachStatus) => handleStatusChange(coach.id, value)}
-                      >
-                        <SelectTrigger className="h-8 w-[150px] text-xs">
-                          <SelectValue placeholder="Change Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending_approval">Pending</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </TableCell>{/* Ensure no space/newline */}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{coach.email || 'N/A'}</TableCell>
+                  {/* The TableCell for App Status has been removed */}
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Badge variant={coach.subscriptionTier === 'premium' ? 'default' : 'secondary'} className={`whitespace-nowrap ${coach.subscriptionTier === 'premium' ? 'bg-yellow-500 text-white hover:bg-yellow-600' : ''}`}>
@@ -206,7 +148,7 @@ export default function AdminManageCoachesPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                  </TableCell>{/* Ensure no space/newline */}
+                  </TableCell>
                   <TableCell className="text-center">
                     <Switch
                       checked={coach.isFeaturedOnHomepage}
@@ -216,13 +158,12 @@ export default function AdminManageCoachesPage() {
                     />
                     {coach.isFeaturedOnHomepage && <Star className="inline-block ml-1 h-4 w-4 text-yellow-400" />}
                   </TableCell>
-                  {/* The actions TableCell was here and is now completely removed */}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
-        {coachesList.length === 0 && <p className="text-center text-muted-foreground py-8">No coach applications found.</p>}
+        {coachesList.length === 0 && <p className="text-center text-muted-foreground py-8">No coaches found.</p>}
       </CardContent>
     </Card>
   );

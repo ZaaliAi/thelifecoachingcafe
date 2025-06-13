@@ -240,10 +240,11 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       }
       
       toast({
-        title: 'Account Submitted for Review',
-        description: 'Your coach account has been created.',
+        title: 'Account Created Successfully',
+        description: 'Your coach account is now active.',
         variant: 'success',
       });
+      
 
       if (planId && createdUserId) {
         toast({ title: "Redirecting to subscription...", description: "Please wait." });

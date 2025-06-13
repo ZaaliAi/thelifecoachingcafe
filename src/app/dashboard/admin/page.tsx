@@ -7,7 +7,6 @@ import { Users, FileText, MessageSquare, BarChart3, ShieldAlert, Loader2 } from 
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { 
-  getPendingCoachCount, 
   getPendingBlogPostCount, 
   getTotalUserCount, 
   getTotalCoachCount 
@@ -16,7 +15,6 @@ import {
 export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({
-    pendingCoaches: 0,
     pendingBlogPosts: 0,
     totalUsers: 0,
     totalCoaches: 0,
@@ -28,18 +26,15 @@ export default function AdminDashboardPage() {
       const fetchStats = async () => {
         setIsLoadingStats(true);
         const [
-          pendingCoachesCount,
           pendingBlogPostsCount,
           totalUsersCount,
           totalCoachesCount
         ] = await Promise.all([
-          getPendingCoachCount(),
           getPendingBlogPostCount(),
           getTotalUserCount(),
           getTotalCoachCount()
         ]);
         setStats({
-          pendingCoaches: pendingCoachesCount,
           pendingBlogPosts: pendingBlogPostsCount,
           totalUsers: totalUsersCount,
           totalCoaches: totalCoachesCount,
@@ -77,16 +72,15 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Coach Registrations</CardTitle>
+            <CardTitle className="text-sm font-medium">Manage Coaches</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoadingStats 
               ? <Loader2 className="h-6 w-6 animate-spin"/> 
-              : <div className="text-2xl font-bold">{stats.pendingCoaches} Pending</div>}
-            <p className="text-xs text-muted-foreground">Review and approve new coach applications.</p>
-            {/* Changed variant to destructive */}
-            <Button asChild variant="destructive" className="mt-4 w-full">
+              : <div className="text-2xl font-bold">{stats.totalCoaches} Coaches</div>}
+            <p className="text-xs text-muted-foreground">Manage coach profiles and subscriptions.</p>
+            <Button asChild variant="default" className="mt-4 w-full">
               <Link href="/dashboard/admin/coaches">Manage Coaches</Link>
             </Button>
           </CardContent>
@@ -102,7 +96,6 @@ export default function AdminDashboardPage() {
                ? <Loader2 className="h-6 w-6 animate-spin"/> 
                : <div className="text-2xl font-bold">{stats.pendingBlogPosts} Pending</div>}
             <p className="text-xs text-muted-foreground">Review and publish coach blog posts.</p>
-            {/* Apply custom orange styling */}
             <Button 
               asChild 
               className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600 focus-visible:ring-orange-400"
@@ -120,7 +113,6 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">View Activity</div>
             <p className="text-xs text-muted-foreground">Monitor messaging for moderation purposes.</p>
-            {/* Apply custom blue styling using primary color */}
             <Button 
               asChild 
               className="mt-4 w-full bg-primary text-white hover:bg-primary/90 focus-visible:ring-primary"

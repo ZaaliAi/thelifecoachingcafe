@@ -1,4 +1,4 @@
-'''use client''';
+'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
@@ -14,6 +14,7 @@ import {
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import { firebaseApp } from './firebase'; // Your existing firebase app initialization
 import type { FirestoreUserProfile, FirebaseUser } from '@/types'; // Assuming your custom FirebaseUser type is here
+import { sendWelcomeEmail } from './emailService';
 
 interface AuthContextType {
   user: FirebaseUser | null; // Using your custom FirebaseUser type
@@ -70,7 +71,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // Add other merged fields as necessary
               } as FirebaseUser);
             } else {
-              // This case might happen if a user exists in Auth but not Firestore
+              // This case might happen if a user exists in Auth but not in Firestore
               // You might want to create a default profile or log an error
               console.warn(`User ${firebaseUserAuth.uid} exists in Auth but not in Firestore. Logging them out.`);
               await signOut(auth); // Or create a default profile
@@ -120,7 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name: name,
         role: role,
         createdAt: new Date(),
-        status: role === 'coach' ? 'pending_approval' : 'active',
+        status: 'active',
         photoURL: null, // Or userCredential.user.photoURL if available and desired
         // Add any other default fields from FirestoreUserProfile
         bio: '',
@@ -132,6 +133,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       await setDoc(doc(db, "users", userCredential.user.uid), userProfile); // Reverted to "users"
       
+      if (role === 'coach') {
+        await sendWelcomeEmail(email, name);
+      }
+
       // The onAuthStateChanged listener will pick up the new user and set the user state
       // No need to call setUser directly here unless you want immediate state update before listener fires
       console.log("User registered and profile created:", userCredential.user.uid);

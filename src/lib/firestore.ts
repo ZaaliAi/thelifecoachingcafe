@@ -139,7 +139,7 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
 
     if (dataToSet.role === 'coach') {
       dataToSet.subscriptionTier = dataToSet.subscriptionTier ?? 'free';
-      dataToSet.status = dataToSet.status ?? 'pending_approval';
+      dataToSet.status = 'active';
       dataToSet.availability = dataToSet.availability ?? [];
       dataToSet.isFeaturedOnHomepage = dataToSet.isFeaturedOnHomepage ?? false;
     }
@@ -219,7 +219,6 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   const q = query(
     collection(db, "users"),
     where("role", "==", "coach"),
-    where("status", "==", "approved"),
     where("isFeaturedOnHomepage", "==", true),
     firestoreLimit(count)
   );
@@ -227,10 +226,8 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   return querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
 }
 
-export async function getAllCoaches(filters?: { searchTerm?: string, includeAllStatuses?: boolean }): Promise<Coach[]> {
-  const qConstraints = [where("role", "==", "coach")];
-  if (!filters?.includeAllStatuses) qConstraints.push(where("status", "==", "approved"));
-  qConstraints.push(firestoreLimit(50));
+export async function getAllCoaches(filters?: { searchTerm?: string }): Promise<Coach[]> {
+  const qConstraints = [where("role", "==", "coach"), firestoreLimit(50)];
   const coachesQuery = query(collection(db, "users"), ...qConstraints);
   const querySnapshot = await getDocs(coachesQuery);
   let allCoaches = querySnapshot.docs.map(docSnapshot => mapCoachFromFirestore(docSnapshot.data(), docSnapshot.id));
@@ -259,7 +256,7 @@ export async function getCoachById(coachId: string): Promise<Coach | null> {
 }
 
 export async function getAllCoachIds(): Promise<string[]> {
-  const q = query(collection(db, "users"), where("role", "==", "coach"), where("status", "==", "approved"));
+  const q = query(collection(db, "users"), where("role", "==", "coach"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(docSnapshot => docSnapshot.id);
 }
@@ -589,8 +586,7 @@ export async function getFavoriteCoaches(userId: string): Promise<Coach[]> {
       const q = query(
         collection(db, "users"),
         where(documentId(), "in", batchIds), 
-        where("role", "==", "coach"),
-        where("status", "==", "approved") 
+        where("role", "==", "coach")
       );
       const querySnapshot = await getDocs(q);
       querySnapshot.forEach(docSnapshot => {
