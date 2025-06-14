@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { User, UserRole, FirestoreUserProfile, CoachStatus } from '@/types';
@@ -268,4 +267,3 @@ export function useAuth() {
   }
   return context;
 }
-
