@@ -1,5 +1,6 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Lightbulb, Heart } from 'lucide-react';
+import { Users, Lightbulb, Heart, Linkedin, Facebook } from 'lucide-react';
 import Image from 'next/image';
 
 export default function AboutUsPage() {
@@ -71,6 +72,23 @@ export default function AboutUsPage() {
         </Card>
       </div>
 
+      <section className="text-center py-8 bg-card rounded-lg shadow-inner">
+        <h2 className="text-2xl font-semibold mb-4">Connect With Us</h2>
+        <p className="text-muted-foreground max-w-xl mx-auto mb-6">
+          Follow our journey and join the conversation on our social media platforms.
+        </p>
+        <div className="flex justify-center gap-8">
+          <a href="https://www.linkedin.com/company/the-life-coaching-cafe/" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center text-muted-foreground hover:text-primary transition-colors">
+            <Linkedin className="h-10 w-10" />
+            <span className="mt-2 text-sm font-medium">LinkedIn</span>
+          </a>
+          <a href="https://www.facebook.com/thelifecoachingcafeglobal" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center text-muted-foreground hover:text-primary transition-colors">
+            <Facebook className="h-10 w-10" />
+            <span className="mt-2 text-sm font-medium">Facebook</span>
+          </a>
+        </div>
+      </section>
+      
       <section className="text-center py-8">
         <h2 className="text-2xl font-semibold mb-4">Join Us on This Journey to Find a Life Coach</h2>
         <p className="text-muted-foreground max-w-xl mx-auto">
