@@ -1,4 +1,3 @@
-
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -39,8 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const title = `${post.title} | The Life Coaching Cafe Blog`;
-  const plainText = post.content.replace(/<[^>]+>/g, '').replace(/
-/g, ' ');
+  const plainText = post.content.replace(/<[^>]+>/g, '').replace(/\n/g, ' ');
   const description = plainText.substring(0, 155).trim() + '...';
   const imageUrl = post.featuredImageUrl || '/preview.jpg';
 
@@ -70,12 +68,10 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
 
   const post = await getFirestoreBlogPostBySlug(slug);
 
-  // Robust check: if no post, or if it's not published and not a preview, show 404.
   if (!post || (post.status !== 'published' && !isPreview)) {
     notFound();
   }
 
-  // From this point onwards, we can safely assume `post` is a valid object.
   const author = post.authorId ? await getCoachById(post.authorId) : null;
 
   const jsonLd = {
@@ -93,11 +89,13 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
       name: 'The Life Coaching Cafe',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://thelifecoachingcafe.com/logo.png', // Replace with your logo URL
+        url: 'https://thelifecoachingcafe.com/logo.png', // Make sure this exists
       },
     },
     datePublished: new Date(post.createdAt).toISOString(),
-    dateModified: post.updatedAt ? new Date(post.updatedAt).toISOString() : new Date(post.createdAt).toISOString(),
+    dateModified: post.updatedAt
+      ? new Date(post.updatedAt).toISOString()
+      : new Date(post.createdAt).toISOString(),
   };
 
   return (
@@ -140,7 +138,7 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
           </h1>
 
           <div className="flex items-center space-x-4 text-muted-foreground">
-            {author?.profileImageUrl && (
+            {author && author.profileImageUrl && (
               <Avatar className="h-8 w-8 mr-2">
                 <AvatarImage src={author.profileImageUrl} alt={author.name || 'Author'} />
                 <AvatarFallback>{author.name?.charAt(0) || 'A'}</AvatarFallback>
