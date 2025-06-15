@@ -2,7 +2,7 @@
 import { getUserProfile, getAllCoachIds } from "@/lib/firestore";
 import { mockCoaches } from "@/data/mock";
 import CoachProfile from "@/components/CoachProfile";
-import type { Coach, FirestoreTimestamp } from "@/types";
+import type { Coach } from "@/types";
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
@@ -28,11 +28,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const title = `${coach.name} - Life Coach | The Life Coaching Cafe`;
-  const description = coach.specialties?.length 
+  const description = coach.specialties?.length
     ? `Expert in ${coach.specialties.join(', ')}. ${coach.bio?.substring(0, 120)}...`
     : `${coach.bio?.substring(0, 155)}...`;
 
-  const imageUrl = coach.profileImageUrl || '/preview.jpg'; // Fallback image
+  const imageUrl = coach.profileImageUrl || '/preview.jpg';
 
   return {
     title,
@@ -56,13 +56,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-function isFirestoreTimestamp(value: any): value is FirestoreTimestamp {
-  return value && typeof value.toDate === 'function';
-}
-
 export default async function Page({ params }: PageProps) {
   let coachData: Coach | null = null;
-  
+
   try {
     coachData = await getUserProfile(params.id);
   } catch (error) {
@@ -74,15 +70,29 @@ export default async function Page({ params }: PageProps) {
   }
   
   if (!coachData) {
-    notFound(); 
+    notFound();
   }
 
-  const serializableCoachData = JSON.parse(JSON.stringify(coachData, (key, value) => {
-    if (value && value.seconds !== undefined) {
-      return new Date(value.seconds * 1000).toISOString();
-    }
-    return value;
-  }));
+  const serializableCoachData = JSON.parse(JSON.stringify(coachData));
 
-  return <CoachProfile coachData={serializableCoachData} coachId={params.id} />;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: coachData.name,
+    jobTitle: 'Life Coach',
+    image: coachData.profileImageUrl,
+    url: `https://thelifecoachingcafe.com/coach/${coachData.id}`,
+    description: coachData.bio,
+    knowsAbout: coachData.specialties,
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <CoachProfile coachData={serializableCoachData} coachId={params.id} />
+    </>
+  );
 }
