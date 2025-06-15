@@ -1,10 +1,11 @@
 
 import * as admin from "firebase-admin";
+import * as functions from "firebase-functions";
 import {
   onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
-import {onRequest} from "firebase-functions/v2/https";
+import {onRequest, onCall} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
 
@@ -171,11 +172,65 @@ export const onBlogPublished = onDocumentUpdated(
   }
 );
 
+export const createCheckoutSessionCallable = onCall(
+  {
+    secrets: [stripeSecretKey],
+    cors: [/thedanvail\.com$/, /thelifecoachingcafe\.com$/],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const {priceId, successUrl, cancelUrl} = request.data as any;
+    const userId = request.auth.uid;
+
+    const stripe = new Stripe(stripeSecretKey.value(), {
+      apiVersion: "2025-05-28.basil",
+    });
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        client_reference_id: userId,
+        metadata: {
+          subscription_tier: "premium",
+        },
+      });
+
+      return {sessionId: session.id};
+    } catch (error) {
+      console.error("Stripe Checkout Session Error:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Unable to create checkout session."
+      );
+    }
+  }
+);
+
+
 /**
  * Stripe webhook handler to process subscription payments.
  */
 export const onSubscriptionActivated = onRequest(
-  {secrets: [stripeSecretKey, stripeWebhookSecret]},
+  {
+    secrets: [stripeSecretKey, stripeWebhookSecret],
+    cors: [/thedanvail\.com$/, /thelifecoachingcafe\.com$/],
+  },
   async (request, response) => {
     const stripe = new Stripe(stripeSecretKey.value(), {
       apiVersion: "2025-05-28.basil",
