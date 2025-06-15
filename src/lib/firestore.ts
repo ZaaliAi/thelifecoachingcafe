@@ -1,3 +1,4 @@
+
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
   serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer,
@@ -256,9 +257,14 @@ export async function getCoachById(coachId: string): Promise<Coach | null> {
 }
 
 export async function getAllCoachIds(): Promise<string[]> {
-  const q = query(collection(db, "users"), where("role", "==", "coach"));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(docSnapshot => docSnapshot.id);
+  try {
+    const q = query(collection(db, "users"), where("role", "==", "coach"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(docSnapshot => docSnapshot.id);
+  } catch (error) {
+    console.error("Failed to fetch coach IDs for static generation:", error);
+    return [];
+  }
 }
 
 export async function updateCoachSubscriptionTier(coachId: string, tier: 'free' | 'premium'): Promise<void> {
@@ -344,9 +350,14 @@ export async function getPublishedBlogPosts(count: number | null = 10): Promise<
 }
 
 export async function getAllPublishedBlogPostSlugs(): Promise<string[]> {
-  const q = query(collection(db, "blogs"), where("status", "==", "published"));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(docSnapshot => (docSnapshot.data() as FirestoreBlogPost).slug).filter(Boolean);
+  try {
+    const q = query(collection(db, "blogs"), where("status", "==", "published"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(docSnapshot => (docSnapshot.data() as FirestoreBlogPost).slug).filter(Boolean);
+  } catch (error) {
+    console.error("Failed to fetch blog slugs for static generation:", error);
+    return [];
+  }
 }
 
 export async function updateBlogPostStatus(postId: string, status: FirestoreBlogPost['status']): Promise<void> {
