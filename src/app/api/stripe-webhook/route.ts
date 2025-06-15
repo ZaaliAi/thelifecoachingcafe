@@ -4,6 +4,27 @@ import { stripe } from '@/lib/stripe';
 import { adminDb } from '@/lib/firebaseAdmin';
 import Stripe from 'stripe';
 
+async function handleSubscriptionCreation(session: Stripe.Checkout.Session) {
+  const userId = session.client_reference_id;
+  const stripeCustomerId = session.customer as string;
+  const stripeSubscriptionId = session.subscription as string;
+
+  if (!userId) {
+    throw new Error('Webhook Error: client_reference_id is missing in session.');
+  }
+
+  const userRef = adminDb.collection('users').doc(userId);
+
+  await userRef.update({
+    stripeCustomerId: stripeCustomerId,
+    stripeSubscriptionId: stripeSubscriptionId,
+    subscriptionTier: 'premium',
+    subscriptionStatus: 'active',
+  });
+
+  console.log(`User ${userId} successfully subscribed.`);
+}
+
 // This is the endpoint Stripe will send events to.
 export async function POST(request: Request) {
   const payload = await request.text();
@@ -30,6 +51,13 @@ export async function POST(request: Request) {
   // Handle the specific event type
   try {
     switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === 'subscription') {
+            await handleSubscriptionCreation(session);
+        }
+        break;
+      }
       // Case 1: The subscription is updated. This often happens when a user
       // chooses to "cancel at the end of the period."
       case 'customer.subscription.updated': {

@@ -1,16 +1,21 @@
-// src/app/api/handle-payment-success/route.ts
-import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
-import { adminDb } from '@/lib/firebaseAdmin';
-import { firestore } from 'firebase-admin';
 
-async function updateSubscription(userId: string, subscriptionTier: 'free' | 'premium', status: 'active' | 'pending' | 'cancelled') {
+import { NextResponse } from 'next/server';
+import { adminDb } from '@/lib/firebaseAdmin';
+
+// This function checks if a user's subscription is active.
+async function verifySubscription(userId: string): Promise<boolean> {
   const userRef = adminDb.collection('users').doc(userId);
-  return userRef.update({
-    subscriptionTier: subscriptionTier,
-    subscriptionStatus: status, // e.g., 'active', 'cancelled'
-    updatedAt: firestore.FieldValue.serverTimestamp(),
-  });
+  const doc = await userRef.get();
+
+  if (!doc.exists) {
+    console.error(`User with ID ${userId} not found.`);
+    return false;
+  }
+  
+  const userData = doc.data();
+  // Check that the subscription is marked as active in your database.
+  // This status should be reliably set by your Stripe webhook.
+  return userData?.subscriptionStatus === 'active' && userData?.subscriptionTier === 'premium';
 }
 
 export async function POST(request: Request) {
@@ -18,36 +23,37 @@ export async function POST(request: Request) {
     const { sessionId } = await request.json();
 
     if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID is required.' }, { status: 400 });
+        return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId as string);
+    // The client_reference_id set during checkout is the user's ID.
+    const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
+        headers: {
+            'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`
+        }
+    });
 
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid Stripe session ID.' }, { status: 404 });
-    }
-
+    const session = await response.json();
     const userId = session.client_reference_id;
-    if (!userId) {
-      throw new Error(`User ID not found in Stripe session: ${sessionId}`);
-    }
 
-    // IMPORTANT: Verify the payment was successful
-    if (session.payment_status === 'paid') {
-      await updateSubscription(userId, 'premium', 'active');
-      console.log(`Successfully upgraded user ${userId} to premium.`);
-      return NextResponse.json({ success: true, message: "User upgraded to premium." });
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID not found in session' }, { status: 400 });
+    }
+    
+    // Instead of updating the subscription here, we now POLL for the updated status.
+    // The webhook is the single source of truth for subscription status.
+    const isSubscribed = await verifySubscription(userId);
+
+    if (isSubscribed) {
+      return NextResponse.json({ success: true, message: "Subscription verified." });
     } else {
-      // This case might occur if the user is redirected before the payment is fully confirmed.
-      // You might want to handle this gracefully, perhaps by telling the user to wait a moment.
-      console.warn(`Payment status for session ${sessionId} is not 'paid', it's '${session.payment_status}'.`);
-      return NextResponse.json({ error: `Payment not yet confirmed. Current status: ${session.payment_status}` }, { status: 402 });
+      // If the webhook hasn't processed yet, the status might not be active.
+      // The client should handle this and can retry.
+      return NextResponse.json({ success: false, error: "Subscription not active. Please wait a moment and try again." }, { status: 409 }); // 409 Conflict
     }
 
   } catch (error: any) {
-    console.error('Error handling payment success:', error);
-    // It's crucial to log the full error, especially if it's a Stripe-related error object
-    const errorMessage = error.message || 'An unknown error occurred.';
-    return NextResponse.json({ error: 'Failed to handle payment success.', details: errorMessage }, { status: 500 });
+    console.error('Error verifying payment success:', error);
+    return NextResponse.json({ error: 'Failed to verify payment success.', details: error.message }, { status: 500 });
   }
 }

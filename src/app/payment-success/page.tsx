@@ -1,4 +1,4 @@
-// src/app/payment-success/page.tsx
+
 'use client';
 
 import Link from 'next/link';
@@ -8,6 +8,9 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 
+const MAX_RETRIES = 5; // Poll the API up to 5 times
+const RETRY_INTERVAL = 2000; // 2 seconds between each poll
+
 function PaymentSuccessContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -16,17 +19,15 @@ function PaymentSuccessContent() {
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
-
-    if (status !== 'loading') return;
+    let retries = 0;
 
     if (!sessionId) {
-      console.error("No session_id found in URL.");
-      setErrorMessage("Missing session information. Your payment may have succeeded, but we could not verify it automatically. Please contact support.");
-      setStatus('error');
-      return;
+        setErrorMessage("Missing session information. Your payment may have succeeded, but we could not verify it automatically.");
+        setStatus('error');
+        return;
     }
 
-    const handleSuccess = async () => {
+    const verifyPayment = async () => {
       try {
         const response = await fetch('/api/handle-payment-success', {
           method: 'POST',
@@ -36,82 +37,77 @@ function PaymentSuccessContent() {
 
         const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || 'An unknown error occurred.');
+        if (response.ok && data.success) {
+          setStatus('success');
+          setTimeout(() => router.push('/dashboard/coach/profile'), 2000);
+        } else if (retries < MAX_RETRIES) {
+          retries++;
+          setTimeout(verifyPayment, RETRY_INTERVAL);
+        } else {
+            setErrorMessage(data.error || "Verification timed out. Please check your dashboard or contact support.");
+            setStatus('error');
         }
-
-        console.log("Successfully updated user's subscription tier. Redirecting...");
-        setStatus('success');
-        
-        // Redirect to the coach's profile editing page after a short delay
-        setTimeout(() => {
-          router.push('/dashboard/coach/profile');
-        }, 2000); // 2-second delay to allow user to read the success message
-
       } catch (error: any) {
-        console.error("Error in handleSuccess:", error);
-        setErrorMessage(error.message || "Failed to update your profile. Please contact support with your payment details.");
+        setErrorMessage("An unexpected error occurred. Please contact support.");
         setStatus('error');
       }
     };
 
-    handleSuccess();
-  }, [searchParams, status, router]);
+    verifyPayment();
+  }, [searchParams, router]);
 
   const renderContent = () => {
     switch (status) {
-      case 'loading':
-        return (
-          <>
-            <div className="mx-auto bg-blue-100 rounded-full p-3 w-fit">
-              <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-            </div>
-            <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-              Verifying Payment...
-            </CardTitle>
-            <CardContent className="text-gray-600">
-              <p>Please wait while we confirm your payment and upgrade your account. This should only take a moment.</p>
-            </CardContent>
-          </>
-        );
-      case 'success':
-        return (
-          <>
-            <div className="mx-auto bg-green-100 rounded-full p-3 w-fit">
-              <CheckCircle className="h-12 w-12 text-green-500" />
-            </div>
-            <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-              Payment Successful!
-            </CardTitle>
-            <CardContent className="text-gray-600 space-y-4">
-              <p>Thank you! Your account has been upgraded to Premium.</p>
-              <p>Redirecting you to your enhanced profile now...</p>
-            </CardContent>
-          </>
-        );
-      case 'error':
-        return (
-          <>
-            <div className="mx-auto bg-red-100 rounded-full p-3 w-fit">
-              <AlertTriangle className="h-12 w-12 text-red-500" />
-            </div>
-            <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-              Verification Failed
-            </CardTitle>
-            <CardContent className="text-gray-600 space-y-4">
-              <p>{errorMessage}</p>
-              <p>Please contact our support team for assistance.</p>
-            </CardContent>
-            <CardFooter className="flex justify-center pt-6">
-               <Button asChild className="w-full sm:w-auto">
-                 <Link href="/contact-us">Contact Support</Link>
-               </Button>
-            </CardFooter>
-          </>
-        );
+        case 'loading':
+            return (
+                <>
+                    <div className="mx-auto bg-blue-100 rounded-full p-3 w-fit">
+                        <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+                    </div>
+                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
+                        Finalizing Your Subscription...
+                    </CardTitle>
+                    <CardContent className="text-gray-600">
+                        <p>Please wait while we confirm your payment. This may take a few seconds.</p>
+                    </CardContent>
+                </>
+            );
+        case 'success':
+            return (
+                <>
+                    <div className="mx-auto bg-green-100 rounded-full p-3 w-fit">
+                        <CheckCircle className="h-12 w-12 text-green-500" />
+                    </div>
+                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
+                        Subscription Confirmed!
+                    </CardTitle>
+                    <CardContent className="text-gray-600">
+                        <p>Your account is now Premium! Redirecting you to your profile...</p>
+                    </CardContent>
+                </>
+            );
+        case 'error':
+            return (
+                <>
+                    <div className="mx-auto bg-red-100 rounded-full p-3 w-fit">
+                        <AlertTriangle className="h-12 w-12 text-red-500" />
+                    </div>
+                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
+                        Verification Failed
+                    </CardTitle>
+                    <CardContent className="text-gray-600">
+                        <p>{errorMessage}</p>
+                    </CardContent>
+                    <CardFooter className="flex justify-center pt-6">
+                        <Button asChild className="w-full sm:w-auto">
+                            <Link href="/contact-us">Contact Support</Link>
+                        </Button>
+                    </CardFooter>
+                </>
+            );
     }
   };
-  
+
   return (
       <Card className="w-full max-w-lg shadow-lg text-center bg-white">
         <CardHeader>
@@ -128,5 +124,5 @@ export default function PaymentSuccessPage() {
                 <PaymentSuccessContent />
             </div>
         </Suspense>
-    )
+    );
 }
