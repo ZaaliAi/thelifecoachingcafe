@@ -15,6 +15,88 @@ const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 /**
+ * Deletes a user account, including their data and Stripe subscription.
+ */
+export const deleteUserAccount = onCall(
+  {
+    secrets: [stripeSecretKey],
+    cors: [/thedanvail\.com$/, /thelifecoachingcafe\.com$/],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "You must be authenticated to delete your account."
+      );
+    }
+
+    const uid = request.auth.uid;
+    const userDocRef = admin.firestore().collection("users").doc(uid);
+
+    const stripe = new Stripe(stripeSecretKey.value(), {
+      apiVersion: "2025-05-28.basil",
+    });
+
+    try {
+      const userDoc = await userDocRef.get();
+      if (!userDoc.exists) {
+        await admin.auth().deleteUser(uid);
+        return {message: "Account deleted successfully."};
+      }
+
+      const userData = userDoc.data()!;
+
+      if (userData.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(userData.stripeSubscriptionId);
+          console.log(
+            `Stripe subscription ${
+              userData.stripeSubscriptionId
+            } for user ${uid} cancelled.`
+          );
+        } catch (error) {
+          console.error(
+            `Failed to cancel Stripe subscription ${
+              userData.stripeSubscriptionId
+            } for user ${uid}. It might have been already cancelled. Error:`,
+            error
+          );
+        }
+      }
+
+      await userDocRef.delete();
+
+      if (userData.role === "coach") {
+        const coachProfileRef = admin
+          .firestore()
+          .collection("coachProfiles")
+          .doc(uid);
+        const coachProfileDoc = await coachProfileRef.get();
+        if (coachProfileDoc.exists) {
+          await coachProfileRef.delete();
+        }
+      }
+
+      console.log(`Firestore documents for user ${uid} deleted.`);
+
+      await admin.auth().deleteUser(uid);
+      console.log(`Firebase Auth user ${uid} deleted.`);
+
+      return {
+        message:
+          "Your account and all associated data have been permanently deleted.",
+      };
+    } catch (error) {
+      console.error(`Error deleting account for user ${uid}:`, error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "An error occurred while deleting your account. Please contact support."
+      );
+    }
+  }
+);
+
+/**
  * Helper function to send a templated email.
  * @param {string} email The recipient's email address.
  * @param {string} templateName The name of the email template document.
@@ -45,7 +127,6 @@ const sendEmail = async (
     );
   }
 };
-
 
 /**
  * Sends a welcome email to a new user upon their creation in Firestore.
@@ -163,10 +244,7 @@ export const onBlogPublished = onDocumentUpdated(
     const before = event.data.before.data();
     const after = event.data.after.data();
 
-    if (
-      before.status === "pending" &&
-      after.status === "published"
-    ) {
+    if (before.status === "pending" && after.status === "published") {
       await sendBlogEmail(after.authorId, after.title, "blog_approved");
     }
   }
@@ -222,7 +300,6 @@ export const createCheckoutSessionCallable = onCall(
   }
 );
 
-
 /**
  * Stripe webhook handler to process subscription payments.
  */
@@ -258,16 +335,48 @@ export const onSubscriptionActivated = onRequest(
     if (webhookEvent.type === "checkout.session.completed") {
       const session = webhookEvent.data.object as Stripe.Checkout.Session;
       const userId = session.client_reference_id;
-      const tier = session.metadata?.subscription_tier || "premium";
 
       if (!userId) {
-        response.status(400).send("Missing userId in checkout session.");
+        console.error("Critical: checkout.session.completed missing userId.");
+        response
+          .status(200)
+          .send("Event handled, but no userId was present.");
         return;
       }
 
-      await admin.firestore().collection("users").doc(userId).update({
-        subscriptionTier: tier,
-      });
+      const subscriptionId = session.subscription;
+      const customerId = session.customer;
+      const subscriptionTier =
+        session.metadata?.subscription_tier || "premium";
+
+      if (!subscriptionId || !customerId) {
+        console.error(
+          `Critical: Missing subscription or customer ID for user ${userId}.`
+        );
+        response
+          .status(200)
+          .send("Event handled, but subscription or customer ID was missing.");
+        return;
+      }
+
+      try {
+        await admin.firestore().collection("users").doc(userId).update({
+          subscriptionTier: subscriptionTier,
+          stripeSubscriptionId: subscriptionId,
+          stripeCustomerId: customerId.toString(),
+          subscriptionStatus: "active",
+        });
+        console.log(
+          `Successfully updated user ${userId} to premium subscription.`
+        );
+      } catch (error) {
+        console.error(
+          `Failed to update user ${userId} in Firestore:`,
+          error
+        );
+        response.status(500).send("Failed to update user record in Firestore.");
+        return;
+      }
     }
 
     response.status(200).send("Event received.");

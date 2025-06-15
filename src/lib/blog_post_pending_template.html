@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Blog Post is Pending Review</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eeeeee;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #333333;
+        }
+        .content {
+            padding: 20px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            font-size: 12px;
+            color: #666666;
+        }
+        .button {
+            display: inline-block;
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>The Life Coaching Cafe</h1>
+        </div>
+        <div class="content">
+            <h2>We've Received Your Blog Post!</h2>
+            <p>Hi {{name}},</p>
+            <p>Thank you for submitting your blog post, "{{postTitle}}". It is now pending review by our team.</p>
+            <p>We will review your post within 24 hours and notify you once it has been published.</p>
+            <p>In the meantime, you can view your submitted posts in your dashboard.</p>
+            <p style="text-align: center;">
+                <a href="https://www.thelifecoachingcafe.com/dashboard/coach/blog" class="button">View Your Blog Posts</a>
+            </p>
+            <p>Thanks,</p>
+            <p>The Life Coaching Cafe Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2023 The Life Coaching Cafe. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
