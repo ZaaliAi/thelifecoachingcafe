@@ -9,6 +9,7 @@ import { AuthProvider } from '@/lib/auth';
 import AnnouncementBar from '@/components/AnnouncementBar'; // Added import
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -59,6 +60,7 @@ export default function RootLayout({
           <Toaster />
         </AuthProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
