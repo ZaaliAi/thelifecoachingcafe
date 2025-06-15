@@ -22,8 +22,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'The Life Coaching Cafe - Find Your Life Coach',
-  description: 'Connect with certified life coaches through our online directory. Utilize our AI-powered CoachMatch tool for personalized recommendations and discover resources for personal development and mental wellness.',
+  title: 'The Life Coaching Cafe - Find Your Perfect Life Coach',
+  description: 'AI-powered coach matching to find the right life coach for your needs. Connect with certified life coaches, and discover resources for personal development and mental wellness.',
+  metadataBase: new URL('https://thelifecoachingcafe.com'), // Replace with your actual domain
+  openGraph: {
+    title: 'The Life Coaching Cafe - Find Your Perfect Life Coach',
+    description: 'AI-powered coach matching. Connect with top-rated life coaches today.',
+    images: ['/preview.jpg'], // Replace with a link to a great preview image
+    url: 'https://thelifecoachingcafe.com', // Replace with your actual domain
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'The Life Coaching Cafe - Find Your Perfect Life Coach',
+    description: 'AI-powered coach matching. Connect with top-rated life coaches today.',
+    images: ['/preview.jpg'], // Must be an absolute URL
+  },
 };
 
 export default function RootLayout({

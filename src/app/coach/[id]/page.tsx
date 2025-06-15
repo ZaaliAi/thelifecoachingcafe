@@ -1,76 +1,88 @@
 
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, getAllCoachIds } from "@/lib/firestore";
 import { mockCoaches } from "@/data/mock";
-import CoachProfile from "@/components/CoachProfile"; // Import the new client component
-import type { Coach, FirestoreTimestamp } from "@/types"; // Assuming FirestoreTimestamp is defined in your types
+import CoachProfile from "@/components/CoachProfile";
+import type { Coach, FirestoreTimestamp } from "@/types";
 import { notFound } from 'next/navigation';
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp for type checking
-import { getAllCoachIds } from "@/lib/firestore";
+import type { Metadata } from 'next';
 
-export const revalidate = 3600; // Revalidate every hour
+export const revalidate = 3600;
 
-// Function to generate static params
 export async function generateStaticParams() {
   const coachIds = await getAllCoachIds();
-  return coachIds.map((id) => ({
-    id,
-  }));
+  return coachIds.map((id) => ({ id }));
 }
 
 interface PageProps {
   params: { id: string };
 }
 
-// Helper function to check if a value is a Firestore Timestamp
-function isFirestoreTimestamp(value: any): value is FirestoreTimestamp {
-  return value && typeof value === 'object' && value.hasOwnProperty('seconds') && value.hasOwnProperty('nanoseconds') && typeof value.toDate === 'function';
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const coach = await getUserProfile(params.id);
+
+  if (!coach) {
+    return {
+      title: "Coach Not Found",
+      description: "The coach you are looking for could not be found.",
+    };
+  }
+
+  const title = `${coach.name} - Life Coach | The Life Coaching Cafe`;
+  const description = coach.specialties?.length 
+    ? `Expert in ${coach.specialties.join(', ')}. ${coach.bio?.substring(0, 120)}...`
+    : `${coach.bio?.substring(0, 155)}...`;
+
+  const imageUrl = coach.profileImageUrl || '/preview.jpg'; // Fallback image
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [imageUrl],
+      type: 'profile',
+      profile: {
+        firstName: coach.name.split(' ')[0],
+        lastName: coach.name.split(' ').slice(1).join(' '),
+      },
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
 }
 
-export default async function Page({ params: paramsProp }: PageProps) {
-  const resolvedParams = await paramsProp;
-  const { id } = resolvedParams;
+function isFirestoreTimestamp(value: any): value is FirestoreTimestamp {
+  return value && typeof value.toDate === 'function';
+}
+
+export default async function Page({ params }: PageProps) {
+  let coachData: Coach | null = null;
   
-  console.log("[CoachPage] paramsProp (can be a Promise):", paramsProp);
-  console.log("[CoachPage] resolvedParams:", resolvedParams);
-  console.log("[CoachPage] Using id:", id);
-
-  let coachData: Coach | null | undefined = null;
-
   try {
-    coachData = await getUserProfile(id);
-    console.log("[CoachPage] Fetched coachData from Firestore for id:", id);
+    coachData = await getUserProfile(params.id);
   } catch (error) {
-    console.error("[CoachPage] Failed to fetch profile from Firestore for id:", id, error);
+    console.error("Failed to fetch profile:", error);
   }
 
   if (!coachData) {
-    console.log("[CoachPage] No data from Firestore, falling back to mockCoaches for id:", id);
-    coachData = mockCoaches.find(c => c.id === id) || null;
-    if (coachData) {
-      console.log("[CoachPage] Found coachData in mockCoaches for id:", id);
-    }
+    coachData = mockCoaches.find(c => c.id === params.id) || null;
   }
-
+  
   if (!coachData) {
-    console.log("[CoachPage] Coach data not found for id:", id, ". Triggering notFound().");
     notFound(); 
   }
 
-  // Serialize coachData before passing to Client Component
-  const serializableCoachData: any = { ...coachData };
+  const serializableCoachData = JSON.parse(JSON.stringify(coachData, (key, value) => {
+    if (value && value.seconds !== undefined) {
+      return new Date(value.seconds * 1000).toISOString();
+    }
+    return value;
+  }));
 
-  if (coachData && isFirestoreTimestamp(coachData.createdAt)) {
-    serializableCoachData.createdAt = coachData.createdAt.toDate().toISOString();
-  }
-  if (coachData && isFirestoreTimestamp(coachData.updatedAt)) {
-    serializableCoachData.updatedAt = coachData.updatedAt.toDate().toISOString();
-  }
-  // You might need to do this for other date fields if they exist e.g. availability
-  // For example, if availability is an array of objects with date/time strings, it might already be serializable.
-  // If availability contains Date objects or Timestamps, they also need serialization.
-  // The current log shows availability as an array of objects with string 'day' and 'time', which is fine.
-
-  console.log("[CoachPage] Serializable coachData:", serializableCoachData);
-
-  return <CoachProfile coachData={serializableCoachData as Coach} coachId={id} />;
+  return <CoachProfile coachData={serializableCoachData} coachId={params.id} />;
 }
