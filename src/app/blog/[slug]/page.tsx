@@ -1,4 +1,3 @@
-
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -6,16 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CalendarDays, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
-import type { BlogPost, Coach } from '@/types';
-import { notFound } from 'next/navigation';
-import { getFirestoreBlogPostBySlug, getCoachById, getAllPublishedBlogSlugs } from '@/lib/firestore';
-import ReactMarkdown from 'react-markdown';
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 
-export const revalidate = 3600; // Revalidate every hour
+import {
+  getFirestoreBlogPostBySlug,
+  getCoachById,
+  getAllPublishedBlogPostSlugs, // ✅ Corrected name
+} from '@/lib/firestore';
+
+export const revalidate = 3600; // Regenerates page every hour
 
 export async function generateStaticParams() {
-  const slugs = await getAllPublishedBlogSlugs();
+  const slugs = await getAllPublishedBlogPostSlugs(); // ✅ Use correct function
   return slugs.map((slug) => ({ slug }));
 }
 
@@ -29,15 +32,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!post) {
     return {
-      title: "Blog Post Not Found",
-      description: "This blog post could not be found.",
+      title: 'Blog Post Not Found',
+      description: 'This blog post could not be found.',
     };
   }
 
   const title = `${post.title} | The Life Coaching Cafe Blog`;
-  const description = post.content.substring(0, 155).replace(/
-/g, ' ').trim() + '...';
-  const imageUrl = post.featuredImageUrl || '/preview.jpg'; // Fallback image
+  const plainText = post.content.replace(/<[^>]+>/g, '').replace(/\n/g, ' ');
+  const description = plainText.substring(0, 155).trim() + '...';
+  const imageUrl = post.featuredImageUrl || '/preview.jpg';
 
   return {
     title,
@@ -64,7 +67,6 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
   const isPreview = searchParams.preview === 'true';
 
   const post = await getFirestoreBlogPostBySlug(slug);
-
   if (!post || (post.status !== 'published' && !isPreview)) {
     notFound();
   }
@@ -76,7 +78,8 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
       <header className="space-y-4">
         <Button variant="outline" asChild className="mb-4">
           <Link href="/blog">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Blog
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Blog
           </Link>
         </Button>
 
@@ -93,17 +96,21 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
         )}
 
         <div className="flex flex-wrap gap-2">
-          {post.tags?.map(tag => (
-            <Badge key={tag} variant="secondary">{tag}</Badge>
+          {post.tags?.map((tag) => (
+            <Badge key={tag} variant="secondary">
+              {tag}
+            </Badge>
           ))}
         </div>
 
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">{post.title}</h1>
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
+          {post.title}
+        </h1>
 
         <div className="flex items-center space-x-4 text-muted-foreground">
-          {author && author.profileImageUrl && (
+          {author?.profileImageUrl && (
             <Avatar className="h-8 w-8 mr-2">
-              <AvatarImage src={author.profileImageUrl} alt={author.name || "Author"} />
+              <AvatarImage src={author.profileImageUrl} alt={author.name || 'Author'} />
               <AvatarFallback>{author.name?.charAt(0) || 'A'}</AvatarFallback>
             </Avatar>
           )}
@@ -114,11 +121,13 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
           </div>
         </div>
       </header>
-      
+
       {isPreview && post.status !== 'published' && (
         <div className="p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800">
-            <p className="font-bold">Preview Mode</p>
-            <p>Current status: <Badge variant="outline">{post.status}</Badge></p>
+          <p className="font-bold">Preview Mode</p>
+          <p>
+            Current status: <Badge variant="outline">{post.status}</Badge>
+          </p>
         </div>
       )}
 
@@ -149,3 +158,4 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
     </article>
   );
 }
+
