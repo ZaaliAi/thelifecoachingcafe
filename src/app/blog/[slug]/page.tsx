@@ -69,10 +69,13 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
   const isPreview = searchParams.preview === 'true';
 
   const post = await getFirestoreBlogPostBySlug(slug);
+
+  // Robust check: if no post, or if it's not published and not a preview, show 404.
   if (!post || (post.status !== 'published' && !isPreview)) {
     notFound();
   }
 
+  // From this point onwards, we can safely assume `post` is a valid object.
   const author = post.authorId ? await getCoachById(post.authorId) : null;
 
   const jsonLd = {
