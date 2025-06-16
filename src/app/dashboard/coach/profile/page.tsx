@@ -11,16 +11,20 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox'; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2, Image as ImageIcon, UploadCloud, Trash2, CalendarDays } from 'lucide-react'; 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Loader2, UserCircle, Lightbulb, Save, Link as LinkIcon, Crown, Globe, Video, PlusCircle, Tag, MapPin, CheckCircle2, Image as ImageIcon, UploadCloud, Trash2, CalendarDays, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { suggestCoachSpecialties, type SuggestCoachSpecialtiesInput, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
 import type { FirestoreUserProfile } from '@/types';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import NextImage from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { getAuth, signOut } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { firebaseApp, db } from '@/lib/firebase'; // ensure firebaseApp is exported from lib/firebase
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
 import { uploadProfileImage } from '@/services/imageUpload'; 
@@ -67,10 +71,14 @@ export default function CoachProfilePage() {
   const [currentCoach, setCurrentCoach] = useState<FirestoreUserProfile | null>(null);
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteAccountConfirmDialog, setShowDeleteAccountConfirmDialog] = useState(false);
 
   const { control, register, handleSubmit, watch, setValue, reset, getValues, formState: { errors } } = useForm<CoachProfileFormData>({
     resolver: zodResolver(coachProfileSchema),
@@ -243,6 +251,43 @@ export default function CoachProfilePage() {
   }, [bioValue, fetchSuggestions]);
 
   const isPremium = currentCoach?.subscriptionTier === 'premium';
+
+  const executeCoachAccountDeletion = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
+    setIsDeletingAccount(true);
+    setShowDeleteAccountConfirmDialog(false);
+
+    try {
+      const functionsInstance = getFunctions(firebaseApp);
+      const deleteCoachAccountCallable = httpsCallable(functionsInstance, 'deleteCoachAccount');
+
+      const result = await deleteCoachAccountCallable();
+
+      toast({
+        title: "Account Deletion Successful",
+        description: (result.data as { message: string })?.message || "Your account has been permanently deleted.",
+      });
+
+      const firebaseAuth = getAuth(firebaseApp);
+      await signOut(firebaseAuth);
+
+      // Using window.location.href for simplicity as per instructions
+      window.location.href = '/';
+
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast({
+        title: "Account Deletion Failed",
+        description: error.message || "Could not delete your account. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
 
   const onSubmit: SubmitHandler<CoachProfileFormData> = async (data) => {
     if (!user || !currentCoach) {
@@ -661,7 +706,7 @@ export default function CoachProfilePage() {
             </div>
           </section>
 
-          <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading || isUploadingImage} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Button type="submit" disabled={isSubmitting || isAiLoading || authLoading || isUploadingImage || isDeletingAccount} size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
             {isSubmitting || authLoading || isUploadingImage ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -672,6 +717,67 @@ export default function CoachProfilePage() {
             )}
           </Button>
         </form>
+
+        {/* Danger Zone Section */}
+        <section className="mt-8 pt-6 border-t">
+          <h3 className="text-lg font-semibold mb-4 border-b pb-2 flex items-center text-destructive">
+            <AlertTriangle className="mr-2 h-5 w-5" />
+            Danger Zone
+          </h3>
+          <div className="p-4 border border-destructive/50 rounded-md bg-destructive/5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <Label htmlFor="deleteAccountButton" className="text-base font-medium text-destructive">Delete Account</Label>
+                <p className="text-sm text-muted-foreground">
+                  Permanently delete your account, all your content, and cancel any active subscriptions.
+                  This action cannot be undone.
+                </p>
+              </div>
+              <Button
+                id="deleteAccountButton"
+                variant="destructive"
+                type="button"
+                onClick={() => setShowDeleteAccountConfirmDialog(true)}
+                className="mt-3 sm:mt-0 sm:ml-4"
+                disabled={isDeletingAccount || isSubmitting}
+              >
+                {isDeletingAccount ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                ) : (
+                  'Delete My Account'
+                )}
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* AlertDialog for Confirmation */}
+        <AlertDialog open={showDeleteAccountConfirmDialog} onOpenChange={setShowDeleteAccountConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete your coach account,
+                all associated data, and cancel any active Stripe subscriptions.
+                Please be certain before proceeding.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={executeCoachAccountDeletion}
+                disabled={isDeletingAccount}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                {isDeletingAccount ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+                ) : (
+                  'Yes, Delete My Account'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
