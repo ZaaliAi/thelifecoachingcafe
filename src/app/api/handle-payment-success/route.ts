@@ -1,10 +1,10 @@
 
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminFirestore } from '@/lib/firebaseAdmin';
 
 // This function checks if a user's subscription is active.
 async function verifySubscription(userId: string): Promise<boolean> {
-  const userRef = adminDb.collection('users').doc(userId);
+  const userRef = adminFirestore.collection('users').doc(userId);
   const doc = await userRef.get();
 
   if (!doc.exists) {

@@ -1,7 +1,11 @@
 
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
-import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
+import { adminAuth, adminFirestore } from '@/lib/firebaseAdmin';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2024-04-10',
+});
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +18,7 @@ export async function POST(request: Request) {
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
-    const userDoc = await adminDb.collection('users').doc(userId).get();
+    const userDoc = await adminFirestore.collection('users').doc(userId).get();
     const userData = userDoc.data();
     if (!userData || !userData.stripeCustomerId) {
       throw new Error('Stripe Customer ID not found for this user.');
