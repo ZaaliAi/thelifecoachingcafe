@@ -84,5 +84,51 @@ export default async function Page({ params }: PageProps) {
     return value;
   }));
 
-  return <CoachProfile coachData={serializableCoachData} coachId={params.id} />;
+  const personSchema = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": coachData.name,
+    "url": `https://thelifecoachingcafe.com/coach/${coachData.id}`,
+    "image": coachData.profileImageUrl && coachData.profileImageUrl.startsWith('http') ? coachData.profileImageUrl : `https://thelifecoachingcafe.com${coachData.profileImageUrl || '/preview.jpg'}`,
+    "jobTitle": "Life Coach",
+    "description": coachData.bio ? coachData.bio.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250) + '...' : '',
+    "knowsAbout": coachData.specialties || [],
+    "sameAs": [
+      ...(coachData.websiteUrl ? [coachData.websiteUrl] : []),
+      ...(coachData.socialLinks ? coachData.socialLinks.map(link => link.url) : [])
+    ].filter(Boolean) // Filter out any null/undefined from websiteUrl
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://thelifecoachingcafe.com"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Coaches",
+        "item": "https://thelifecoachingcafe.com/browse-coaches"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": coachData.name.replace(/"/g, '\\"'),
+        "item": `https://thelifecoachingcafe.com/coach/${coachData.id}`
+      }
+    ]
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <CoachProfile coachData={serializableCoachData} coachId={params.id} />
+    </>
+  );
 }

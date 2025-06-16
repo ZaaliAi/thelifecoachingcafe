@@ -62,6 +62,38 @@ export default function RootLayout({
           `}
         </Script>
         <link rel="icon" href="/favicon.ico" />
+        <script type="application/ld+json">
+          {`
+            {
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "Organization",
+                  "name": "The Life Coaching Cafe",
+                  "url": "https://thelifecoachingcafe.com",
+                  "logo": "https://thelifecoachingcafe.com/preview.jpg",
+                  "sameAs": [
+                    "https://www.linkedin.com/company/the-life-coaching-cafe/",
+                    "https://www.facebook.com/thelifecoachingcafeglobal"
+                  ]
+                },
+                {
+                  "@type": "WebSite",
+                  "name": "The Life Coaching Cafe",
+                  "url": "https://thelifecoachingcafe.com",
+                  "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": {
+                      "@type": "EntryPoint",
+                      "urlTemplate": "https://thelifecoachingcafe.com/browse-coaches?search={search_term_string}"
+                    },
+                    "query-input": "required name=search_term_string"
+                  }
+                }
+              ]
+            }
+          `}
+        </script>
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}>
         <AuthProvider>

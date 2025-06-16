@@ -1,6 +1,28 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export function generateMetadata(): Metadata {
+  return {
+    title: "Privacy Policy | The Life Coaching Cafe",
+    description: "Read the Privacy Policy for The Life Coaching Cafe to understand how we collect, use, and protect your personal information.",
+    metadataBase: new URL('https://thelifecoachingcafe.com'), // From layout.tsx
+    openGraph: {
+      title: "Privacy Policy | The Life Coaching Cafe",
+      description: "Read the Privacy Policy for The Life Coaching Cafe to understand how we collect, use, and protect your personal information.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+      url: 'https://thelifecoachingcafe.com/privacy-policy', // Page specific URL
+      type: 'website', // From layout.tsx
+    },
+    twitter: {
+      card: 'summary_large_image', // From layout.tsx
+      title: "Privacy Policy | The Life Coaching Cafe",
+      description: "Read the Privacy Policy for The Life Coaching Cafe to understand how we collect, use, and protect your personal information.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+    },
+  };
+}
 
 export default function PrivacyPolicyPage() {
   const companyName = "The Life Coaching Cafe";

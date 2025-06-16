@@ -7,6 +7,28 @@ import {
 } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpCircle } from "lucide-react";
+import type { Metadata } from 'next';
+
+export function generateMetadata(): Metadata {
+  return {
+    title: "FAQ | The Life Coaching Cafe | Answers to Your Questions",
+    description: "Find answers to frequently asked questions about The Life Coaching Cafe, our CoachMatch AI, how to find a coach, and how to join as a coach.",
+    metadataBase: new URL('https://thelifecoachingcafe.com'), // From layout.tsx
+    openGraph: {
+      title: "FAQ | The Life Coaching Cafe | Answers to Your Questions",
+      description: "Find answers to frequently asked questions about The Life Coaching Cafe, our CoachMatch AI, how to find a coach, and how to join as a coach.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+      url: 'https://thelifecoachingcafe.com/faq', // Page specific URL
+      type: 'website', // From layout.tsx
+    },
+    twitter: {
+      card: 'summary_large_image', // From layout.tsx
+      title: "FAQ | The Life Coaching Cafe | Answers to Your Questions",
+      description: "Find answers to frequently asked questions about The Life Coaching Cafe, our CoachMatch AI, how to find a coach, and how to join as a coach.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+    },
+  };
+}
 
 const faqs = [
   {
@@ -83,6 +105,24 @@ export default function FAQPage() {
           .
         </p>
       </section>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": faqs.map(faq => ({
+              "@type": "Question",
+              "name": faq.question.replace(/"/g, '\\"'),
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": faq.answer.replace(/"/g, '\\"')
+              }
+            }))
+          })
+        }}
+      />
     </div>
   );
 }

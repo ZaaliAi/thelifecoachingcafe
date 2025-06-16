@@ -2,6 +2,28 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Lightbulb, Heart, Linkedin, Facebook } from 'lucide-react';
 import Image from 'next/image';
+import type { Metadata } from 'next';
+
+export function generateMetadata(): Metadata {
+  return {
+    title: "About The Life Coaching Cafe | Our Mission, Values & Community",
+    description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+    metadataBase: new URL('https://thelifecoachingcafe.com'), // Replace with your actual domain
+    openGraph: {
+      title: "About The Life Coaching Cafe | Our Mission, Values & Community",
+      description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+      images: ['/preview.jpg'], // Replace with a link to a great preview image for the About Us page
+      url: 'https://thelifecoachingcafe.com/about', // Replace with your actual domain
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: "About The Life Coaching Cafe | Our Mission, Values & Community",
+      description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+      images: ['/preview.jpg'], // Must be an absolute URL. Replace with a link to a great preview image for the About Us page
+    },
+  };
+}
 
 export default function AboutUsPage() {
   return (

@@ -128,7 +128,7 @@ export function CoachCard({ coach }: CoachCardProps) {
           <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
             <AvatarImage
               src={coach.profileImageUrl}
-              alt={coach.name}
+              alt={`Profile picture of ${coach.name}`}
               data-ai-hint={(coach.dataAiHint as string) || 'person portrait'}
             />
             <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
