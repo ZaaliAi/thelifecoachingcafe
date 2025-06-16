@@ -24,7 +24,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           >
             <Image
               src={post.featuredImageUrl}
-              alt={post.title}
+              alt={`Featured image for blog post titled: ${post.title}`}
               width={400}
               height={200}
               className="object-cover w-full h-48"

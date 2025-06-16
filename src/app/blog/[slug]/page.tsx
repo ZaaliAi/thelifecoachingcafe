@@ -87,7 +87,7 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
           <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-lg">
             <Image
               src={post.featuredImageUrl}
-              alt={post.title}
+              alt={`Featured image for blog post titled: ${post.title}`}
               fill
               className="object-cover"
               priority
