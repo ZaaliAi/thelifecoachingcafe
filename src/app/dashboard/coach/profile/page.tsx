@@ -24,6 +24,10 @@ const CoachProfilePage = () => {
           console.log('No such document!');
         }
         setLoading(false);
+      }, (error) => {
+        console.error("Error listening to user profile updates:", error);
+        // Optionally, you could also set some error state here to display a message to the user
+        setLoading(false); // Ensure loading is also turned off on error
       });
 
       // Cleanup subscription on unmount
