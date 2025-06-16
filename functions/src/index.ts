@@ -1,3 +1,4 @@
+const productionBaseUrl = "https://www.thelifecoachingcafe.com";
 
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
@@ -198,11 +199,13 @@ export const onNewChatMessage = onDocumentCreated(
       if (!snap) return;
 
       const {recipientId, senderName} = snap.data();
+      const dashboardUrl = `${productionBaseUrl}/dashboard`;
 
       const userRecord = await admin.auth().getUser(recipientId);
       await sendEmail(userRecord.email!, "new_chat_message", {
         senderName: senderName || "Someone",
         recipientName: userRecord.displayName || "there",
+        dashboardUrl: dashboardUrl,
       });
     }
 );
@@ -216,13 +219,20 @@ export const onNewChatMessage = onDocumentCreated(
 const sendBlogEmail = async (
     authorId: string,
     blogTitle: string,
-    template: string
+    template: string,
+    slug?: string
 ) => {
   const userRecord = await admin.auth().getUser(authorId);
-  await sendEmail(userRecord.email!, template, {
+  const templateData: Record<string, unknown> = {
     name: userRecord.displayName || "Coach",
     blogTitle: blogTitle,
-  });
+  };
+
+  if (slug) {
+    templateData.postUrl = `${productionBaseUrl}/blog/${slug}`;
+  }
+
+  await sendEmail(userRecord.email!, template, templateData);
 };
 
 /**
@@ -253,7 +263,7 @@ export const onBlogPublished = onDocumentUpdated(
       const after = event.data.after.data();
 
       if (before.status === "pending" && after.status === "published") {
-        await sendBlogEmail(after.authorId, after.title, "blog_approved");
+        await sendBlogEmail(after.authorId, after.title, "blog_approved", after.slug);
       }
     }
 );
