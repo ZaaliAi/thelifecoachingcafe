@@ -110,8 +110,10 @@ export interface Testimonial {
   name: string;
   text: string;
   imageUrl?: string;
-  dataAiHint?: string;
   designation?: string;
+  createdAt: any; // Firestore Timestamp on server, Date on client after fetch
+  updatedAt: any; // Firestore Timestamp on server, Date on client after fetch
+  dataAiHint?: string;
 }
 
 // For application use (timestamp is ISO string)

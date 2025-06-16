@@ -3,42 +3,16 @@ import { Button } from '@/components/ui/button';
 // import { Input } from '@/components/ui/input'; // Removed Input import
 import { CoachCard } from '@/components/CoachCard';
 import { TestimonialCard } from '@/components/TestimonialCard';
-import type { Testimonial } from '@/types';
-import { getFeaturedCoaches } from '@/lib/firestore';
-import { Search, Users, UserPlus } from 'lucide-react';
-
-// Testimonials are static for now
-const mockTestimonials: Testimonial[] = [
-  {
-    id: '1',
-    name: 'Sarah L.',
-    text: "The Life Coaching Cafe helped me find the perfect life coach who understood my needs. The AI matching was spot on!",
-    imageUrl: 'https://placehold.co/100x100.png',
-    dataAiHint: 'happy person',
-    // designation: 'User of The Life Coaching Cafe',
-  },
-  {
-    id: '2',
-    name: 'John B.',
-    text: "As a coach, registering on The Life Coaching Cafe was easy, and I love the platform's modern design and features for finding clients seeking online life coaching.",
-    imageUrl: 'https://placehold.co/100x100.png',
-    dataAiHint: 'professional person',
-    // designation: 'Life Coach on The Life Coaching Cafe',
-  },
-  {
-    id: '3',
-    name: 'Maria G.',
-    text: "The blog section is full of insightful articles. It's a great resource for anyone interested in personal development and self-coaching techniques.",
-    imageUrl: 'https://placehold.co/100x100.png',
-    dataAiHint: 'thoughtful person',
-    // designation: 'Reader & User',
-  },
-];
+// import type { Testimonial } from '@/types'; // Testimonial type will be inferred from getTestimonials
+import { getFeaturedCoaches, getTestimonials } from '@/lib/firestore';
+import { Search, Users, UserPlus, MessageCircle } from 'lucide-react'; // Added MessageCircle for testimonials icon
 
 
 export default async function HomePage() {
   const featuredCoaches = await getFeaturedCoaches(3);
-  // console.log('Featured Coaches Data (HomePage):', JSON.stringify(featuredCoaches, null, 2)); // Commented out console.log
+  const testimonials = await getTestimonials(3); // Fetch 3 testimonials
+  // console.log('Featured Coaches Data (HomePage):', JSON.stringify(featuredCoaches, null, 2));
+  // console.log('Testimonials Data (HomePage):', JSON.stringify(testimonials, null, 2));
 
  return (
     <div className="space-y-16">
@@ -117,12 +91,19 @@ export default async function HomePage() {
       </section>
       {/* Testimonials Section */}
       <section>
-        <h2 className="text-3xl font-semibold text-center mb-8">What Our Users Say About Finding Their Coach</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {mockTestimonials.map((testimonial) => (
-            <TestimonialCard key={testimonial.id} testimonial={testimonial} />
-          ))}
+        <div className="flex items-center justify-center mb-8">
+          <MessageCircle className="h-8 w-8 text-accent mr-3" />
+          <h2 className="text-3xl font-semibold text-center">What Our Users Say</h2>
         </div>
+        {testimonials.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {testimonials.map((testimonial) => (
+              <TestimonialCard key={testimonial.id} testimonial={testimonial} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-muted-foreground">No testimonials yet. Check back soon!</p>
+        )}
       </section>
       {/* Call to Action Section */}
       <section className="py-12 bg-primary/10 rounded-lg shadow-sm">

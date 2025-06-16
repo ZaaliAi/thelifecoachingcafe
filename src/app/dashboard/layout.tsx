@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/admin/coaches', label: 'Manage Coaches', icon: Users, roles: ['admin'] },
   { href: '/dashboard/admin/users', label: 'Manage Users', icon: UserX, roles: ['admin'] }, 
   { href: '/dashboard/admin/blogs', label: 'Manage Blogs', icon: FileText, roles: ['admin'] },
+  { href: '/dashboard/admin/testimonials', label: 'Testimonials', icon: FileText, roles: ['admin'] },
   { href: '/dashboard/admin/messages', label: 'Message Logs', icon: MessageSquare, roles: ['admin'] },
   { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'] },
 ];
