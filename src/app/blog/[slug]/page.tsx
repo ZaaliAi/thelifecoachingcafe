@@ -155,6 +155,64 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
           </div>
         </footer>
       )}
+
+      <script type="application/ld+json">
+        {`
+          {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://thelifecoachingcafe.com/blog/${post.slug}"
+            },
+            "headline": "${post.title.replace(/"/g, '\\"')}",
+            "description": "${post.content.replace(/<[^>]+>/g, '').replace(/\n/g, ' ').replace(/"/g, '\\"').substring(0, 160).trim() + '...'}",
+            "image": "${post.featuredImageUrl && post.featuredImageUrl.startsWith('http') ? post.featuredImageUrl : 'https://thelifecoachingcafe.com' + (post.featuredImageUrl || '/preview.jpg')}",
+            "author": {
+              "@type": "Person",
+              "name": "${post.authorName.replace(/"/g, '\\"')}"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "The Life Coaching Cafe",
+              "logo": {
+                "@type": "ImageObject",
+                "url": "https://thelifecoachingcafe.com/preview.jpg"
+              }
+            },
+            "datePublished": "${new Date(post.createdAt).toISOString()}",
+            "dateModified": "${new Date(post.updatedAt || post.createdAt).toISOString()}"
+          }
+        `}
+      </script>
+      <script type="application/ld+json">
+        {`
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://thelifecoachingcafe.com"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://thelifecoachingcafe.com/blog"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "${post.title.replace(/"/g, '\\"')}",
+                "item": "https://thelifecoachingcafe.com/blog/${post.slug}"
+              }
+            ]
+          }
+        `}
+      </script>
     </article>
   );
 }

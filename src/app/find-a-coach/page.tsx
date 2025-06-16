@@ -1,6 +1,7 @@
 
 "use client";
 
+import type { Metadata } from 'next';
 import { useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';

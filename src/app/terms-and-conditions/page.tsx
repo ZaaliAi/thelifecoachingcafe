@@ -1,6 +1,28 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export function generateMetadata(): Metadata {
+  return {
+    title: "Terms and Conditions | The Life Coaching Cafe",
+    description: "Review the Terms and Conditions for using The Life Coaching Cafe website and services. Understand your rights and responsibilities.",
+    metadataBase: new URL('https://thelifecoachingcafe.com'), // From layout.tsx
+    openGraph: {
+      title: "Terms and Conditions | The Life Coaching Cafe",
+      description: "Review the Terms and Conditions for using The Life Coaching Cafe website and services. Understand your rights and responsibilities.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+      url: 'https://thelifecoachingcafe.com/terms-and-conditions', // Page specific URL
+      type: 'website', // From layout.tsx
+    },
+    twitter: {
+      card: 'summary_large_image', // From layout.tsx
+      title: "Terms and Conditions | The Life Coaching Cafe",
+      description: "Review the Terms and Conditions for using The Life Coaching Cafe website and services. Understand your rights and responsibilities.",
+      images: ['/preview.jpg'], // From layout.tsx - consider a specific image for this page
+    },
+  };
+}
 
 export default function TermsAndConditionsPage() {
   const companyName = "The Life Coaching Cafe";
