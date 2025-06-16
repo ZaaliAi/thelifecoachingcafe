@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DeleteAccountDialog } from '@/components/dashboard/DeleteAccountDialog';
@@ -18,14 +19,24 @@ export default function SettingsPage() {
   const router = useRouter();
 
   const handleDelete = async () => {
+    if (!user) {
+        toast({ title: 'Error', description: 'You must be logged in to delete your account.', variant: 'destructive' });
+        return;
+    }
+
     setIsDeleting(true);
     toast({ title: 'Deleting Account...', description: 'This may take a moment. Please wait.' });
+    
     try {
-        // This will call the deleteUserAccount cloud function
-      await user?.delete();
+      const functions = getFunctions();
+      const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
+      await deleteUserAccount();
+      
       toast({ title: 'Account Deleted', description: 'Your account has been successfully deleted.' });
+      // The auth state should change, leading to a redirect, but we can also push manually.
       router.push('/');
     } catch (error: any) {
+      console.error("Error calling deleteUserAccount function:", error);
       toast({
         title: 'Error Deleting Account',
         description: error.message || 'An unexpected error occurred. Please try again.',
@@ -61,7 +72,7 @@ export default function SettingsPage() {
             <Button
               variant="destructive"
               onClick={() => setIsDialogOpen(true)}
-              disabled={isDeleting}
+              disabled={isDeleting || !user}
             >
               {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Delete My Account
