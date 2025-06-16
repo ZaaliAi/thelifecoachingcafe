@@ -5,7 +5,7 @@ import {
   Timestamp, arrayUnion, arrayRemove, documentId
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage } from '@/types';
+import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage, Testimonial } from '@/types';
 
 // --- Helper Function to Generate Conversation ID ---
 const generateConversationId = (userId1: string, userId2: string): string => {
@@ -264,6 +264,39 @@ export async function getAllCoachIds(): Promise<string[]> {
   } catch (error) {
     console.error("Failed to fetch coach IDs for static generation:", error);
     return [];
+  }
+}
+
+// --- Testimonial Functions ---
+const mapTestimonialFromFirestore = (docData: any, id: string): Testimonial => {
+  const data = docData as any; // Cast to any to handle Firebase Timestamps before conversion
+  return {
+    id,
+    name: data.name || 'Anonymous',
+    text: data.text || '',
+    imageUrl: data.imageUrl || undefined,
+    designation: data.designation || undefined,
+    // Ensure createdAt and updatedAt are converted to ISO strings safely
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt?._seconds ? new Date(data.createdAt._seconds * 1000).toISOString() : new Date().toISOString()),
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt?._seconds ? new Date(data.updatedAt._seconds * 1000).toISOString() : new Date().toISOString()),
+    // dataAiHint is not part of the core Testimonial type for display on homepage usually
+  };
+};
+
+export async function getTestimonials(count = 3): Promise<Testimonial[]> {
+  try {
+    const testimonialsRef = collection(db, "testimonials");
+    // Order by creation date, newest first. You can change 'createdAt' if your field is named differently or add other ordering.
+    const q = query(testimonialsRef, orderBy("createdAt", "desc"), firestoreLimit(count));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      console.log("No testimonials found in Firestore.");
+      return [];
+    }
+    return querySnapshot.docs.map(docSnapshot => mapTestimonialFromFirestore(docSnapshot.data(), docSnapshot.id));
+  } catch (error) {
+    console.error("Error fetching testimonials from Firestore:", error);
+    return []; // Return empty array on error to prevent breaking the page
   }
 }
 
