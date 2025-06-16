@@ -2,127 +2,57 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-
-const MAX_RETRIES = 5; // Poll the API up to 5 times
-const RETRY_INTERVAL = 2000; // 2 seconds between each poll
-
-function PaymentSuccessContent() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState('');
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  useEffect(() => {
-    const sessionId = searchParams.get('session_id');
-    let retries = 0;
-
-    if (!sessionId) {
-        setErrorMessage("Missing session information. Your payment may have succeeded, but we could not verify it automatically.");
-        setStatus('error');
-        return;
-    }
-
-    const verifyPayment = async () => {
-      try {
-        const response = await fetch('/api/handle-payment-success', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          setStatus('success');
-          setTimeout(() => router.push('/dashboard/coach/profile'), 2000);
-        } else if (retries < MAX_RETRIES) {
-          retries++;
-          setTimeout(verifyPayment, RETRY_INTERVAL);
-        } else {
-            setErrorMessage(data.error || "Verification timed out. Please check your dashboard or contact support.");
-            setStatus('error');
-        }
-      } catch (error: any) {
-        setErrorMessage("An unexpected error occurred. Please contact support.");
-        setStatus('error');
-      }
-    };
-
-    verifyPayment();
-  }, [searchParams, router]);
-
-  const renderContent = () => {
-    switch (status) {
-        case 'loading':
-            return (
-                <>
-                    <div className="mx-auto bg-blue-100 rounded-full p-3 w-fit">
-                        <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-                    </div>
-                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-                        Finalizing Your Subscription...
-                    </CardTitle>
-                    <CardContent className="text-gray-600">
-                        <p>Please wait while we confirm your payment. This may take a few seconds.</p>
-                    </CardContent>
-                </>
-            );
-        case 'success':
-            return (
-                <>
-                    <div className="mx-auto bg-green-100 rounded-full p-3 w-fit">
-                        <CheckCircle className="h-12 w-12 text-green-500" />
-                    </div>
-                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-                        Subscription Confirmed!
-                    </CardTitle>
-                    <CardContent className="text-gray-600">
-                        <p>Your account is now Premium! Redirecting you to your profile...</p>
-                    </CardContent>
-                </>
-            );
-        case 'error':
-            return (
-                <>
-                    <div className="mx-auto bg-red-100 rounded-full p-3 w-fit">
-                        <AlertTriangle className="h-12 w-12 text-red-500" />
-                    </div>
-                    <CardTitle className="text-2xl md:text-3xl font-bold mt-4">
-                        Verification Failed
-                    </CardTitle>
-                    <CardContent className="text-gray-600">
-                        <p>{errorMessage}</p>
-                    </CardContent>
-                    <CardFooter className="flex justify-center pt-6">
-                        <Button asChild className="w-full sm:w-auto">
-                            <Link href="/contact-us">Contact Support</Link>
-                        </Button>
-                    </CardFooter>
-                </>
-            );
-    }
-  };
-
-  return (
-      <Card className="w-full max-w-lg shadow-lg text-center bg-white">
-        <CardHeader>
-          {renderContent()}
-        </CardHeader>
-      </Card>
-  );
-}
+import { CheckCircle, Zap } from 'lucide-react';
 
 export default function PaymentSuccessPage() {
-    return (
-        <Suspense fallback={<div>Loading...</div>}>
-            <div className="container mx-auto py-12 px-4 min-h-screen flex flex-col items-center justify-center">
-                <PaymentSuccessContent />
-            </div>
-        </Suspense>
-    );
+  const router = useRouter();
+
+  // Automatically redirect the user after a few seconds.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.push('/dashboard/coach/profile');
+    }, 4000); // 4-second delay before redirecting
+
+    // Cleanup the timer if the component is unmounted
+    return () => clearTimeout(timer);
+  }, [router]);
+
+  return (
+    <div className="container mx-auto py-12 px-4 min-h-screen flex flex-col items-center justify-center">
+      <Card className="w-full max-w-lg shadow-xl text-center bg-white animate-fade-in-up">
+        <CardHeader>
+          <div className="mx-auto bg-green-100 rounded-full p-4 w-fit">
+            <CheckCircle className="h-16 w-16 text-green-600" />
+          </div>
+          <CardTitle className="text-3xl md:text-4xl font-bold mt-6 text-gray-800">
+            Upgrade Successful!
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-gray-600 text-lg px-8">
+          <p>
+            Congratulations! Your account is now <span className="font-semibold text-primary">Premium</span>.
+            You can now access all exclusive features.
+          </p>
+          <p className="mt-4">
+            We are redirecting you to your profile editor so you can start enhancing your profile right away.
+          </p>
+        </CardContent>
+        <CardFooter className="flex flex-col items-center justify-center pt-8 gap-4">
+          <Button asChild size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Link href="/dashboard/coach/profile">
+              <Zap className="mr-2 h-5 w-5" />
+              Go to My Profile Now
+            </Link>
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            If you are not redirected automatically, please click the button above.
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }
