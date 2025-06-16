@@ -19,7 +19,9 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
-import { getUserProfile, setUserProfile } from '@/lib/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { setUserProfile } from '@/lib/firestore';
 import { Badge } from '@/components/ui/badge';
 import { uploadProfileImage } from '@/services/imageUpload'; 
 
@@ -100,49 +102,85 @@ export default function CoachProfilePage() {
   useEffect(() => {
     if (authLoading || !user) return;
 
-    const fetchCoachData = async () => {
-      setIsSubmitting(true); 
-      const coachData = await getUserProfile(user.id);
-      if (coachData && coachData.role === 'coach') {
-        setCurrentCoach(coachData);
-        reset({
-          name: coachData.name || '',
-          email: coachData.email || user?.email || '',
-          bio: coachData.bio || '',
-          selectedSpecialties: Array.isArray(coachData.specialties) ? coachData.specialties : [],
-          profileImageUrl: coachData.profileImageUrl || '',
-          location: coachData.location || '',
-          websiteUrl: coachData.websiteUrl || '',
-          introVideoUrl: coachData.introVideoUrl || '',
-          socialLinkPlatform: coachData.socialLinks?.[0]?.platform || '',
-          socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
-          availability: Array.isArray(coachData.availability) ? coachData.availability : [], 
-        });
-        // Always set keywords and certifications after reset, regardless of profile image
-        setValue('keywords', Array.isArray(coachData.keywords) ? coachData.keywords.join(', ') : (coachData.keywords || ''));
-        setValue('certifications', Array.isArray(coachData.certifications) ? coachData.certifications.join(', ') : (coachData.certifications || ''));
-        if (coachData.profileImageUrl) {
-          setImagePreviewUrl(coachData.profileImageUrl);
+    setIsSubmitting(true);
+    const unsub = onSnapshot(doc(db, 'users', user.id),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const coachData = { ...docSnap.data(), id: docSnap.id } as FirestoreUserProfile;
+          if (coachData.role === 'coach') {
+            setCurrentCoach(coachData);
+            reset({
+              name: coachData.name || '',
+              email: coachData.email || user?.email || '',
+              bio: coachData.bio || '',
+              selectedSpecialties: Array.isArray(coachData.specialties) ? coachData.specialties : [],
+              profileImageUrl: coachData.profileImageUrl || '',
+              location: coachData.location || '',
+              websiteUrl: coachData.websiteUrl || '',
+              introVideoUrl: coachData.introVideoUrl || '',
+              socialLinkPlatform: coachData.socialLinks?.[0]?.platform || '',
+              socialLinkUrl: coachData.socialLinks?.[0]?.url || '',
+              availability: Array.isArray(coachData.availability) ? coachData.availability : [],
+            });
+            setValue('keywords', Array.isArray(coachData.keywords) ? coachData.keywords.join(', ') : (coachData.keywords || ''));
+            setValue('certifications', Array.isArray(coachData.certifications) ? coachData.certifications.join(', ') : (coachData.certifications || ''));
+            if (coachData.profileImageUrl) {
+              setImagePreviewUrl(coachData.profileImageUrl);
+            } else {
+              setImagePreviewUrl(null); // Clear preview if no image
+            }
+            const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
+            setAvailableSpecialties(Array.from(allSpecs));
+          } else {
+            console.warn(`[CoachProfilePage] User ${user.id} is not a coach.`);
+            toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
+            setCurrentCoach(null); // Clear coach data
+          }
+        } else {
+          // This case handles when the user is marked as 'coach' in auth but has no Firestore document.
+          // It adapts the logic from the original `else if (!coachData && user.role === 'coach')`
+          if (user.role === 'coach') { // Check against auth context role
+            console.warn(`[CoachProfilePage] No existing Firestore profile for coach ${user.id}. Pre-filling from auth context.`);
+            reset({
+              name: user.name || '',
+              email: user.email || '',
+              availability: [],
+              selectedSpecialties: [],
+              // Clear other fields that would have come from Firestore
+              bio: '',
+              profileImageUrl: '',
+              location: '',
+              websiteUrl: '',
+              introVideoUrl: '',
+              socialLinkPlatform: '',
+              socialLinkUrl: '',
+              keywords: '',
+              certifications: '',
+            });
+            setCurrentCoach(null); // No Firestore profile
+            setImagePreviewUrl(null);
+            setAvailableSpecialties(allSpecialtiesList); // Reset to default specialties
+            // Potentially show a message or guide the user to complete their profile.
+            // toast({ title: "Profile Incomplete", description: "Please complete your coach profile.", variant: "default" });
+          } else {
+             // If user.role is not 'coach' and doc doesn't exist, it's not a coach scenario.
+            console.warn(`[CoachProfilePage] User ${user.id} has no Firestore profile and is not marked as coach in auth.`);
+            setCurrentCoach(null);
+          }
         }
-        const allSpecs = new Set([...allSpecialtiesList, ...(coachData.specialties || [])]);
-        setAvailableSpecialties(Array.from(allSpecs));
-      } else if(coachData && coachData.role !== 'coach'){
-        console.warn(`[CoachProfilePage] User ${user.id} is not a coach.`);
-        toast({ title: "Not a Coach", description: "This dashboard is for coaches.", variant: "destructive" });
-      } else if (!coachData && user.role === 'coach') {
-        console.warn(`[CoachProfilePage] No existing Firestore profile for coach ${user.id}. Pre-filling from auth context.`);
-        reset({
-          name: user.name || '',
-          email: user.email || '',
-          availability: [], 
-          selectedSpecialties: [],
-        });
+        setIsSubmitting(false);
+      },
+      (error) => {
+        console.error("Error listening to user profile:", error);
+        toast({ title: "Error Loading Profile", description: "Could not load profile data in real-time.", variant: "destructive" });
+        setIsSubmitting(false);
       }
-      setIsSubmitting(false);
-    };
+    );
 
-    fetchCoachData();
-  }, [reset, user, authLoading, toast, setValue]);
+    return () => {
+      unsub();
+    };
+  }, [user, authLoading, reset, setValue, toast]);
 
   const handleImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
