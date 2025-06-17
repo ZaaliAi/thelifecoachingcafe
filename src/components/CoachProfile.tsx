@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NextImage from "next/image";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
-import type { Coach } from "@/types";
+import { Card, CardContent } from "@/components/ui/card"; // Added for Testimonial Card
+import type { Coach, Testimonial } from "@/types"; // Added Testimonial
 import { useAuth } from '@/lib/auth';
 import { addCoachToFavorites, removeCoachFromFavorites, getUserProfile } from '@/lib/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -45,12 +46,23 @@ function SocialButton({ url, label, icon, className }: { url: string; label: str
   );
 }
 
-interface CoachProfileClientProps {
+interface CoachProfileProps { // Renamed for clarity as it's the main export
   coachData: Coach | null;
-  coachId: string; // coachId is passed from the server component
+  coachId: string;
+  testimonials?: Testimonial[]; // Added testimonials prop
 }
 
-export default function CoachProfile({ coachData, coachId }: CoachProfileClientProps) {
+// Simplified testimonial card component
+const AdaptedTestimonialCard = ({ testimonial }: { testimonial: Testimonial }) => (
+  <Card className="bg-slate-50 p-4 rounded-lg shadow-sm"> {/* Changed bg-gray-50 to bg-slate-50 for variety */}
+    <CardContent className="pt-4"> {/* Added pt-4 for padding consistency if needed */}
+      <p className="text-gray-700 italic mb-3 text-center">&ldquo;{testimonial.testimonialText}&rdquo;</p>
+      <p className="text-right font-semibold text-primary">- {testimonial.clientName}</p>
+    </CardContent>
+  </Card>
+);
+
+export default function CoachProfile({ coachData, coachId, testimonials }: CoachProfileProps) {
   const [coach, setCoach] = useState<Coach | null>(coachData);
   const [loading, setLoading] = useState(!coachData);
   const { user } = useAuth();
@@ -405,6 +417,33 @@ export default function CoachProfile({ coachData, coachId }: CoachProfileClientP
             )}
           </div>
         )}
+
+        {/* Client Testimonials Section */}
+        {isPremium && testimonials && testimonials.length > 0 && (
+          <>
+            <hr className="w-full border-t border-gray-200 my-6" />
+            <div className="w-full">
+              <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">
+                What Clients Say
+              </h2>
+              <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+                {testimonials.map(testimonial => (
+                  <AdaptedTestimonialCard key={testimonial.id} testimonial={testimonial} />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        {isPremium && (!testimonials || testimonials.length === 0) && (
+           <>
+            <hr className="w-full border-t border-gray-200 my-6" />
+            <div className="w-full text-center text-gray-500 py-4">
+              <p>This coach has not added any client testimonials yet.</p>
+            </div>
+           </>
+        )}
+        {/* End Client Testimonials Section */}
+
       </div>
     </div>
   );

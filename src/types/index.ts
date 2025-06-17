@@ -107,12 +107,11 @@ export interface FirestoreBlogPost {
 
 export interface Testimonial {
   id: string;
-  name: string;
-  text: string;
-  imageUrl?: string;
-  designation?: string;
+  coachId: string;
+  clientName: string;
+  testimonialText: string;
   createdAt: any; // Firestore Timestamp on server, Date on client after fetch
-  updatedAt: any; // Firestore Timestamp on server, Date on client after fetch
+  updatedAt?: any; // Firestore Timestamp on server, Date on client after fetch. Making this optional as it might not always be present.
   dataAiHint?: string;
 }
 

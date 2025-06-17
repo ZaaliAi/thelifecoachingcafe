@@ -25,6 +25,7 @@ import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
 // Import Checkbox
 import { Checkbox } from '@/components/ui/checkbox';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'; // Added for testimonials
 
 const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RURVlG6UVJU45QN1mByj8Fc";
 const LOCAL_STORAGE_KEY = 'registerCoachFormData';
@@ -46,6 +47,8 @@ const coachRegistrationSchema = z.object({
   confirmPassword: z.string(),
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.').optional().or(z.literal('')),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select or add at least one specialty.'),
+  // Testimonials are handled separately and not part of the main Zod schema for form validation directly with RHF submit
+  // but individual entries will be validated before attempting to add them to the API.
   keywords: z.string().optional(),
   certifications: z.string().optional(),
   location: z.string().optional(),
@@ -69,7 +72,7 @@ type CoachRegistrationFormData = z.infer<typeof coachRegistrationSchema>;
 
 export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
   const router = useRouter();
-  const { signup, loading: authLoading } = useAuth();
+  const { signup, loading: authLoading, getFirebaseAuthToken } = useAuth(); // Added getFirebaseAuthToken
   const isFreeTier = !planId; // If planId is null, undefined, or an empty string, it's a free tier.
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
@@ -80,6 +83,16 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
 
   const [newSlotDay, setNewSlotDay] = useState('');
   const [newSlotTime, setNewSlotTime] = useState('');
+
+  // State for testimonials
+  const [testimonialEntries, setTestimonialEntries] = useState([{ clientName: '', testimonialText: '' }]);
+  const MAX_TESTIMONIALS = 10;
+
+  // Zod schema for a single testimonial entry (for local validation before adding to API)
+  const testimonialEntrySchema = z.object({
+    clientName: z.string().min(1, "Client's name is required.").max(100, "Name too long."),
+    testimonialText: z.string().min(10, "Testimonial text must be at least 10 characters.").max(1000, "Text too long."),
+  });
 
   const getInitialFormValues = () => {
     try {
@@ -239,6 +252,61 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
       }
       
+      // --- Process Testimonials (Option B) ---
+      if (!isFreeTier && testimonialEntries.length > 0 && createdUserId) {
+        const authToken = await getFirebaseAuthToken();
+        if (authToken) {
+          let successfulTestimonials = 0;
+          let failedTestimonials = 0;
+          toast({ title: 'Submitting testimonials...', description: 'Please wait while we process your testimonials.'});
+
+          for (const entry of testimonialEntries) {
+            const validationResult = testimonialEntrySchema.safeParse(entry);
+            // Only submit if the entry is valid AND has actual content (not just empty strings)
+            if (validationResult.success && validationResult.data.clientName.trim() && validationResult.data.testimonialText.trim()) {
+              try {
+                const response = await fetch('/api/testimonials', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${authToken}`,
+                  },
+                  body: JSON.stringify({
+                    coachId: createdUserId,
+                    clientName: validationResult.data.clientName.trim(),
+                    testimonialText: validationResult.data.testimonialText.trim(),
+                  }),
+                });
+                if (response.ok) {
+                  successfulTestimonials++;
+                } else {
+                  failedTestimonials++;
+                  console.warn(`Failed to submit testimonial for ${validationResult.data.clientName}: ${response.statusText}`);
+                }
+              } catch (testimonialError) {
+                failedTestimonials++;
+                console.error(`Error submitting testimonial for ${validationResult.data.clientName}:`, testimonialError);
+              }
+            } else if (entry.clientName.trim() !== '' || entry.testimonialText.trim() !== '') {
+              // Count as failed if user entered something but it was invalid or became empty after trim
+              failedTestimonials++;
+              console.warn("Skipping invalid or incomplete testimonial entry during submission:", validationResult.error?.flatten().fieldErrors || "Entry was empty or invalid.");
+            }
+          }
+          if (successfulTestimonials > 0 || failedTestimonials > 0) { // Show toast only if submissions were attempted
+             toast({
+                title: 'Testimonials Submission Complete',
+                description: `${successfulTestimonials} testimonial(s) submitted successfully. ${failedTestimonials > 0 ? `${failedTestimonials} failed or skipped.` : ''}`,
+                variant: failedTestimonials > 0 ? 'warning' : 'success',
+                duration: failedTestimonials > 0 ? 8000 : 5000, // Longer duration if there were issues
+             });
+          }
+        } else {
+          toast({ title: 'Authentication Error', description: 'Could not submit testimonials due to missing auth token. Please add them later from your dashboard.', variant: 'destructive', duration: 8000 });
+        }
+      }
+      // --- End Process Testimonials ---
+
       toast({
         title: 'Account Created Successfully',
         description: 'Your coach account is now active.',
@@ -655,7 +723,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
                     <Label htmlFor="newSlotTime" className="text-sm font-medium">New Time Slot</Label>
                     <Input id="newSlotTime" placeholder="e.g., 10am - 2pm" value={newSlotTime} onChange={(e) => setNewSlotTime(e.target.value)} className="text-base"/>
                 </div>
-              <Button type="button" variant="outline" onClick={handleAddAvailabilitySlot} className="whitespace-nowrap shrink-0">
+              <Button type="button" variant="outline" onClick={handleAddAvailabilitySlot} className="whitespace-nowrap shrink-0" disabled={!newSlotDay.trim() || !newSlotTime.trim()}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add Slot
               </Button>
             </div>
@@ -664,6 +732,101 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             )}
           </CardContent>
         </Card>
+
+        {/* Testimonials Section - Conditional for Premium */}
+        {!isFreeTier && (
+          <Card className="shadow-xl border-border/20 overflow-hidden">
+            <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                <AccordionItem value="item-1" className="border-b-0">
+                    <AccordionTrigger className="p-6 bg-muted/30 hover:no-underline !rounded-t-lg">
+                        <div className="flex items-center text-2xl font-semibold text-primary w-full justify-between">
+                            <div className="flex items-center">
+                                <Star className="mr-3 h-7 w-7 text-yellow-400 fill-yellow-400" /> Initial Client Testimonials (Optional)
+                            </div>
+                            {/* Chevron will be part of AccordionTrigger */}
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="p-0 border-t border-border/20"> {/* Border added to content top instead of item bottom */}
+                        <CardHeader className="px-6 pt-4 pb-2">
+                             <CardDescription>
+                                Boost your premium profile by adding up to {MAX_TESTIMONIALS} client testimonials. You can add more or manage these later from your coach dashboard.
+                                Only filled-in testimonials will be saved.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6 pt-2 space-y-6">
+                          {testimonialEntries.map((entry, index) => (
+                            <div key={index} className="p-4 border rounded-md space-y-3 relative bg-background shadow-sm">
+                              <div className="flex justify-between items-center mb-2">
+                                <Label className="text-base font-medium">Testimonial #{index + 1}</Label>
+                                {(testimonialEntries.length > 1 || (testimonialEntries.length === 1 && (entry.clientName.trim() !== '' || entry.testimonialText.trim() !== ''))) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      const newEntries = testimonialEntries.filter((_, i) => i !== index);
+                                      // If all removed, add one blank one back
+                                      setTestimonialEntries(newEntries.length > 0 ? newEntries : [{ clientName: '', testimonialText: '' }]);
+                                    }}
+                                    className="text-destructive hover:bg-destructive/10"
+                                    aria-label="Remove testimonial"
+                                  >
+                                    <Trash2 className="h-5 w-5" />
+                                  </Button>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`testimonialClientName-${index}`}>Client&apos;s Name</Label>
+                                <Input
+                                  id={`testimonialClientName-${index}`}
+                                  placeholder="Client's Full Name"
+                                  value={entry.clientName}
+                                  onChange={(e) => {
+                                    const newEntries = [...testimonialEntries];
+                                    newEntries[index].clientName = e.target.value;
+                                    setTestimonialEntries(newEntries);
+                                  }}
+                                  className="text-base"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label htmlFor={`testimonialText-${index}`}>Testimonial Text</Label>
+                                <Textarea
+                                  id={`testimonialText-${index}`}
+                                  placeholder="Enter client's testimonial..."
+                                  value={entry.testimonialText}
+                                  onChange={(e) => {
+                                    const newEntries = [...testimonialEntries];
+                                    newEntries[index].testimonialText = e.target.value;
+                                    setTestimonialEntries(newEntries);
+                                  }}
+                                  rows={3}
+                                  className="text-base"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          {testimonialEntries.length < MAX_TESTIMONIALS && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                if (testimonialEntries.length < MAX_TESTIMONIALS) {
+                                  setTestimonialEntries([...testimonialEntries, { clientName: '', testimonialText: '' }]);
+                                }
+                              }}
+                              className="mt-2"
+                            >
+                              <PlusCircle className="mr-2 h-4 w-4" /> Add Testimonial
+                            </Button>
+                          )}
+                        </CardContent>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+          </Card>
+        )}
+        {/* End Testimonials Section */}
 
         {/* Terms and Conditions Checkbox */}
         <div className="flex items-start gap-3 p-4 border border-border/20 rounded-lg bg-muted/20">

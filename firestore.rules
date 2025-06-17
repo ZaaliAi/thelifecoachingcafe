@@ -58,11 +58,27 @@ service cloud.firestore {
     
     // Testimonials
     match /testimonials/{testimonialId} {
-      // Allow public read access for all testimonials
+      // Allow public read access for all testimonials. This also allows a coach to read their own.
       allow get, list: if true;
 
-      // Allow write access (create, update, delete) only for admins
-      allow write: if isAdmin();
+      // Allow coach to create a testimonial if:
+      // 1. They are a coach
+      // 2. The coachId in the testimonial matches their UID
+      // 3. Required fields are present and valid
+      // 4. The coach has less than 10 testimonials
+      allow create: if isCoach() && request.auth.uid == request.resource.data.coachId
+                      && request.resource.data.coachId is string
+                      && request.resource.data.clientName is string && request.resource.data.clientName != ""
+                      && request.resource.data.testimonialText is string && request.resource.data.testimonialText != ""
+                      && request.resource.data.createdAt == request.time
+                      && get(/databases/$(database)/documents/testimonials).where("coachId", "==", request.resource.data.coachId).size() < 10;
+
+      // Allow coach to delete their own testimonials, or admin to delete any testimonial
+      allow delete: if request.auth != null &&
+                      ( (isCoach() && resource.data.coachId == request.auth.uid) || isAdmin() );
+
+      // Coaches cannot update testimonials directly. They should delete and re-create if changes are needed, or an admin can update.
+      allow update: if isAdmin();
     }
 
     // Rules for conversations (if you decide to add a conversations collection later)
