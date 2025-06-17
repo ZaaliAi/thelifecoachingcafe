@@ -4,57 +4,54 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { UserProfile } from '@/types'; // Assuming UserProfile includes uid or id
+import { UserProfile } from '@/types'; // UserProfile from types/index.ts uses 'id'
 import CoachProfile from '@/components/CoachProfile';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const CoachProfilePage = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // user object from useAuth has 'id'
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true); // Start true if auth might be loading
+  const [profileLoading, setProfileLoading] = useState(true);
 
   console.log('[CoachProfilePage] Rendering. Initial authLoading:', authLoading, 'Initial user from useAuth():', user);
 
   useEffect(() => {
     console.log('[CoachProfilePage] useEffect triggered. Current user from useAuth():', user, 'AuthLoading:', authLoading);
 
-    if (user && user.uid) {
-      console.log('[CoachProfilePage] useEffect: User and user.uid exist. UID:', user.uid, '. Attempting to set up Firestore listener.');
+    // Changed user.uid to user.id
+    if (user && user.id) {
+      console.log('[CoachProfilePage] useEffect: User and user.id exist. ID:', user.id, '. Attempting to set up Firestore listener.');
       setProfileLoading(true);
-      const docRef = doc(db, 'users', user.uid);
+      const docRef = doc(db, 'users', user.id); // Use user.id
       const unsubscribe = onSnapshot(docRef, (doc) => {
         console.log('[CoachProfilePage] onSnapshot callback triggered. Doc received. Doc exists?', doc.exists());
         if (doc.exists()) {
-          const data = doc.data() as UserProfile; // Assuming UserProfile type matches doc structure
+          const data = doc.data() as UserProfile;
           console.log('[CoachProfilePage] onSnapshot: Document exists. Data:', data);
-          setUserProfile({ ...data, uid: doc.id }); // Ensure uid is part of UserProfile or added here
+          // UserProfile type uses 'id', so this aligns.
+          setUserProfile({ ...data, id: doc.id });
         } else {
-          console.log('[CoachProfilePage] onSnapshot: No profile document found for user UID:', user.uid);
+          console.log('[CoachProfilePage] onSnapshot: No profile document found for user ID:', user.id);
           setUserProfile(null);
         }
         setProfileLoading(false);
       }, (error) => {
-        console.error('[CoachProfilePage] onSnapshot: Error listening to user profile updates for UID:', user.uid, error);
+        console.error('[CoachProfilePage] onSnapshot: Error listening to user profile updates for ID:', user.id, error);
         setUserProfile(null);
         setProfileLoading(false);
       });
       
       return () => {
-        console.log('[CoachProfilePage] useEffect cleanup. Unsubscribing from Firestore listener for UID:', user.uid);
+        console.log('[CoachProfilePage] useEffect cleanup. Unsubscribing from Firestore listener for ID:', user.id);
         unsubscribe();
       };
     } else {
-      console.log('[CoachProfilePage] useEffect: User or user.uid is missing or auth still loading. User:', user, 'AuthLoading:', authLoading);
+      console.log('[CoachProfilePage] useEffect: User or user.id is missing or auth still loading. User:', user, 'AuthLoading:', authLoading);
       if (!authLoading && !user) {
-        // No user and auth is done, so no profile to load.
-        // The main render logic will show "User profile not found" or similar.
         setProfileLoading(false);
-      } else if (authLoading) {
-        // Still waiting for auth to resolve, keep profileLoading true or let initial state handle it.
-        // setProfileLoading(true); // Or rely on initial useState(true)
       }
     }
-  }, [user, authLoading]); // Added authLoading to dependency array as it's used in the else block
+  }, [user, authLoading]);
 
   if (authLoading) {
     console.log('[CoachProfilePage] Render: authLoading is true. Displaying main skeleton.');
@@ -73,12 +70,9 @@ const CoachProfilePage = () => {
 
   if (!user) {
     console.log('[CoachProfilePage] Render: No user from useAuth(). Displaying "User profile not found. Please log in."');
-    // This should ideally not be reached if AuthProvider handles redirects,
-    // but as a fallback for this page's logic.
     return <div className="p-4">User profile not found. Please log in.</div>;
   }
   
-  // User is available, now check profileLoading state (set by useEffect)
   if (profileLoading) {
     console.log('[CoachProfilePage] Render: User exists, but profileLoading is true. Displaying profile skeleton.');
       return (
@@ -94,16 +88,14 @@ const CoachProfilePage = () => {
     );
   }
 
-  // Auth is done, user exists, profile loading is done. Now check if userProfile was actually found.
   if (!userProfile) {
     console.log('[CoachProfilePage] Render: userProfile is null. Displaying "Your user profile could not be loaded."');
     return <div className="p-4">Your user profile could not be loaded. Please contact support. (Hint: Check console for Firestore errors or 'No document' messages for your user ID).</div>;
   }
 
   console.log('[CoachProfilePage] Render: Rendering CoachProfile with userProfile:', userProfile);
-  // Ensure userProfile has a 'uid' or 'id' field as expected by CoachProfile's coachId prop.
-  // The spread { ...data, uid: doc.id } in onSnapshot should ensure this.
-  return <CoachProfile coachData={userProfile} coachId={userProfile.uid} />;
+  // Changed userProfile.uid to userProfile.id for coachId prop
+  return <CoachProfile coachData={userProfile} coachId={userProfile.id} />;
 };
 
 export default CoachProfilePage;
