@@ -348,6 +348,7 @@ export const createCheckoutSessionCallable = onCall(
 /**
  * Stripe webhook handler to process subscription payments.
  */
+/*
 export const onSubscriptionActivated = onRequest(
     {
       secrets: [stripeSecretKey, stripeWebhookSecret],
@@ -427,3 +428,4 @@ export const onSubscriptionActivated = onRequest(
       response.status(200).send("Event received.");
     }
 );
+*/

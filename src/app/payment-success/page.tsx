@@ -14,7 +14,7 @@ export default function PaymentSuccessPage() {
   // Automatically redirect the user after a few seconds.
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.push('/dashboard/coach/profile');
+      router.push('/dashboard/coach/profile?status_update_pending=true');
     }, 4000); // 4-second delay before redirecting
 
     // Cleanup the timer if the component is unmounted
@@ -43,7 +43,7 @@ export default function PaymentSuccessPage() {
         </CardContent>
         <CardFooter className="flex flex-col items-center justify-center pt-8 gap-4">
           <Button asChild size="lg" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href="/dashboard/coach/profile">
+            <Link href="/dashboard/coach/profile?status_update_pending=true">
               <Zap className="mr-2 h-5 w-5" />
               Go to My Profile Now
             </Link>
