@@ -55,6 +55,15 @@ service cloud.firestore {
       // 2. You are an admin
       allow update, delete: if request.auth != null && (request.auth.uid == resource.data.authorId || isAdmin());
     }
+    
+    // Testimonials
+    match /testimonials/{testimonialId} {
+      // Allow public read access for all testimonials
+      allow get, list: if true;
+
+      // Allow write access (create, update, delete) only for admins
+      allow write: if isAdmin();
+    }
 
     // Rules for conversations (if you decide to add a conversations collection later)
     match /conversations/{conversationId} {
