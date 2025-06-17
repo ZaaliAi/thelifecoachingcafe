@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/lib/auth'; // User type from here should have id, role, subscriptionTier
+import { useAuth } from '@/lib/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { UserProfile } from '@/types';
-import { EditCoachProfileForm } from '@/components/dashboard/EditCoachProfileForm'; // Import the new form
-import { updateUserProfile } from '@/lib/firestore'; // Import the update function
+import type { UserProfile, SocialLink } from '@/types'; // Added SocialLink
+import { EditCoachProfileForm, type EditProfileFormSubmitData } from '@/components/dashboard/EditCoachProfileForm'; // Import form and its submit data type
+import { updateUserProfile } from '@/lib/firestore';
+import { uploadProfileImage } from '@/services/imageUpload'; // Import image upload service
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast'; // For feedback on update
+import { useToast } from '@/hooks/use-toast';
 
 const CoachProfilePage = () => {
   const { user, loading: authLoading } = useAuth();
@@ -16,102 +17,111 @@ const CoachProfilePage = () => {
   const [profileLoading, setProfileLoading] = useState(true);
   const { toast } = useToast();
 
-  // console.log('[CoachProfilePage] Rendering. Initial authLoading:', authLoading, 'Initial user from useAuth():', user); // Keep for debugging if needed
-
   useEffect(() => {
-    // console.log('[CoachProfilePage] useEffect triggered. Current user from useAuth():', user, 'AuthLoading:', authLoading); // Keep for debugging
-
     if (user && user.id) {
-      // console.log('[CoachProfilePage] useEffect: User and user.id exist. ID:', user.id, '. Attempting to set up Firestore listener.'); // Keep for debugging
       setProfileLoading(true);
       const docRef = doc(db, 'users', user.id);
-      const unsubscribe = onSnapshot(docRef, (docSnap) => { // Renamed 'doc' to 'docSnap' to avoid conflict
-        // console.log('[CoachProfilePage] onSnapshot callback triggered. Doc received. Doc exists?', docSnap.exists()); // Keep for debugging
+      const unsubscribe = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
-          const data = docSnap.data() as UserProfile;
-          // console.log('[CoachProfilePage] onSnapshot: Document exists. Data:', data); // Keep for debugging
-          setUserProfile({ ...data, id: docSnap.id });
+          setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
         } else {
-          // console.log('[CoachProfilePage] onSnapshot: No profile document found for user ID:', user.id); // Keep for debugging
           setUserProfile(null);
         }
         setProfileLoading(false);
       }, (error) => {
-        // console.error('[CoachProfilePage] onSnapshot: Error listening to user profile updates for ID:', user.id, error); // Keep for debugging
+        console.error('[CoachProfilePage] onSnapshot: Error listening to user profile updates for ID:', user.id, error);
         setUserProfile(null);
         setProfileLoading(false);
       });
-      
-      return () => {
-        // console.log('[CoachProfilePage] useEffect cleanup. Unsubscribing from Firestore listener for ID:', user.id); // Keep for debugging
-        unsubscribe();
-      };
+      return () => unsubscribe();
     } else {
-      // console.log('[CoachProfilePage] useEffect: User or user.id is missing or auth still loading. User:', user, 'AuthLoading:', authLoading); // Keep for debugging
       if (!authLoading && !user) {
         setProfileLoading(false);
       }
     }
   }, [user, authLoading]);
 
-  const handleProfileUpdate = useCallback(async (formData: Partial<UserProfile>) => {
-    if (!user || !user.id) {
-      toast({ title: 'Error', description: 'You must be logged in to update your profile.', variant: 'destructive' });
-      throw new Error('User not authenticated');
+  const handleProfileUpdate = useCallback(async (submitData: EditProfileFormSubmitData) => {
+    if (!user || !user.id || !userProfile) { // userProfile must exist to get currentProfileImageUrl if needed
+      toast({ title: 'Error', description: 'User session or profile data is missing. Please try again.', variant: 'destructive' });
+      throw new Error('User not authenticated or profile not loaded');
     }
-    // The `updateUserProfile` function in firestore.ts will handle adding 'updatedAt'
-    await updateUserProfile(user.id, formData);
-    // No need to manually set userProfile state here if onSnapshot listener is active,
-    // as it will pick up the changes from Firestore and update the local state automatically.
-    // If onSnapshot is not desired after an edit, then manual update or refetch would be needed.
-    // For now, relying on onSnapshot.
-  }, [user, toast]);
+
+    let profileImageUrlToSave: string | null = submitData.currentProfileImageUrl || null;
+
+    try {
+      if (submitData.imageAction === 'replace' && submitData.selectedFile) {
+        toast({ title: 'Uploading image...', description: 'Please wait.' });
+        profileImageUrlToSave = await uploadProfileImage(submitData.selectedFile, user.id, submitData.currentProfileImageUrl);
+      } else if (submitData.imageAction === 'remove') {
+        if (submitData.currentProfileImageUrl) { // Only attempt delete if there was an image
+          toast({ title: 'Removing image...', description: 'Please wait.' });
+          await uploadProfileImage(undefined, user.id, submitData.currentProfileImageUrl);
+        }
+        profileImageUrlToSave = null;
+      }
+      // If imageAction is 'keep', profileImageUrlToSave remains submitData.currentProfileImageUrl
+
+      // Reconstruct socialLinks
+      let updatedSocialLinks: SocialLink[] = userProfile.socialLinks?.filter(link => link.platform !== 'LinkedIn') || [];
+      if (submitData.linkedInUrl && submitData.linkedInUrl.trim() !== '') {
+        updatedSocialLinks.push({ platform: 'LinkedIn', url: submitData.linkedInUrl.trim() });
+      }
+      // Ensure empty array if no links, not array with empty object
+      if (updatedSocialLinks.length === 1 && updatedSocialLinks[0].platform === 'LinkedIn' && !updatedSocialLinks[0].url) {
+          updatedSocialLinks = [];
+      }
+
+
+      const { selectedFile, imageAction, currentProfileImageUrl, linkedInUrl, ...otherFormData } = submitData;
+
+      const dataForFirestore: Partial<UserProfile> = {
+        ...otherFormData, // name, bio, specialties (as array), availability (as array), etc.
+        profileImageUrl: profileImageUrlToSave,
+        socialLinks: updatedSocialLinks,
+      };
+
+      await updateUserProfile(user.id, dataForFirestore);
+      // Toast for success is now in EditCoachProfileForm, triggered after this onSubmit resolves
+      // However, we might want a specific one here if upload was involved.
+      // For now, relying on the form's toast.
+      // The onSnapshot listener will update userProfile, refreshing initialData for the form.
+    } catch (error: any) {
+      console.error("Error in handleProfileUpdate:", error);
+      toast({ title: 'Update Failed', description: error.message || 'Could not update profile.', variant: 'destructive' });
+      throw error; // Re-throw to let the form know submission failed
+    }
+  }, [user, userProfile, toast]);
 
 
   if (authLoading) {
-    // console.log('[CoachProfilePage] Render: authLoading is true. Displaying main skeleton.'); // Keep for debugging
-    return (
+    return ( /* Skeleton for auth loading */
         <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1> {/* Title changed */}
-            <div className="space-y-4">
-                <Skeleton className="h-8 w-1/4" />
-                <Skeleton className="h-40 w-full" />
-                <Skeleton className="h-8 w-1/2" />
-                <Skeleton className="h-20 w-full" />
-            </div>
+            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1>
+            <div className="space-y-4"> <Skeleton className="h-8 w-1/4" /> <Skeleton className="h-40 w-full" /> </div>
         </div>
     );
   }
 
   if (!user) {
-    // console.log('[CoachProfilePage] Render: No user from useAuth(). Displaying "User profile not found. Please log in."'); // Keep for debugging
     return <div className="p-4">User profile not found. Please log in.</div>;
   }
   
   if (profileLoading) {
-    // console.log('[CoachProfilePage] Render: User exists, but profileLoading is true. Displaying profile skeleton.'); // Keep for debugging
-      return (
+    return ( /* Skeleton for profile data loading */
         <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1> {/* Title changed */}
-            <div className="space-y-4">
-                <Skeleton className="h-8 w-1/4" />
-                <Skeleton className="h-40 w-full" />
-                <Skeleton className="h-8 w-1/2" />
-                <Skeleton className="h-20 w-full" />
-            </div>
+            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1>
+            <div className="space-y-4"> <Skeleton className="h-8 w-1/4" /> <Skeleton className="h-40 w-full" /> </div>
         </div>
     );
   }
 
   if (!userProfile) {
-    // console.log('[CoachProfilePage] Render: userProfile is null. Displaying "Your user profile could not be loaded."'); // Keep for debugging
-    return <div className="p-4">Your user profile data could not be loaded to edit. Please contact support.</div>; // Message slightly changed
+    return <div className="p-4">Your user profile data could not be loaded to edit. Please contact support.</div>;
   }
 
-  // console.log('[CoachProfilePage] Render: Rendering EditCoachProfileForm with userProfile:', userProfile); // Keep for debugging
   return (
     <div className="p-4 md:p-8">
-      {/* The EditCoachProfileForm is already wrapped in a Card, so no need for another Card here unless desired for page layout */}
       <EditCoachProfileForm
         initialData={userProfile}
         onSubmit={handleProfileUpdate}
