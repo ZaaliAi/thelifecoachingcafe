@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -11,10 +11,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Loader2, UploadCloud, Trash2, Image as ImageIcon, PlusCircle, Sparkles } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, Image as ImageIcon, PlusCircle, Sparkles, X } from 'lucide-react';
 import NextImage from 'next/image';
 import { useAuth } from '@/lib/auth';
 import { initiateStripeCheckout } from '@/lib/subscriptionUtils';
+import { suggestCoachSpecialties, type SuggestCoachSpecialtiesOutput } from '@/ai/flows/suggest-coach-specialties';
+import { debounce } from 'lodash';
+import { Badge } from '@/components/ui/badge';
+
 
 // Helper to remove undefined properties from an object
 const pruneUndefined = (obj: any) => {
@@ -45,8 +49,8 @@ const availabilitySlotSchema = z.object({
 
 const editCoachProfileSchema = z.object({
   name: z.string().min(1, 'Full name is required'),
-  bio: z.string().optional(),
-  specialties: z.string().optional(),
+  bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.').optional().or(z.literal('')),
+  selectedSpecialties: z.array(z.string()).min(1, 'Please select or add at least one specialty.'),
   keywords: z.string().optional(),
   certifications: z.string().optional(),
   location: z.string().optional().nullable(),
@@ -58,7 +62,7 @@ const editCoachProfileSchema = z.object({
 
 type EditCoachProfileFormData = z.infer<typeof editCoachProfileSchema>;
 
-export interface EditProfileFormSubmitData extends Omit<Partial<UserProfile>, 'profileImageUrl' | 'socialLinks' | 'availability' | 'availabilityText'> {
+export interface EditProfileFormSubmitData extends Omit<Partial<UserProfile>, 'profileImageUrl' | 'socialLinks' | 'availability' | 'availabilityText' | 'specialties'> {
   name: string;
   bio?: string;
   specialties: string[];
@@ -108,16 +112,19 @@ const PremiumFeatureMessage: React.FC<PremiumFeatureMessageProps> = ({ featureNa
 
 export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ initialData, onSubmit, isPremiumCoach }) => {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get user for upgrade click
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUpgrading, setIsUpgrading] = useState(false); // State for upgrade button
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestCoachSpecialtiesOutput | null>(null);
+  const [customSpecialtyInput, setCustomSpecialtyInput] = useState('');
 
-  const { control, handleSubmit, reset, formState: { errors, isSubmitting: rhfIsSubmitting }, getValues } = useForm<EditCoachProfileFormData>({
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting: rhfIsSubmitting }, getValues, watch, setValue } = useForm<EditCoachProfileFormData>({
     resolver: zodResolver(editCoachProfileSchema),
     defaultValues: {
       name: initialData.name || '',
       bio: initialData.bio || '',
-      specialties: prepareArrayLikeFieldForInput(initialData.specialties),
+      selectedSpecialties: Array.isArray(initialData.specialties) ? initialData.specialties : [],
       keywords: prepareArrayLikeFieldForInput(initialData.keywords),
       certifications: prepareArrayLikeFieldForInput(initialData.certifications),
       location: initialData.location || null,
@@ -135,12 +142,40 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageAction, setImageAction] = useState<'keep' | 'replace' | 'remove'>('keep');
   const [uiIsSubmitting, setUiIsSubmitting] = useState(false);
+  
+  const bioValue = watch('bio');
+  const currentSelectedSpecialties = watch('selectedSpecialties') || [];
+
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (bioText: string) => {
+      if (bioText.length >= 50) {
+        setIsAiLoading(true);
+        setAiSuggestions(null);
+        try {
+          const suggestions = await suggestCoachSpecialties({ bio: bioText });
+          setAiSuggestions(suggestions);
+        } catch (error) {
+          console.error('Error fetching AI suggestions:', error);
+        }
+        setIsAiLoading(false);
+      }
+    }, 1000),
+    [setIsAiLoading, setAiSuggestions]
+  );
+
+  useEffect(() => {
+    if (bioValue && bioValue.length >= 50) {
+      debouncedFetchSuggestions(bioValue);
+    } else {
+      setAiSuggestions(null);
+    }
+  }, [bioValue, debouncedFetchSuggestions]);
 
   useEffect(() => {
     reset({
       name: initialData.name || '',
       bio: initialData.bio || '',
-      specialties: prepareArrayLikeFieldForInput(initialData.specialties),
+      selectedSpecialties: Array.isArray(initialData.specialties) ? initialData.specialties : [],
       keywords: prepareArrayLikeFieldForInput(initialData.keywords),
       certifications: prepareArrayLikeFieldForInput(initialData.certifications),
       location: initialData.location || null,
@@ -197,9 +232,8 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     }
     setIsUpgrading(true);
     const result = await initiateStripeCheckout({
-      priceId: "price_1RURVlG6UVJU45QN1mByj8Fc", // Premium price ID
+      priceId: "price_1P6g6bHAbH8p1j3J5sY5e5g5", // Replace with your actual premium price ID
       user: user,
-      // Using default successUrl and cancelUrl from the utility function
     });
 
     if (result?.error) {
@@ -207,15 +241,43 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     } else if (result?.stripeError) {
       toast({ title: "Payment Error", description: result.stripeError.message, variant: "destructive" });
     }
-    // If successful, Stripe redirects, so no success toast needed here.
-    setIsUpgrading(false); // Only sets if redirect doesn't happen (i.e. error)
+    setIsUpgrading(false);
   };
+  
+  const addSuggestedKeyword = (keyword: string) => {
+    const currentKeywords = getValues('keywords') || '';
+    const keywordsArray = currentKeywords.split(',').map(k => k.trim()).filter(k => k);
+    if (!keywordsArray.includes(keyword)) {
+      setValue('keywords', [...keywordsArray, keyword].join(', '), { shouldValidate: true });
+    }
+  };
+
+  const addSpecialty = (specialty: string) => {
+    if (specialty.trim() === '') return;
+    const currentSpecialties = getValues('selectedSpecialties') || [];
+    if (!currentSpecialties.includes(specialty.trim())) {
+      setValue('selectedSpecialties', [...currentSpecialties, specialty.trim()], { shouldValidate: true });
+    }
+  };
+
+  const handleAddCustomSpecialty = () => {
+    if (customSpecialtyInput.trim() !== '') {
+      addSpecialty(customSpecialtyInput.trim());
+      setCustomSpecialtyInput('');
+    }
+  };
+
+  const removeSpecialty = (specialtyToRemove: string) => {
+    const currentSpecialties = getValues('selectedSpecialties') || [];
+    setValue('selectedSpecialties', currentSpecialties.filter(s => s !== specialtyToRemove), { shouldValidate: true });
+  };
+
 
   const onFormSubmit = async (data: EditCoachProfileFormData) => {
     setUiIsSubmitting(true);
     const submitData: EditProfileFormSubmitData = {
       ...data,
-      specialties: commaStringToArray(data.specialties),
+      specialties: data.selectedSpecialties,
       keywords: commaStringToArray(data.keywords),
       certifications: commaStringToArray(data.certifications),
       linkedInUrl: isPremiumCoach ? (data.linkedInUrl?.trim() || undefined) : undefined,
@@ -338,14 +400,46 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
           <div className="space-y-4">
             <div>
               <Label htmlFor="bio">Bio</Label>
-              <Controller name="bio" control={control} render={({ field }) => <Textarea {...field} placeholder="Tell us about yourself..." rows={6} />} />
+              <Controller name="bio" control={control} render={({ field }) => <Textarea {...field} placeholder="Share your coaching philosophy... (Min 50 characters for AI suggestions)" rows={6} />} />
               {errors.bio && <p className="text-sm text-destructive">{errors.bio.message}</p>}
+              {isAiLoading && <div className="flex items-center text-sm text-muted-foreground mt-3"><Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />Analyzing bio...</div>}
+              {aiSuggestions && (
+                <div className="mt-4 p-4 border border-dashed border-primary/50 rounded-lg bg-primary/5">
+                  <div className="flex items-center mb-3"><Sparkles className="h-6 w-6 text-primary mr-2" /><h4 className="text-lg font-semibold text-primary">Smart Suggestions ✨</h4></div>
+                  {aiSuggestions.keywords && aiSuggestions.keywords.length > 0 && (
+                    <div className="mb-4">
+                      <Label className="text-base font-medium text-foreground">Keywords:</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {aiSuggestions.keywords.map(k => <Button key={k} type="button" variant="outline" size="sm" onClick={() => addSuggestedKeyword(k)} className="bg-background hover:bg-muted"><PlusCircle className="mr-2 h-4 w-4"/>{k}</Button>)}
+                      </div>
+                    </div>
+                  )}
+                  {aiSuggestions.specialties && aiSuggestions.specialties.length > 0 && (
+                    <div>
+                      <Label className="text-base font-medium text-foreground">Specialties:</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {aiSuggestions.specialties.map(s => <Button key={s} type="button" variant="outline" size="sm" onClick={() => addSpecialty(s)} className="bg-background hover:bg-muted"><PlusCircle className="mr-2 h-4 w-4"/>{s}</Button>)}
+                      </div>
+                    </div>
+                  )}
+                  {(aiSuggestions.keywords?.length === 0 && aiSuggestions.specialties?.length === 0) && <p className="text-sm text-muted-foreground">No suggestions. Expand bio.</p>}
+                </div>
+              )}
             </div>
-            <div>
-              <Label htmlFor="specialties">Specialties (comma-separated)</Label>
-              <Controller name="specialties" control={control} render={({ field }) => <Input {...field} placeholder="e.g., Leadership, Career Growth" />} />
-              {errors.specialties && <p className="text-sm text-destructive">{errors.specialties.message}</p>}
+            
+            <div className="space-y-2">
+              <Label htmlFor="customSpecialtyInput" className="text-base font-medium">Your Specialties</Label>
+              <p className="text-sm text-muted-foreground mb-3">Add from AI suggestions or type your own. (Min. 1 required)</p>
+              <div className="flex flex-wrap gap-2 mb-3 min-h-[2.5rem] p-2 border rounded-md bg-muted/20 items-center">
+                {currentSelectedSpecialties.length > 0 ? currentSelectedSpecialties.map(s => <Badge key={s} variant="secondary" className="text-sm py-1 px-2.5 flex items-center gap-1.5">{s}<button type="button" onClick={() => removeSpecialty(s)} className="rounded-full hover:bg-destructive/20 p-0.5 text-destructive-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button></Badge>) : <span className="text-sm text-muted-foreground px-1">No specialties yet.</span>}
+              </div>
+              <div className="flex gap-3 items-center">
+                <Input id="customSpecialtyInput" placeholder="Type specialty & click Add" value={customSpecialtyInput} onChange={e => setCustomSpecialtyInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && customSpecialtyInput.trim() !== '') { e.preventDefault(); handleAddCustomSpecialty();}}} className="text-base py-2.5" />
+                <Button type="button" variant="outline" onClick={handleAddCustomSpecialty} disabled={customSpecialtyInput.trim() === ''} className="shrink-0"><PlusCircle className="mr-2 h-4 w-4" /> Add</Button>
+              </div>
+              {errors.selectedSpecialties && <p className="text-sm text-destructive mt-1">{errors.selectedSpecialties.message}</p>}
             </div>
+
             <div>
               <Label htmlFor="keywords">Keywords (comma-separated)</Label>
               <Controller name="keywords" control={control} render={({ field }) => <Input {...field} placeholder="e.g., Entrepreneurship, Executive Coaching" />} />

@@ -9,14 +9,13 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2, KeyRound, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { updateUserProfile } from '@/lib/firestore';
 
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-// Firebase auth functions for password change, email change & account deletion
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail, sendEmailVerification, deleteUser } from 'firebase/auth';
+// Firebase auth functions for password change & account deletion
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from 'firebase/auth';
 
 // Zod Schema for Password Change
 const passwordChangeSchema = z.object({
@@ -28,13 +27,6 @@ const passwordChangeSchema = z.object({
   path: ["confirmNewPassword"],
 });
 type PasswordChangeFormData = z.infer<typeof passwordChangeSchema>;
-
-// Zod Schema for Email Change
-const emailChangeSchema = z.object({
-  newEmail: z.string().email("Invalid email address."),
-  currentPasswordForEmail: z.string().min(1, "Current password is required to change email."),
-});
-type EmailChangeFormData = z.infer<typeof emailChangeSchema>;
 
 // Zod Schema for Delete Account
 const deleteAccountSchema = z.object({
@@ -131,71 +123,6 @@ export default function SettingsPage() {
     }
   };
 
-  // --- Email Change State & Logic ---
-  const {
-    control: emailControl,
-    handleSubmit: handleEmailSubmit,
-    formState: { errors: emailErrors, isSubmitting: isEmailSubmitting },
-    reset: resetEmailForm,
-  } = useForm<EmailChangeFormData>({
-    resolver: zodResolver(emailChangeSchema),
-    defaultValues: { newEmail: '', currentPasswordForEmail: '' },
-  });
-
-  const onEmailChangeSubmit: SubmitHandler<EmailChangeFormData> = async (data) => {
-    if (!firebaseUser || !firebaseUser.email) {
-      toast({ title: "Error", description: "User not found. Please re-login.", variant: "destructive" });
-      return;
-    }
-
-    if (firebaseUser.email === data.newEmail) {
-      toast({ title: "Info", description: "The new email address is the same as your current one.", variant: "info" });
-      return;
-    }
-
-    try {
-      const credential = EmailAuthProvider.credential(firebaseUser.email, data.currentPasswordForEmail);
-      await reauthenticateWithCredential(firebaseUser, credential);
-      
-      await updateEmail(firebaseUser, data.newEmail);
-
-      try {
-         await sendEmailVerification(firebaseUser);
-         toast({ title: "Verification Email Sent", description: `A verification email has been sent to ${data.newEmail}. Please verify your new email address.` });
-      } catch (verificationError: any) {
-         console.error("Error sending verification email:", verificationError);
-         toast({ title: "Warning: Verification Email Failed", description: `Could not send verification email to ${data.newEmail}. You may need to re-login or contact support. Your email has been changed but requires verification.`, variant: "warning", duration: 10000 });
-      }
-
-      try {
-         await updateUserProfile(firebaseUser.uid, { email: data.newEmail });
-         toast({ title: "Profile Updated", description: "Email updated in your profile." });
-      } catch (firestoreError: any) {
-         console.error("Error updating email in Firestore:", firestoreError);
-         toast({ title: "Critical Sync Error", description: "Email changed in authentication, but failed to update in profile. Please contact support immediately with your new and old email addresses.", variant: "destructive", duration: 15000 });
-      }
-
-      resetEmailForm();
-      toast({ title: "Email Change Process Complete", description: "Please check your new email address to verify it.", duration: 7000 });
-
-    } catch (error: any) {
-      console.error("Email change error:", error);
-      let errorMessage = "Failed to update email. Please try again.";
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect current password. Please try again.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many attempts. Please try again later.";
-      } else if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "This email address is already in use by another account.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "The new email address is not valid.";
-      } else if (error.code === 'auth/user-mismatch') {
-        errorMessage = "Credential mismatch. Please ensure you are logged in with the correct user.";
-      }
-      toast({ title: "Error Changing Email", description: errorMessage, variant: "destructive" });
-    }
-  };
-
   if (authLoading) {
     return <div className="p-4"><Loader2 className="animate-spin" /> Loading settings...</div>;
   }
@@ -212,38 +139,13 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center text-xl">
             <Mail className="mr-2 h-5 w-5 text-primary" />
-            Change Email Address
+            Email Address
           </CardTitle>
-          <CardDescription>Update the email address associated with your account. You will need to verify your new email address.</CardDescription>
+          <CardDescription>This is the email address associated with your account. It cannot be changed.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleEmailSubmit(onEmailChangeSubmit)}>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="newEmail">New Email Address</Label>
-              <Controller
-                name="newEmail"
-                control={emailControl}
-                render={({ field }) => <Input id="newEmail" type="email" {...field} placeholder="yournewemail@example.com" />}
-              />
-              {emailErrors.newEmail && <p className="text-sm text-destructive mt-1">{emailErrors.newEmail.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="currentPasswordForEmail">Current Password</Label>
-              <Controller
-                name="currentPasswordForEmail"
-                control={emailControl}
-                render={({ field }) => <Input id="currentPasswordForEmail" type="password" {...field} placeholder="Enter your current password" />}
-              />
-              {emailErrors.current_password_for_email && <p className="text-sm text-destructive mt-1">{emailErrors.currentPasswordForEmail.message}</p>}
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" disabled={isEmailSubmitting}>
-              {isEmailSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update Email Address
-            </Button>
-          </CardFooter>
-        </form>
+        <CardContent>
+          <p className="text-lg font-medium text-muted-foreground">{user.email}</p>
+        </CardContent>
       </Card>
 
       <Card className="mb-8">
