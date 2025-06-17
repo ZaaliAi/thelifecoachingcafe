@@ -33,7 +33,7 @@ export default function CoachDashboardPage() {
 
   useEffect(() => {
     if (user && user.role === 'coach') {
-      setCoachName(user.name || user.email?.split('@')[0] || "Coach");
+      setCoachName(user.name || (user.email ? user.email.split('@')[0] : "Coach") || "Coach");
       
       const fetchStats = async () => {
         setIsLoadingStats(true);
