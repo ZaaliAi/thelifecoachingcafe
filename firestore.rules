@@ -56,9 +56,18 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && (request.auth.uid == resource.data.authorId || isAdmin());
     }
     
-    // Testimonials
+    // Homepage Testimonials (Admin Managed)
     match /testimonials/{testimonialId} {
-      // Allow public read access for all testimonials. This also allows a coach to read their own.
+      // Allow public read access for all homepage testimonials
+      allow get, list: if true;
+
+      // Allow write access (create, update, delete) only for admins for homepage testimonials
+      allow write: if isAdmin();
+    }
+
+    // Coach-Specific Testimonials
+    match /coachtestimonials/{testimonialId} {
+      // Allow public read access for all coach testimonials. This also allows a coach to read their own.
       allow get, list: if true;
 
       // Allow coach to create a testimonial if:
@@ -71,13 +80,13 @@ service cloud.firestore {
                       && request.resource.data.clientName is string && request.resource.data.clientName != ""
                       && request.resource.data.testimonialText is string && request.resource.data.testimonialText != ""
                       && request.resource.data.createdAt == request.time
-                      && get(/databases/$(database)/documents/testimonials).where("coachId", "==", request.resource.data.coachId).size() < 10;
+                      && get(/databases/$(database)/documents/coachtestimonials).where("coachId", "==", request.resource.data.coachId).size() < 10; // Updated path
 
       // Allow coach to delete their own testimonials, or admin to delete any testimonial
       allow delete: if request.auth != null &&
                       ( (isCoach() && resource.data.coachId == request.auth.uid) || isAdmin() );
 
-      // Coaches cannot update testimonials directly. They should delete and re-create if changes are needed, or an admin can update.
+      // Coaches cannot update testimonials directly for their own testimonials. They should delete and re-create if changes are needed. Admin can update.
       allow update: if isAdmin();
     }
 

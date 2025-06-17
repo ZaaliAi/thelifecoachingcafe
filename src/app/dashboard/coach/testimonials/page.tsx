@@ -46,7 +46,7 @@ export default function CoachTestimonialsPage() {
       }
 
       try {
-        const response = await fetch(`/api/testimonials?coachId=${user.id}`, {
+        const response = await fetch(`/api/coachtestimonials?coachId=${user.id}`, { // UPDATED
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) {
@@ -77,7 +77,7 @@ export default function CoachTestimonialsPage() {
     setTestimonials(testimonials.filter(t => t.id !== testimonialId)); // Optimistic update
 
     try {
-      const response = await fetch(`/api/testimonials/${testimonialId}`, {
+      const response = await fetch(`/api/coachtestimonials/${testimonialId}`, { // UPDATED
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -115,7 +115,7 @@ export default function CoachTestimonialsPage() {
     }
 
     try {
-      const response = await fetch('/api/testimonials', {
+      const response = await fetch('/api/coachtestimonials', { // UPDATED
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ export default function CoachTestimonialsPage() {
       setTestimonialText('');
       // Trigger refetch
       if (user && user.id) {
-        const updatedResponse = await fetch(`/api/testimonials?coachId=${user.id}`, {
+        const updatedResponse = await fetch(`/api/coachtestimonials?coachId=${user.id}`, { // UPDATED
           headers: { Authorization: `Bearer ${token}` },
         });
         const updatedData: Testimonial[] = await updatedResponse.json();

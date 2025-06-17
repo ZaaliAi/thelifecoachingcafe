@@ -89,7 +89,7 @@ export default async function Page({ params }: PageProps) {
   if (coachData && coachData.subscriptionTier === 'premium') {
     try {
       const appURL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Fallback for local dev
-      const testimonialsResponse = await fetch(`${appURL}/api/testimonials?coachId=${params.id}`, { cache: 'no-store' }); // Disable cache for dynamic data
+      const testimonialsResponse = await fetch(`${appURL}/api/coachtestimonials?coachId=${params.id}`, { cache: 'no-store' }); // UPDATED // Disable cache for dynamic data
       if (testimonialsResponse.ok) {
         testimonials = await testimonialsResponse.json();
       } else {

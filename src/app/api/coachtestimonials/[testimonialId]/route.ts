@@ -30,7 +30,7 @@ export async function DELETE(
     const uid = decodedToken.uid;
 
     // Fetch the testimonial document
-    const testimonialDocRef = adminFirestore.collection('testimonials').doc(testimonialId);
+    const testimonialDocRef = adminFirestore.collection('coachtestimonials').doc(testimonialId); // UPDATED
     const testimonialDocSnap = await testimonialDocRef.get();
 
     if (!testimonialDocSnap.exists()) {

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Bad Request: coachId query parameter is required' }, { status: 400 });
     }
 
-    const testimonialsRef = adminFirestore.collection('testimonials');
+    const testimonialsRef = adminFirestore.collection('coachtestimonials'); // UPDATED
     const q = testimonialsRef.where('coachId', '==', coachId).orderBy('createdAt', 'desc');
     const snapshot = await q.get();
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // }
 
     // Testimonial Limit Check
-    const testimonialsRef = adminFirestore.collection('testimonials');
+    const testimonialsRef = adminFirestore.collection('coachtestimonials'); // UPDATED
     const q = testimonialsRef.where('coachId', '==', uid);
     const snapshot = await q.get(); // Get the QuerySnapshot
     const count = snapshot.size;     // Get the number of documents in the QuerySnapshot
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       // 'dataAiHint' is also part of the type, but not required here.
     };
 
-    const docRef = await adminFirestore.collection('testimonials').add(newTestimonialData);
+    const docRef = await adminFirestore.collection('coachtestimonials').add(newTestimonialData); // UPDATED
 
     // Respond with the ID of the newly created testimonial and the submitted data (serverTimestamp will be a placeholder client-side)
     // For a more complete response, one might fetch the document again to get the actual createdAt timestamp.

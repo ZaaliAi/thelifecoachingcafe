@@ -265,7 +265,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             // Only submit if the entry is valid AND has actual content (not just empty strings)
             if (validationResult.success && validationResult.data.clientName.trim() && validationResult.data.testimonialText.trim()) {
               try {
-                const response = await fetch('/api/testimonials', {
+                const response = await fetch('/api/coachtestimonials', { // UPDATED
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
