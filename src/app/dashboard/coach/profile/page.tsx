@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation'; // Added
 import { useAuth } from '@/lib/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -9,10 +10,13 @@ import { EditCoachProfileForm, type EditProfileFormSubmitData } from '@/componen
 import { updateUserProfile } from '@/lib/firestore';
 import { uploadProfileImage } from '@/services/imageUpload'; // Import image upload service
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2 } from 'lucide-react'; // Added
 import { useToast } from '@/hooks/use-toast';
 
 const CoachProfilePage = () => {
   const { user, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams(); // Added
+  const statusUpdatePending = searchParams.get('status_update_pending'); // Added
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const { toast } = useToast();
@@ -106,6 +110,19 @@ const CoachProfilePage = () => {
   if (!user) {
     return <div className="p-4">User profile not found. Please log in.</div>;
   }
+
+  // New condition for pending status
+  if (statusUpdatePending === 'true' && userProfile?.subscriptionTier !== 'premium' && !profileLoading && !authLoading) {
+    return (
+      <div className="p-4 md:p-8 text-center">
+        <div className="flex justify-center items-center mb-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+          <h2 className="text-xl font-semibold">Finalizing your premium upgrade...</h2>
+        </div>
+        <p className="text-muted-foreground">Please wait a moment while we update your account. This page will refresh automatically.</p>
+      </div>
+    );
+  }
   
   if (profileLoading) {
     return ( /* Skeleton for profile data loading */
@@ -116,8 +133,17 @@ const CoachProfilePage = () => {
     );
   }
 
-  if (!userProfile) {
+  // Original check for userProfile, now ensuring statusUpdatePending is not the primary reason for an empty state.
+  if (!userProfile && statusUpdatePending !== 'true') {
     return <div className="p-4">Your user profile data could not be loaded to edit. Please contact support.</div>;
+  }
+
+  // If userProfile is still null here, but statusUpdatePending was true, it means we are waiting for the update.
+  // The form should only render if userProfile is available.
+  if (!userProfile) {
+     // This case should ideally be covered by the statusUpdatePending message or profileLoading.
+     // If we reach here, it's an unexpected state, possibly profile is null after loading and not pending.
+    return <div className="p-4">Loading profile data...</div>;
   }
 
   return (
