@@ -110,8 +110,8 @@ export interface Testimonial {
   coachId: string;
   clientName: string;
   testimonialText: string;
-  createdAt: any; // Firestore Timestamp on server, Date on client after fetch
-  updatedAt?: any; // Firestore Timestamp on server, Date on client after fetch. Making this optional as it might not always be present.
+  createdAt: string | null; // ISO date string or null
+  updatedAt?: string | null; // ISO date string, null, or undefined
   dataAiHint?: string;
 }
 

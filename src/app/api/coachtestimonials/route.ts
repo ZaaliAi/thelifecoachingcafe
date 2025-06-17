@@ -12,13 +12,20 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const coachId = searchParams.get('coachId');
 
-    if (!coachId) {
-      return NextResponse.json({ error: 'Bad Request: coachId query parameter is required' }, { status: 400 });
+    if (!coachId || typeof coachId !== 'string' || coachId.trim() === '') {
+      return NextResponse.json({ error: 'Bad Request: coachId query parameter is required and must be a non-empty string' }, { status: 400 });
     }
 
-    const testimonialsRef = adminFirestore.collection('coachtestimonials'); // UPDATED
+    const testimonialsRef = adminFirestore.collection('coachtestimonials');
     const q = testimonialsRef.where('coachId', '==', coachId).orderBy('createdAt', 'desc');
-    const snapshot = await q.get();
+
+    let snapshot;
+    try {
+      snapshot = await q.get();
+    } catch (dbError: any) {
+      console.error('Firestore error while fetching testimonials:', dbError);
+      return NextResponse.json({ error: 'Internal Server Error: Failed to retrieve data from database' }, { status: 500 });
+    }
 
     if (snapshot.empty) {
       return NextResponse.json([], { status: 200 });
@@ -26,44 +33,73 @@ export async function GET(request: Request) {
 
     const testimonials: Testimonial[] = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
+      try {
+        const data = doc.data();
+        if (!data) {
+          console.warn(`Document ${doc.id} in coachtestimonials has no data. Skipping.`);
+          return; // Skip this document
+        }
 
-      let createdAtISO: string | null = null;
-      if (data.createdAt && data.createdAt instanceof FirebaseFirestoreNamespace.Timestamp) {
-        createdAtISO = data.createdAt.toDate().toISOString();
-      } else if (data.createdAt) {
-        // Log a warning if createdAt exists but is not a valid Timestamp
-        console.warn(`Document ${doc.id} in coachtestimonials has invalid createdAt:`, data.createdAt);
-      } else {
-        // Log a warning if createdAt is missing, as it's expected.
-        console.warn(`Document ${doc.id} in coachtestimonials is missing createdAt.`);
+        let createdAtISO: string | null = null;
+        if (data.createdAt) {
+          if (data.createdAt instanceof FirebaseFirestoreNamespace.Timestamp) {
+            try {
+              createdAtISO = data.createdAt.toDate().toISOString();
+            } catch (e) {
+              console.warn(`Document ${doc.id} in coachtestimonials has createdAt that failed toDate().toISOString():`, data.createdAt, e);
+            }
+          } else {
+            console.warn(`Document ${doc.id} in coachtestimonials has createdAt that is not a Firestore Timestamp:`, data.createdAt);
+          }
+        } else {
+          console.warn(`Document ${doc.id} in coachtestimonials is missing createdAt.`);
+        }
+
+        let updatedAtISO: string | undefined = undefined;
+        if (data.updatedAt) {
+          if (data.updatedAt instanceof FirebaseFirestoreNamespace.Timestamp) {
+            try {
+              updatedAtISO = data.updatedAt.toDate().toISOString();
+            } catch (e) {
+              console.warn(`Document ${doc.id} in coachtestimonials has updatedAt that failed toDate().toISOString():`, data.updatedAt, e);
+            }
+          } else {
+            console.warn(`Document ${doc.id} in coachtestimonials has updatedAt that is not a Firestore Timestamp:`, data.updatedAt);
+          }
+        }
+
+        if (!data.coachId || !data.clientName || !data.testimonialText) {
+          console.warn(`Document ${doc.id} is missing one or more essential fields (coachId, clientName, testimonialText). Skipping.`);
+          return; // Skip this document
+        }
+
+        const testimonial: Testimonial = {
+          id: doc.id,
+          coachId: data.coachId,
+          clientName: data.clientName,
+          testimonialText: data.testimonialText,
+          createdAt: createdAtISO,
+          updatedAt: updatedAtISO,
+          dataAiHint: data.dataAiHint,
+        };
+        testimonials.push(testimonial);
+
+      } catch (error: any) {
+        console.error(`Error processing document ${doc.id} in coachtestimonials:`, error);
+        // Decide if you want to skip this doc or stop the whole process
+        // For now, we log and skip.
       }
-
-      let updatedAtISO: string | undefined = undefined;
-      if (data.updatedAt && data.updatedAt instanceof FirebaseFirestoreNamespace.Timestamp) {
-        updatedAtISO = data.updatedAt.toDate().toISOString();
-      } else if (data.updatedAt) {
-        // Log a warning if updatedAt exists but is not a valid Timestamp
-        console.warn(`Document ${doc.id} in coachtestimonials has invalid updatedAt:`, data.updatedAt);
-      }
-
-      const testimonial: Testimonial = {
-        id: doc.id,
-        coachId: data.coachId,
-        clientName: data.clientName,
-        testimonialText: data.testimonialText,
-        createdAt: createdAtISO, // Use processed value
-        updatedAt: updatedAtISO, // Use processed value
-        dataAiHint: data.dataAiHint,
-      };
-      testimonials.push(testimonial);
     });
 
     return NextResponse.json(testimonials, { status: 200 });
 
   } catch (error: any) {
-    console.error('Error fetching testimonials:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error fetching testimonials (outer catch):', error);
+    // Check if the error is something specific we can handle, e.g., URL parsing error
+    if (error instanceof TypeError && error.message.includes("Invalid URL")) {
+      return NextResponse.json({ error: 'Bad Request: Invalid URL format' }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal Server Error while fetching testimonials' }, { status: 500 });
   }
 }
 
