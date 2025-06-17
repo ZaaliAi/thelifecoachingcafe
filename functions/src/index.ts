@@ -19,8 +19,7 @@ const corsConfig = [
   /thelifecoachingcafe\.com$/,
   /localhost:3000/,
   /localhost:3001/,
-  /3000-firebase-studio-1747477108457\.cluster-6vyo4gb53jczovun3dxslzjahs\.cloudworkstations\.dev/,
-  /3001-firebase-studio-1747477108457\.cluster-6vyo4gb53jczovun3dxslzjahs\.cloudworkstations\.dev/,
+  /https:\/\/\d+-firebase-studio-1747477108457\.cluster-6vyo4gb53jczovun3dxslzjahs\.cloudworkstations\.dev/,
 ];
 
 /**
@@ -198,15 +197,42 @@ export const onNewChatMessage = onDocumentCreated(
       const snap = event.data;
       if (!snap) return;
 
-      const {recipientId, senderName} = snap.data();
-      const dashboardUrl = `${productionBaseUrl}/dashboard`;
+      const {recipientId, senderName, conversationId} = snap.data();
 
-      const userRecord = await admin.auth().getUser(recipientId);
-      await sendEmail(userRecord.email!, "new_chat_message", {
-        senderName: senderName || "Someone",
-        recipientName: userRecord.displayName || "there",
-        dashboardUrl: dashboardUrl,
-      });
+      try {
+        const userDoc = await admin.firestore().collection("users").doc(recipientId).get();
+        if (!userDoc.exists) {
+          console.error(`User profile for recipient ${recipientId} not found.`);
+          return;
+        }
+        const userData = userDoc.data();
+        const userRole = userData?.role;
+
+        let dashboardPath;
+        switch (userRole) {
+          case "coach":
+            dashboardPath = "/dashboard/coach/messages";
+            break;
+          case "admin":
+            dashboardPath = "/dashboard/admin/messages";
+            break;
+          case "user":
+          default:
+            dashboardPath = "/dashboard/user/messages";
+            break;
+        }
+
+        const conversationUrl = `${productionBaseUrl}${dashboardPath}/${conversationId}`;
+
+        const userRecord = await admin.auth().getUser(recipientId);
+        await sendEmail(userRecord.email!, "new_chat_message", {
+          senderName: senderName || "Someone",
+          recipientName: userRecord.displayName || "there",
+          conversationUrl: conversationUrl,
+        });
+      } catch (error) {
+        console.error(`Error processing new chat message for recipient ${recipientId}:`, error);
+      }
     }
 );
 
@@ -215,6 +241,7 @@ export const onNewChatMessage = onDocumentCreated(
  * @param {string} authorId ID of the blog author.
  * @param {string} blogTitle Title of the blog post.
  * @param {string} template Template name for the email.
+ * @param {string} slug The slug of the blog post.
  */
 const sendBlogEmail = async (
     authorId: string,

@@ -13,8 +13,19 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Loader2, UploadCloud, Trash2, Image as ImageIcon, PlusCircle, Sparkles } from 'lucide-react';
 import NextImage from 'next/image';
-import { useAuth } from '@/lib/auth'; // Added
-import { initiateStripeCheckout } from '@/lib/subscriptionUtils'; // Added
+import { useAuth } from '@/lib/auth';
+import { initiateStripeCheckout } from '@/lib/subscriptionUtils';
+
+// Helper to remove undefined properties from an object
+const pruneUndefined = (obj: any) => {
+  const newObj: any = {};
+  Object.keys(obj).forEach(key => {
+    if (obj[key] !== undefined) {
+      newObj[key] = obj[key];
+    }
+  });
+  return newObj;
+};
 
 // Helper to prepare array-like fields for string input
 const prepareArrayLikeFieldForInput = (fieldData?: string[] | string): string => {
@@ -221,7 +232,7 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     }
 
     try {
-      await onSubmit(submitData);
+      await onSubmit(pruneUndefined(submitData));
       toast({ title: 'Success', description: 'Profile update request submitted!' });
       if (isPremiumCoach) {
         setImageAction('keep');
