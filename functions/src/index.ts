@@ -313,7 +313,7 @@ export const createCheckoutSessionCallable = onCall(
       const userId = request.auth.uid;
 
       const stripe = new Stripe(stripeSecretKey.value(), {
-        apiVersion: "2025-05-28.basil",
+        apiVersion: "2024-04-10",
       });
 
       try {
