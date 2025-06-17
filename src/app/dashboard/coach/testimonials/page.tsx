@@ -29,11 +29,25 @@ export default function CoachTestimonialsPage() {
   // Fetch testimonials
   useEffect(() => {
     if (authLoading) return;
-    if (!user || user.role !== 'coach') {
-      router.push('/login'); // Or some other appropriate page
+
+    if (!user) {
+      router.push('/login');
       return;
     }
 
+    if (user.role !== 'coach') {
+      router.push('/dashboard'); // Or a generic dashboard / access-denied page
+      toast({ title: 'Access Denied', description: 'This page is for coaches only.', variant: 'destructive' });
+      return;
+    }
+
+    if (user.subscriptionTier !== 'premium') {
+      router.push('/dashboard/coach'); // Redirect non-premium coaches to their main dashboard
+      toast({ title: 'Premium Feature', description: 'Managing testimonials is a premium feature. Please upgrade your plan.', variant: 'destructive' });
+      return;
+    }
+
+    // User is authenticated, is a coach, and is premium. Proceed to fetch testimonials.
     const fetchTestimonials = async () => {
       setIsLoadingTestimonials(true);
       setError(null);
@@ -162,20 +176,39 @@ export default function CoachTestimonialsPage() {
   }
 
   if (!user && !authLoading) {
-     // This should ideally be handled by a top-level layout or router middleware
-     // For now, just preventing render. User will be redirected by useEffect.
+     // This case is primarily handled by the useEffect redirect, but good for initial render before effect runs
     return null;
   }
 
-  if (user && user.role !== 'coach') {
+  // Specific handling for non-premium coaches after loading state, before rendering main content
+  if (user && user.role === 'coach' && user.subscriptionTier !== 'premium' && !authLoading) {
+    // The useEffect above should have already redirected.
+    // This is a fallback or for cases where redirect hasn't happened yet or to show a message.
+    // For now, relying on useEffect redirect mostly. Can enhance this with a message if needed.
+    // Or, to be more explicit and show a message before potential redirect:
     return (
       <div className="container mx-auto p-4 text-center">
-        <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
-        <p>You do not have permission to view this page.</p>
+        <h1 className="text-2xl font-bold text-primary">Premium Feature</h1>
+        <p className="my-4">Managing client testimonials is a premium feature.</p>
+        <p>Please upgrade your plan to access this page.</p>
+        <Button onClick={() => router.push('/pricing')} className="mt-6">View Pricing Plans</Button>
+        {/* Assuming /pricing is the route for upgrade plans */}
       </div>
     );
   }
 
+  // General access denied for non-coaches (also handled by useEffect, but good as a fallback)
+  if (user && user.role !== 'coach' && !authLoading) {
+    return (
+      <div className="container mx-auto p-4 text-center">
+        <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
+        <p>You do not have permission to view this page.</p>
+        <Button onClick={() => router.push('/dashboard')} className="mt-6">Go to Dashboard</Button>
+      </div>
+    );
+  }
+
+  // If user is a coach and premium (or checks passed in useEffect), render the page:
   return (
     <div className="container mx-auto p-4 md:p-8">
       <h1 className="text-3xl font-bold mb-8">Manage Your Testimonials</h1>

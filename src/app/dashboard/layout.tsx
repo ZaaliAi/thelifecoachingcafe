@@ -15,6 +15,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   roles: ('user' | 'coach' | 'admin')[];
+  requiresPremium?: boolean; // Added for premium-only links
 }
 
 const navItems: NavItem[] = [
@@ -27,7 +28,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/coach', label: 'Overview', icon: LayoutDashboard, roles: ['coach'] },
   { href: '/dashboard/coach/profile', label: 'Edit Profile', icon: Edit3, roles: ['coach'] },
   { href: '/dashboard/coach/blog', label: 'My Blog Posts', icon: FileText, roles: ['coach'] },
-  { href: '/dashboard/coach/testimonials', label: 'My Testimonials', icon: MessageSquareText, roles: ['coach'] },
+  { href: '/dashboard/coach/testimonials', label: 'My Testimonials', icon: MessageSquareText, roles: ['coach'], requiresPremium: true },
   { href: '/dashboard/coach/messages', label: 'Client Messages', icon: MessageSquare, roles: ['coach'] },
   { href: '/dashboard/coach/billing', label: 'Billing', icon: CreditCard, roles: ['coach'] },
   { href: '/dashboard/coach/settings', label: 'Settings', icon: Settings, roles: ['coach'] },
@@ -60,7 +61,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
   
-  const accessibleNavItems = navItems.filter(item => item.roles.includes(user.role));
+  const accessibleNavItems = navItems.filter(item => {
+    if (!item.roles.includes(user.role)) {
+      return false;
+    }
+    if (item.requiresPremium) {
+      // Assuming user object from useAuth includes subscriptionTier
+      return user.subscriptionTier === 'premium';
+    }
+    return true;
+  });
 
   return (
     <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]"> {/* Adjust based on header/footer height */}
