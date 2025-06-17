@@ -2,7 +2,7 @@
 import { getUserProfile, getAllCoachIds } from "@/lib/firestore";
 import { mockCoaches } from "@/data/mock";
 import CoachProfile from "@/components/CoachProfile";
-import type { Coach, FirestoreTimestamp } from "@/types";
+import type { Coach, FirestoreTimestamp, Testimonial } from "@/types"; // Added Testimonial
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
@@ -84,6 +84,22 @@ export default async function Page({ params }: PageProps) {
     return value;
   }));
 
+  // Fetch testimonials if coach is premium
+  let testimonials: Testimonial[] = [];
+  if (coachData && coachData.subscriptionTier === 'premium') {
+    try {
+      const appURL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Fallback for local dev
+      const testimonialsResponse = await fetch(`${appURL}/api/coachtestimonials?coachId=${params.id}`, { cache: 'no-store' }); // UPDATED // Disable cache for dynamic data
+      if (testimonialsResponse.ok) {
+        testimonials = await testimonialsResponse.json();
+      } else {
+        console.error(`Failed to fetch testimonials. Status: ${testimonialsResponse.status}, Body: ${await testimonialsResponse.text()}`);
+      }
+    } catch (error) {
+      console.error("Error fetching testimonials:", error);
+    }
+  }
+
   const personSchema = {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -128,7 +144,7 @@ export default async function Page({ params }: PageProps) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-      <CoachProfile coachData={serializableCoachData} coachId={params.id} />
+      <CoachProfile coachData={serializableCoachData} coachId={params.id} testimonials={testimonials} />
     </>
   );
 }

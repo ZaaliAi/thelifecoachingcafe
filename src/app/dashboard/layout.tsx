@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard } from 'lucide-react'; // Added Heart, UserX, and CreditCard
+import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react'; // Added Heart, UserX, CreditCard and MessageSquareText
 import React, { useEffect } from 'react';
 
 interface NavItem {
@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/coach', label: 'Overview', icon: LayoutDashboard, roles: ['coach'] },
   { href: '/dashboard/coach/profile', label: 'Edit Profile', icon: Edit3, roles: ['coach'] },
   { href: '/dashboard/coach/blog', label: 'My Blog Posts', icon: FileText, roles: ['coach'] },
+  { href: '/dashboard/coach/testimonials', label: 'My Testimonials', icon: MessageSquareText, roles: ['coach'] },
   { href: '/dashboard/coach/messages', label: 'Client Messages', icon: MessageSquare, roles: ['coach'] },
   { href: '/dashboard/coach/billing', label: 'Billing', icon: CreditCard, roles: ['coach'] },
   { href: '/dashboard/coach/settings', label: 'Settings', icon: Settings, roles: ['coach'] },
