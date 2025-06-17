@@ -313,7 +313,7 @@ export const createCheckoutSessionCallable = onCall(
       const userId = request.auth.uid;
 
       const stripe = new Stripe(stripeSecretKey.value(), {
-        apiVersion: "2024-04-10",
+        apiVersion: "2025-05-28.basil",
       });
 
       try {
@@ -348,7 +348,6 @@ export const createCheckoutSessionCallable = onCall(
 /**
  * Stripe webhook handler to process subscription payments.
  */
-/*
 export const onSubscriptionActivated = onRequest(
     {
       secrets: [stripeSecretKey, stripeWebhookSecret],
@@ -428,4 +427,3 @@ export const onSubscriptionActivated = onRequest(
       response.status(200).send("Event received.");
     }
 );
-*/
