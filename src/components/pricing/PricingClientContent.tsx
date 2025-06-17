@@ -223,26 +223,26 @@ export default function PricingClientContent() {
         </Card>
 
         {premiumProduct && premiumPrice ? (
-          <Card key={premiumProduct.id} className="flex flex-col shadow-lg shadow-xl border-2 border-custom-gold relative overflow-hidden bg-gradient-to-br from-light-gold-bg to-white">
-            <div className="absolute top-0 right-0 bg-custom-gold text-black px-3 py-1 text-sm font-semibold rounded-bl-md">
+          <Card key={premiumProduct.id} className="flex flex-col shadow-2xl border-2 border-primary relative overflow-hidden bg-gray-800 text-white">
+            <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-bl-md">
               Most Popular
             </div>
-            <CardHeader className="bg-custom-gold text-black p-6">
-              <CardTitle className="text-2xl flex items-center text-black">
-                <Crown className="mr-3 h-7 w-7 text-black" />
+            <CardHeader className="p-6">
+              <CardTitle className="text-2xl flex items-center text-white">
+                <Crown className="mr-3 h-7 w-7 text-primary" />
                 {premiumProduct.name || 'Premium Plan'}
               </CardTitle>
-                <CardDescription className="text-black/80">{premiumDisplayDescription}</CardDescription>
+                <CardDescription className="text-gray-300">{premiumDisplayDescription}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow space-y-4 p-6">
               <p className="text-3xl font-bold">
-                £{premiumPriceAmount} <span className="text-sm font-normal text-muted-foreground">/ month</span>
+                £{premiumPriceAmount} <span className="text-sm font-normal text-gray-400">/ month</span>
               </p>
               <ul className="space-y-2">
                 {premiumFeatures.map((feature, index) => (
                   <li key={index} className="flex items-center">
-                    <Check className="h-5 w-5 text-custom-gold mr-2 flex-shrink-0" />
-                    <span className="text-foreground">{feature}</span>
+                    <Check className="h-5 w-5 text-primary mr-2 flex-shrink-0" />
+                    <span>{feature}</span>
                   </li>
                 ))}
               </ul>
@@ -253,9 +253,10 @@ export default function PricingClientContent() {
                   priceId={premiumPrice.id}
                   userId={userId}
                   buttonText={`Upgrade to ${premiumProduct.name || 'Premium'}`}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 />
               ) : (
-                <Button asChild size="lg" className="w-full bg-custom-gold hover:bg-yellow-600 text-black">
+                <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Link href={`/register-coach?planId=${premiumPrice.id}`}>Sign Up for {premiumProduct.name || 'Premium'}</Link>
                 </Button>
               )}
