@@ -1,11 +1,10 @@
-
 import {
   collection, doc, setDoc, getDoc, addDoc, query, orderBy, getDocs,
   serverTimestamp, limit as firestoreLimit, updateDoc, where, deleteDoc, writeBatch, runTransaction, collectionGroup, getCountFromServer,
   Timestamp, arrayUnion, arrayRemove, documentId
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage, Testimonial } from '@/types';
+import type { FirestoreUserProfile, FirestoreBlogPost, Coach, BlogPost, UserRole, CoachStatus, Message as MessageType, FirestoreMessage, Testimonial, UserProfile } from '@/types'; // Added UserProfile
 
 // --- Helper Function to Generate Conversation ID ---
 const generateConversationId = (userId1: string, userId2: string): string => {
@@ -642,3 +641,44 @@ export async function getFavoriteCoaches(userId: string): Promise<Coach[]> {
   }
   return coaches;
 }
+
+/**
+ * Updates a user's profile document in Firestore.
+ * @param userId The ID of the user to update.
+ * @param data An object containing the fields to update.
+ */
+export const updateUserProfile = async (userId: string, data: Partial<UserProfile>): Promise<void> => {
+  if (!userId) {
+    console.error("updateUserProfile error: User ID is required.");
+    throw new Error("User ID is required to update profile.");
+  }
+  if (!data || Object.keys(data).length === 0) {
+    console.warn("updateUserProfile warning: No data provided to update profile. Skipping update.");
+    // Depending on desired behavior, you might throw an error or just return
+    // throw new Error("No data provided to update profile.");
+    return; // Or simply do nothing if empty data is not an error
+  }
+
+  const userDocRef = doc(db, 'users', userId);
+
+  const dataToUpdate: Partial<UserProfile> & { updatedAt: any } = {
+    ...data,
+    updatedAt: serverTimestamp(),
+  };
+
+  // Optional: Clean data further if needed.
+  // For example, if certain fields should be explicitly removed if they are empty strings,
+  // rather than saving empty strings. The form currently converts empty URL strings to null.
+  // Example: if (dataToUpdate.bio === "") { delete dataToUpdate.bio; }
+  // However, updateDoc with undefined/null values for fields usually works as expected (removes or sets to null).
+
+  try {
+    console.log(`Attempting to update user profile for ${userId} with data:`, JSON.parse(JSON.stringify(dataToUpdate))); // Stringify for serverTimestamp object
+    await updateDoc(userDocRef, dataToUpdate);
+    console.log(`User profile for ${userId} updated successfully.`);
+  } catch (error) {
+    console.error(`Error updating user profile for ${userId}:`, error);
+    // Re-throw the error so the calling function can handle it (e.g., show a toast)
+    throw error;
+  }
+};
