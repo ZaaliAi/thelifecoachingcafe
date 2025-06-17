@@ -11,8 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Loader2, UploadCloud, Trash2, Image as ImageIcon, PlusCircle, Sparkles } from 'lucide-react'; // Added Sparkles
+import { Loader2, UploadCloud, Trash2, Image as ImageIcon, PlusCircle, Sparkles } from 'lucide-react';
 import NextImage from 'next/image';
+import { useAuth } from '@/lib/auth'; // Added
+import { initiateStripeCheckout } from '@/lib/subscriptionUtils'; // Added
 
 // Helper to prepare array-like fields for string input
 const prepareArrayLikeFieldForInput = (fieldData?: string[] | string): string => {
@@ -70,10 +72,24 @@ interface EditCoachProfileFormProps {
 const commaStringToArray = (str?: string): string[] =>
   str ? str.split(',').map(item => item.trim()).filter(item => item !== '') : [];
 
-const PremiumFeatureMessage: React.FC<{ featureName: string }> = ({ featureName }) => (
+interface PremiumFeatureMessageProps {
+  featureName: string;
+  onUpgradeClick: () => void;
+  isUpgrading: boolean;
+}
+
+const PremiumFeatureMessage: React.FC<PremiumFeatureMessageProps> = ({ featureName, onUpgradeClick, isUpgrading }) => (
   <p className="text-xs text-muted-foreground mt-1">
     {featureName} is a premium feature.
-    <Button type="button" variant="link" size="xs" className="p-1 h-auto" onClick={() => { /* TODO: Handle upgrade click, e.g., router.push('/pricing') */ }}>
+    <Button
+      type="button"
+      variant="link"
+      size="xs"
+      className="p-1 h-auto"
+      onClick={onUpgradeClick}
+      disabled={isUpgrading}
+    >
+      {isUpgrading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
       Upgrade to Premium
     </Button>
   </p>
@@ -81,7 +97,9 @@ const PremiumFeatureMessage: React.FC<{ featureName: string }> = ({ featureName 
 
 export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ initialData, onSubmit, isPremiumCoach }) => {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get user for upgrade click
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUpgrading, setIsUpgrading] = useState(false); // State for upgrade button
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting: rhfIsSubmitting }, getValues } = useForm<EditCoachProfileFormData>({
     resolver: zodResolver(editCoachProfileSchema),
@@ -161,6 +179,27 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     }
   };
 
+  const handleUpgradeClick = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "You need to be logged in to upgrade.", variant: "destructive" });
+      return;
+    }
+    setIsUpgrading(true);
+    const result = await initiateStripeCheckout({
+      priceId: "price_1RURVlG6UVJU45QN1mByj8Fc", // Premium price ID
+      user: user,
+      // Using default successUrl and cancelUrl from the utility function
+    });
+
+    if (result?.error) {
+      toast({ title: "Upgrade Error", description: result.error, variant: "destructive" });
+    } else if (result?.stripeError) {
+      toast({ title: "Payment Error", description: result.stripeError.message, variant: "destructive" });
+    }
+    // If successful, Stripe redirects, so no success toast needed here.
+    setIsUpgrading(false); // Only sets if redirect doesn't happen (i.e. error)
+  };
+
   const onFormSubmit = async (data: EditCoachProfileFormData) => {
     setUiIsSubmitting(true);
     const submitData: EditProfileFormSubmitData = {
@@ -168,25 +207,23 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
       specialties: commaStringToArray(data.specialties),
       keywords: commaStringToArray(data.keywords),
       certifications: commaStringToArray(data.certifications),
-      linkedInUrl: isPremiumCoach ? (data.linkedInUrl?.trim() || undefined) : undefined, // Only include if premium
-      websiteUrl: isPremiumCoach ? (data.websiteUrl?.trim() || undefined) : undefined, // Only include if premium
-      introVideoUrl: isPremiumCoach ? (data.introVideoUrl?.trim() || undefined) : undefined, // Only include if premium
+      linkedInUrl: isPremiumCoach ? (data.linkedInUrl?.trim() || undefined) : undefined,
+      websiteUrl: isPremiumCoach ? (data.websiteUrl?.trim() || undefined) : undefined,
+      introVideoUrl: isPremiumCoach ? (data.introVideoUrl?.trim() || undefined) : undefined,
       availability: data.availability,
-      selectedFile: isPremiumCoach && imageAction === 'replace' ? selectedFile : null, // Only include if premium
-      imageAction: isPremiumCoach ? imageAction : 'keep', // If not premium, always 'keep' existing or no image
+      selectedFile: isPremiumCoach && imageAction === 'replace' ? selectedFile : null,
+      imageAction: isPremiumCoach ? imageAction : 'keep',
       currentProfileImageUrl: initialData.profileImageUrl || null,
     };
-     // If not premium, ensure profileImageUrl is not changed from initialData for submission
     if (!isPremiumCoach) {
         submitData.imageAction = 'keep';
         submitData.selectedFile = null;
     }
 
-
     try {
       await onSubmit(submitData);
       toast({ title: 'Success', description: 'Profile update request submitted!' });
-      if (isPremiumCoach) { // Only reset image actions if they could have been changed
+      if (isPremiumCoach) {
         setImageAction('keep');
         setSelectedFile(null);
         setImagePreviewUrl(null);
@@ -206,7 +243,7 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
   else if (imageAction === 'remove') displayImageUrl = null;
   else if (initialData.profileImageUrl) displayImageUrl = initialData.profileImageUrl;
 
-  const totalIsSubmitting = rhfIsSubmitting || uiIsSubmitting;
+  const totalIsSubmitting = rhfIsSubmitting || uiIsSubmitting || isUpgrading;
 
   return (
     <Card>
@@ -238,12 +275,12 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
                     <Trash2 className="mr-2 h-4 w-4" /> Remove Image
                   </Button>
                 )}
-                { imageAction === 'remove' && isPremiumCoach && ( // Only show undo if premium and action was remove
+                { imageAction === 'remove' && isPremiumCoach && (
                      <Button type="button" variant="ghost" size="sm" onClick={handleUndoImageAction} disabled={totalIsSubmitting}>Undo Remove</Button>
                 )}
               </div>
             </div>
-            {!isPremiumCoach && <PremiumFeatureMessage featureName="Profile picture management" />}
+            {!isPremiumCoach && <PremiumFeatureMessage featureName="Profile picture management" onUpgradeClick={handleUpgradeClick} isUpgrading={isUpgrading} />}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -264,26 +301,25 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
                 <Label htmlFor="linkedInUrl" className="flex items-center">
                   LinkedIn Profile URL {isPremiumCoach && <Sparkles className="ml-1 h-4 w-4 text-yellow-500" />}
                 </Label>
-                <Controller name="linkedInUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://linkedin.com/in/yourprofile" disabled={!isPremiumCoach} />} />
+                <Controller name="linkedInUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://linkedin.com/in/yourprofile" disabled={!isPremiumCoach || totalIsSubmitting} />} />
                 {errors.linkedInUrl && <p className="text-sm text-destructive">{errors.linkedInUrl.message}</p>}
-                {!isPremiumCoach && <PremiumFeatureMessage featureName="LinkedIn URL" />}
+                {!isPremiumCoach && <PremiumFeatureMessage featureName="LinkedIn URL" onUpgradeClick={handleUpgradeClick} isUpgrading={isUpgrading} />}
               </div>
-              { /* Conditionally render premium fields or their disabled state with message */ }
               <div>
                 <Label htmlFor="websiteUrl" className="flex items-center">
                   Website URL {isPremiumCoach && <Sparkles className="ml-1 h-4 w-4 text-yellow-500" />}
                 </Label>
-                <Controller name="websiteUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://yourwebsite.com" disabled={!isPremiumCoach} />} />
+                <Controller name="websiteUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://yourwebsite.com" disabled={!isPremiumCoach || totalIsSubmitting} />} />
                 {errors.websiteUrl && <p className="text-sm text-destructive">{errors.websiteUrl.message}</p>}
-                {!isPremiumCoach && <PremiumFeatureMessage featureName="Website URL" />}
+                {!isPremiumCoach && <PremiumFeatureMessage featureName="Website URL" onUpgradeClick={handleUpgradeClick} isUpgrading={isUpgrading} />}
               </div>
               <div>
                 <Label htmlFor="introVideoUrl" className="flex items-center">
                   Intro Video URL {isPremiumCoach && <Sparkles className="ml-1 h-4 w-4 text-yellow-500" />}
                 </Label>
-                <Controller name="introVideoUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://youtube.com/watch?v=yourvideo" disabled={!isPremiumCoach} />} />
+                <Controller name="introVideoUrl" control={control} render={({ field }) => <Input {...field} type="url" value={field.value ?? ''} placeholder="https://youtube.com/watch?v=yourvideo" disabled={!isPremiumCoach || totalIsSubmitting} />} />
                 {errors.introVideoUrl && <p className="text-sm text-destructive">{errors.introVideoUrl.message}</p>}
-                {!isPremiumCoach && <PremiumFeatureMessage featureName="Intro Video URL" />}
+                {!isPremiumCoach && <PremiumFeatureMessage featureName="Intro Video URL" onUpgradeClick={handleUpgradeClick} isUpgrading={isUpgrading} />}
               </div>
             </div>
           </div>
