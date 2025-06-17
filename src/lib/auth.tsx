@@ -17,6 +17,7 @@ import { db } from './firebase';
 
 interface AuthContextType {
   user: User | null;
+  firebaseUser: FirebaseUser | null; // <-- Add this line
   login: (email: string, pass: string) => Promise<void>;
   signup: (name: string, email: string, pass: string, role: UserRole, additionalData?: Partial<FirestoreUserProfile>) => Promise<FirebaseUser | null>;
   logout: () => Promise<void>;
@@ -251,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const providerValue = { user, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken };
+  const providerValue = { user, firebaseUser: firebaseUserSt, login: loginUser, signup: signupUser, logout: logoutUser, loading, getFirebaseAuthToken };
 
   return (
     <AuthContext.Provider value={providerValue}>

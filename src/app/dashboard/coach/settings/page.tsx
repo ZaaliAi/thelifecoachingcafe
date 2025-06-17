@@ -9,15 +9,14 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2, KeyRound, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { deleteUserAccount, reauthenticateUser as reauthenticateUserForDelete } from '@/lib/firebase';
-import { updateUserProfile } from '@/lib/firestore'; // Added for email update in Firestore
+import { updateUserProfile } from '@/lib/firestore';
 
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-// Firebase auth functions for password change & email change
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail, sendEmailVerification } from 'firebase/auth';
+// Firebase auth functions for password change, email change & account deletion
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateEmail, sendEmailVerification, deleteUser } from 'firebase/auth';
 
 // Zod Schema for Password Change
 const passwordChangeSchema = z.object({
@@ -45,7 +44,7 @@ type DeleteAccountFormData = z.infer<typeof deleteAccountSchema>;
 
 
 export default function SettingsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, firebaseUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -63,21 +62,28 @@ export default function SettingsPage() {
   });
 
   const onReauthenticateAndDelete: SubmitHandler<DeleteAccountFormData> = async (data) => {
-    if (!user) {
-      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+    if (!firebaseUser || !firebaseUser.email) {
+      toast({ title: "Error", description: "You must be logged in to perform this action.", variant: "destructive" });
       return;
     }
     setIsDeleting(true);
     try {
-      await reauthenticateUserForDelete(user, data.password);
-      await deleteUserAccount();
+      const credential = EmailAuthProvider.credential(firebaseUser.email, data.password);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await deleteUser(firebaseUser);
       toast({ title: "Account Deleted", description: "Your account has been successfully deleted." });
       router.push('/');
     } catch (error: any) {
       console.error("Error deleting account:", error);
+      let errorMessage = "Failed to delete account. Please try again.";
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = "Incorrect password. Please try again.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many attempts. Please try again later.";
+      }
       toast({
         title: "Error Deleting Account",
-        description: error.message || "Failed to delete account. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -99,14 +105,14 @@ export default function SettingsPage() {
   });
 
   const onPasswordChangeSubmit: SubmitHandler<PasswordChangeFormData> = async (data) => {
-    if (!user || !user.email) {
+    if (!firebaseUser || !firebaseUser.email) {
       toast({ title: "Error", description: "User not found. Please re-login.", variant: "destructive" });
       return;
     }
     try {
-      const credential = EmailAuthProvider.credential(user.email, data.currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, data.newPassword);
+      const credential = EmailAuthProvider.credential(firebaseUser.email, data.currentPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await updatePassword(firebaseUser, data.newPassword);
       toast({ title: "Success!", description: "Password updated successfully." });
       resetPasswordForm();
     } catch (error: any) {
@@ -137,26 +143,24 @@ export default function SettingsPage() {
   });
 
   const onEmailChangeSubmit: SubmitHandler<EmailChangeFormData> = async (data) => {
-    if (!user || !user.email) {
+    if (!firebaseUser || !firebaseUser.email) {
       toast({ title: "Error", description: "User not found. Please re-login.", variant: "destructive" });
       return;
     }
 
-    if (user.email === data.newEmail) {
+    if (firebaseUser.email === data.newEmail) {
       toast({ title: "Info", description: "The new email address is the same as your current one.", variant: "info" });
       return;
     }
 
     try {
-      const credential = EmailAuthProvider.credential(user.email, data.currentPasswordForEmail);
-      await reauthenticateWithCredential(user, credential);
-      // toast({ title: "Re-authentication successful", description: "Proceeding to update email address." }); // Optional
-
-      await updateEmail(user, data.newEmail);
-      // toast({ title: "Email Updated in Auth", description: "Attempting to send verification email and update profile."}); // Optional
+      const credential = EmailAuthProvider.credential(firebaseUser.email, data.currentPasswordForEmail);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      
+      await updateEmail(firebaseUser, data.newEmail);
 
       try {
-         await sendEmailVerification(user);
+         await sendEmailVerification(firebaseUser);
          toast({ title: "Verification Email Sent", description: `A verification email has been sent to ${data.newEmail}. Please verify your new email address.` });
       } catch (verificationError: any) {
          console.error("Error sending verification email:", verificationError);
@@ -164,7 +168,7 @@ export default function SettingsPage() {
       }
 
       try {
-         await updateUserProfile(user.id, { email: data.newEmail });
+         await updateUserProfile(firebaseUser.uid, { email: data.newEmail });
          toast({ title: "Profile Updated", description: "Email updated in your profile." });
       } catch (firestoreError: any) {
          console.error("Error updating email in Firestore:", firestoreError);
@@ -230,7 +234,7 @@ export default function SettingsPage() {
                 control={emailControl}
                 render={({ field }) => <Input id="currentPasswordForEmail" type="password" {...field} placeholder="Enter your current password" />}
               />
-              {emailErrors.currentPasswordForEmail && <p className="text-sm text-destructive mt-1">{emailErrors.currentPasswordForEmail.message}</p>}
+              {emailErrors.current_password_for_email && <p className="text-sm text-destructive mt-1">{emailErrors.currentPasswordForEmail.message}</p>}
             </div>
           </CardContent>
           <CardFooter>
