@@ -170,8 +170,9 @@ export default function CoachProfile({ coachData, coachId, testimonials }: Coach
 
   const isPremium = coach.subscriptionTier === "premium";
   const socials = coach.socialLinks || [];
-  const linkedIn = socials.find((s: any) => s.platform?.toLowerCase().includes("linkedin"));
-  const otherSocials = socials.filter((s: any) => !s.platform?.toLowerCase().includes("linkedin"));
+  // Guard against s.platform being null or undefined before calling toLowerCase() / includes()
+  const linkedIn = socials.find(s => typeof s?.platform === 'string' && s.platform.toLowerCase().includes("linkedin"));
+  const otherSocials = socials.filter(s => typeof s?.platform === 'string' && !s.platform.toLowerCase().includes("linkedin"));
 
   const availabilityByDay: { [key: string]: string[] } = {};
   if (coach.availability && coach.availability.length > 0) {
