@@ -27,14 +27,33 @@ export async function GET(request: Request) {
     const testimonials: Testimonial[] = [];
     snapshot.forEach(doc => {
       const data = doc.data();
-      // Ensure data conforms to the Testimonial type, especially timestamps
+
+      let createdAtISO: string | null = null;
+      if (data.createdAt && data.createdAt instanceof FirebaseFirestoreNamespace.Timestamp) {
+        createdAtISO = data.createdAt.toDate().toISOString();
+      } else if (data.createdAt) {
+        // Log a warning if createdAt exists but is not a valid Timestamp
+        console.warn(`Document ${doc.id} in coachtestimonials has invalid createdAt:`, data.createdAt);
+      } else {
+        // Log a warning if createdAt is missing, as it's expected.
+        console.warn(`Document ${doc.id} in coachtestimonials is missing createdAt.`);
+      }
+
+      let updatedAtISO: string | undefined = undefined;
+      if (data.updatedAt && data.updatedAt instanceof FirebaseFirestoreNamespace.Timestamp) {
+        updatedAtISO = data.updatedAt.toDate().toISOString();
+      } else if (data.updatedAt) {
+        // Log a warning if updatedAt exists but is not a valid Timestamp
+        console.warn(`Document ${doc.id} in coachtestimonials has invalid updatedAt:`, data.updatedAt);
+      }
+
       const testimonial: Testimonial = {
         id: doc.id,
         coachId: data.coachId,
         clientName: data.clientName,
         testimonialText: data.testimonialText,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(), // Fallback for safety
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+        createdAt: createdAtISO, // Use processed value
+        updatedAt: updatedAtISO, // Use processed value
         dataAiHint: data.dataAiHint,
       };
       testimonials.push(testimonial);
