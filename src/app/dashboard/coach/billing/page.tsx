@@ -8,7 +8,7 @@ import { Loader2, CreditCard, Zap } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { doc, getDoc } from "firebase/firestore";
-import { db } from '@/lib/firebase'; // Ensure you have a 'db' export from your firebase config
+import { db } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 
@@ -16,12 +16,11 @@ const createCheckoutSessionCallable = httpsCallable(functions, 'createCheckoutSe
 
 export default function CoachBillingPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [isPremium, setIsPremium] = useState<boolean | null>(null); // null for loading state
+  const [isPremium, setIsPremium] = useState<boolean | null>(null);
   const { toast } = useToast();
-  const { user } = useAuth(); // Using the user object from your auth context
+  const { user, firebaseUser } = useAuth(); // Destructure firebaseUser from useAuth
 
   useEffect(() => {
-    // Check user's subscription status from Firestore
     const checkUserStatus = async () => {
       if (user?.id) {
         const userDocRef = doc(db, "users", user.id);
@@ -54,10 +53,10 @@ export default function CoachBillingPage() {
   const handleManageBilling = async () => {
     setIsLoading(true);
     try {
-      if (!user?.firebaseUser) {
+      if (!firebaseUser) { // Check for firebaseUser
         throw new Error("User not authenticated.");
       }
-      const token = await user.firebaseUser.getIdToken();
+      const token = await firebaseUser.getIdToken(); // Get token from firebaseUser
       const response = await fetch('/api/manage-billing', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },

@@ -1,8 +1,7 @@
 
 import { getUserProfile, getAllCoachIds } from "@/lib/firestore";
-import { mockCoaches } from "@/data/mock";
 import CoachProfile from "@/components/CoachProfile";
-import type { Coach, FirestoreTimestamp, Testimonial } from "@/types"; // Added Testimonial
+import type { Coach, FirestoreTimestamp, Testimonial } from "@/types";
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
@@ -32,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? `Expert in ${coach.specialties.join(', ')}. ${coach.bio?.substring(0, 120)}...`
     : `${coach.bio?.substring(0, 155)}...`;
 
-  const imageUrl = coach.profileImageUrl || '/preview.jpg'; // Fallback image
+  const imageUrl = coach.profileImageUrl || '/preview.jpg';
 
   return {
     title,
@@ -70,10 +69,6 @@ export default async function Page({ params }: PageProps) {
   }
 
   if (!coachData) {
-    coachData = mockCoaches.find(c => c.id === params.id) || null;
-  }
-  
-  if (!coachData) {
     notFound(); 
   }
 
@@ -84,12 +79,11 @@ export default async function Page({ params }: PageProps) {
     return value;
   }));
 
-  // Fetch testimonials if coach is premium
   let testimonials: Testimonial[] = [];
   if (coachData && coachData.subscriptionTier === 'premium') {
     try {
-      const appURL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Fallback for local dev
-      const testimonialsResponse = await fetch(`${appURL}/api/coachtestimonials?coachId=${params.id}`, { cache: 'no-store' }); // UPDATED // Disable cache for dynamic data
+      const appURL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const testimonialsResponse = await fetch(`${appURL}/api/coachtestimonials?coachId=${params.id}`, { cache: 'no-store' });
       if (testimonialsResponse.ok) {
         testimonials = await testimonialsResponse.json();
       } else {
@@ -112,7 +106,7 @@ export default async function Page({ params }: PageProps) {
     "sameAs": [
       ...(coachData.websiteUrl ? [coachData.websiteUrl] : []),
       ...(coachData.socialLinks ? coachData.socialLinks.map(link => link.url) : [])
-    ].filter(Boolean) // Filter out any null/undefined from websiteUrl
+    ].filter(Boolean)
   };
 
   const breadcrumbSchema = {
@@ -134,7 +128,7 @@ export default async function Page({ params }: PageProps) {
       {
         "@type": "ListItem",
         "position": 3,
-        "name": coachData.name.replace(/"/g, '\\"'),
+        "name": coachData.name.replace(/"/g, '"'),
         "item": `https://thelifecoachingcafe.com/coach/${coachData.id}`
       }
     ]
