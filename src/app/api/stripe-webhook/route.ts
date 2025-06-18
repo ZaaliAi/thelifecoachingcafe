@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 import { adminFirestore } from '@/lib/firebaseAdmin';
 import Stripe from 'stripe';
 
-// Initialize Stripe with the secret key for server-side operations
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-04-10', // Use a specific API version
-});
+// Initialize Stripe with the secret key.
+// By not specifying an apiVersion, the Stripe library will automatically use the
+// API version of the incoming webhook event, ensuring compatibility.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 async function handleSubscriptionCreation(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id;
