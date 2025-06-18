@@ -14,13 +14,14 @@ import {
 import { setUserProfile, getUserProfile } from './firestore';
 
 interface AuthContextType {
-  user: User | null; // This will hold the combined user and profile data
+  user: User | null; 
   firebaseUser: FirebaseUser | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   signup: (name: string, email: string, pass: string, role: UserRole, additionalData?: Partial<FirestoreUserProfile>) => Promise<FirebaseUser>;
   logout: () => Promise<void>;
   refetchUserProfile: () => Promise<void>;
+  getFirebaseAuthToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,10 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       setUser(combinedUser);
     } else {
-      // If profile doesn't exist, this might be a transient state during signup.
-      // Setting user to null can cause redirects. Let's keep the old user state for a moment.
       console.warn(`User profile not found for uid: ${fbUser.uid}. This may be a race condition during signup.`);
-      setUser(null); // Or handle this more gracefully
+      setUser(null); 
     }
   }, []);
 
@@ -78,15 +77,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
+  const getFirebaseAuthToken = async (): Promise<string | null> => {
+    if (auth.currentUser) {
+        try {
+            return await auth.currentUser.getIdToken(true);
+        } catch (error) {
+            console.error("Error getting Firebase ID token:", error);
+            return null;
+        }
+    }
+    return null;
+  };
+
   const signup = async (name: string, email: string, pass: string, role: UserRole, additionalData?: Partial<FirestoreUserProfile>): Promise<FirebaseUser> => {
-    // 1. Create user in Firebase Auth
+    
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const newFirebaseUser = userCredential.user;
 
-    // 2. Update their display name in Firebase Auth
     await updateFirebaseProfile(newFirebaseUser, { displayName: name });
     
-    // 3. Prepare the user profile for Firestore
     const initialProfileData: Partial<Omit<FirestoreUserProfile, 'id' | 'createdAt' | 'updatedAt'>> = {
         name,
         email,
@@ -98,15 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initialProfileData.status = 'pending';
     }
 
-    // 4. Save the profile to Firestore
     await setUserProfile(newFirebaseUser.uid, initialProfileData);
 
-    // 5. Manually update the auth context state to AVOID race conditions.
-    // This is the key change: we wait for the user profile to be created
-    // and then explicitly update our application's state.
     await fetchAndSetUser(newFirebaseUser);
 
-    // 6. Return the firebase user object
     return newFirebaseUser;
   };
 
@@ -122,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signup,
     logout,
     refetchUserProfile,
+    getFirebaseAuthToken,
   };
 
   return (
