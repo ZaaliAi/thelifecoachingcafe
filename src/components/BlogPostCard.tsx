@@ -65,7 +65,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
               variant={post.status === 'pending_approval' ? 'secondary' : (post.status === 'draft' ? 'outline' : 'destructive')} 
               className="mt-3 text-xs"
             >
-              Status: {post.status.replace('_', ' ').replace(/\w/g, l => l.toUpperCase())}
+              Status: {post.status.replace('_', ' ').replace(/ \w/g, l => l.toUpperCase())}
             </Badge>
           )}
       </CardContent>
@@ -80,7 +80,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
           </Button>
           {showEditButton && (
              <Button asChild variant="ghost" size="sm">
-                <Link href={`/dashboard/coach/blog/edit/${post.id}`}>
+                <Link href={`/dashboard/coach/blog/edit/${post.slug}`}>
                   <>
                     <Edit3 className="mr-2 h-4 w-4" /> Edit
                   </>
@@ -92,5 +92,3 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
     </Card>
   );
 }
-
-    
