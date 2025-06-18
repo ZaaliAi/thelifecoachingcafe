@@ -47,7 +47,8 @@ export default function CreateBlogPostPage() {
     handleSubmit,
     formState: { errors },
     setValue,
-    control // MARKDOWN PREVIEW: Need control for useWatch if used standalone, or just watch from useForm directly
+    control, // MARKDOWN PREVIEW: Need control for useWatch if used standalone, or just watch from useForm directly
+    getValues // Added getValues here
   } = useForm<BlogPostFormData>({
     resolver: zodResolver(blogPostSchema),
     defaultValues: {
