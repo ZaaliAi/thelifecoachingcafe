@@ -261,28 +261,39 @@ Sidebar.displayName = "Sidebar"
 
 const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
-  React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  // Adjusted props to make children optional and explicitly include asChild
+  Omit<React.ComponentProps<typeof Button>, 'children'> & { children?: React.ReactNode; asChild?: boolean }
+>(({ className, onClick, children, asChild = false, ...props }, ref) => { // Destructure asChild (default to false) and children
+  const { toggleSidebar } = useSidebar();
 
   return (
-    <Button
+    <Button // This is the Button from @/components/ui/button
       ref={ref}
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
       className={cn("h-7 w-7", className)}
       onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
+        onClick?.(event);
+        toggleSidebar();
       }}
-      {...props}
+      asChild={asChild} // Pass the asChild prop to the inner Button
+      {...props} // Spread the remaining props
     >
-      <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
+      {/*
+        If asChild is true and children are provided to SidebarTrigger,
+        Button (acting as Slot) will use those children.
+        Otherwise, render the default PanelLeft icon and span.
+      */}
+      {asChild && children ? children : (
+        <>
+          <PanelLeft />
+          <span className="sr-only">Toggle Sidebar</span>
+        </>
+      )}
     </Button>
-  )
-})
+  );
+});
 SidebarTrigger.displayName = "SidebarTrigger"
 
 const SidebarRail = React.forwardRef<
