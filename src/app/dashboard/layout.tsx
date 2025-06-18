@@ -1,59 +1,25 @@
 
 "use client";
 
-import Link from 'next/link';
+"use client";
+
+// import Link from 'next/link'; // Duplicate, remove if not directly used by layout
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
-import Link from 'next/link'; // Keep Link, it might be used by accessibleNavItems if they are rendered directly on pages
-import { usePathname, useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/auth';
-// Button and ScrollArea might be used by accessibleNavItems if rendered directly on pages, keep for now.
-// If not, they can be removed when those pages are implemented.
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react'; // Removed Menu
+// Button and ScrollArea are not used in this file anymore after sidebar removal
+// import { Button } from '@/components/ui/button';
+// import { ScrollArea } from '@/components/ui/scroll-area';
+// Icons for navItems are now in navConfig.ts. Keep only icons used directly in THIS file.
+import { Loader2 } from 'lucide-react'; // LogOut was also removed as it was part of sidebar
 import React, { useEffect } from 'react';
-// Removed Sidebar imports
-
-// ... (navItems array remains the same)
-const navItems: NavItem[] = [
-  // User specific
-  { href: '/dashboard/user', label: 'My Profile', icon: UserCircle, roles: ['user'] },
-  { href: '/dashboard/user/messages', label: 'My Messages', icon: MessageSquare, roles: ['user'] },
-  { href: '/dashboard/user/favorites', label: 'My Favorites', icon: Heart, roles: ['user'] },
-  { href: '/dashboard/user/settings', label: 'Settings', icon: Settings, roles: ['user'] },
-  // Coach specific
-  { href: '/dashboard/coach', label: 'Overview', icon: LayoutDashboard, roles: ['coach'] },
-  { href: '/dashboard/coach/profile', label: 'Edit Profile', icon: Edit3, roles: ['coach'] },
-  { href: '/dashboard/coach/blog', label: 'My Blog Posts', icon: FileText, roles: ['coach'] },
-  { href: '/dashboard/coach/testimonials', label: 'My Testimonials', icon: MessageSquareText, roles: ['coach'], requiresPremium: true },
-  { href: '/dashboard/coach/messages', label: 'Client Messages', icon: MessageSquare, roles: ['coach'] },
-  { href: '/dashboard/coach/billing', label: 'Billing', icon: CreditCard, roles: ['coach'] },
-  { href: '/dashboard/coach/settings', label: 'Settings', icon: Settings, roles: ['coach'] },
-  // Admin specific
-  { href: '/dashboard/admin', label: 'Admin Overview', icon: ShieldAlert, roles: ['admin'] },
-  { href: '/dashboard/admin/coaches', label: 'Manage Coaches', icon: Users, roles: ['admin'] },
-  { href: '/dashboard/admin/users', label: 'Manage Users', icon: UserX, roles: ['admin'] }, 
-  { href: '/dashboard/admin/blogs', label: 'Manage Blogs', icon: FileText, roles: ['admin'] },
-  { href: '/dashboard/admin/testimonials', label: 'Testimonials', icon: FileText, roles: ['admin'] },
-  { href: '/dashboard/admin/messages', label: 'Message Logs', icon: MessageSquare, roles: ['admin'] },
-  { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'] },
-];
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  roles: ('user' | 'coach' | 'admin')[];
-  requiresPremium?: boolean;
-}
-
+import { navItems } from '../../config/navConfig'; // Import from new location
+// NavItem interface is also now in navConfig.ts, not needed here directly
+// No longer importing individual icons like UserCircle, LayoutDashboard etc.
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { user, firebaseUser, loading, logout } = useAuth(); // Use firebaseUser for auth check
+  const pathname = usePathname(); // usePathname is used for accessibleNavItems logic below if that stays
+  const { user, firebaseUser, loading } = useAuth(); // Removed logout as it was part of sidebar
   const router = useRouter();
 
   useEffect(() => {

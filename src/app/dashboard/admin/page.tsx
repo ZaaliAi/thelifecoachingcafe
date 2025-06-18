@@ -11,8 +11,8 @@ import {
   getTotalUserCount, 
   getTotalCoachCount 
 } from "@/lib/firestore";
-import { navItems } from '../layout';
-import type { NavItem } from '../layout';
+import { navItems } from '../../../config/navConfig'; // Updated path
+import type { NavItem } from '../../../config/navConfig'; // Updated path
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 

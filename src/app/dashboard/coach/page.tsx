@@ -6,9 +6,9 @@ import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, St
 import { useAuth, type User } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
-import { navItems } from '../layout';
-import type { NavItem } from '../layout';
-import { LogOut } from "lucide-react"; // Added LogOut
+import { navItems } from '../../../config/navConfig'; // Updated path
+import type { NavItem } from '../../../config/navConfig'; // Updated path
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils"; // Added cn
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { loadStripe } from '@stripe/stripe-js';

@@ -2,10 +2,10 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { navItems } from '../layout'; // Assuming navItems can be imported
-import type { NavItem } from '../layout'; // Assuming NavItem type can be imported
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'; // CardContent might be useful
-import { LogOut, Loader2, MessageSquare, UserCircle, Search } from "lucide-react"; // Keep Loader2 and other icons if used by existing cards
+import { navItems } from '../../../config/navConfig'; // Updated path
+import type { NavItem } from '../../../config/navConfig'; // Updated path
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { LogOut, Loader2, MessageSquare, UserCircle, Search } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button"; // Keep button if used by existing cards
 import { getMessagesForUserOrCoach } from "@/lib/messageService"; // Import the message service function
