@@ -1,4 +1,4 @@
-"use client"; // Added this directive
+"use client"; 
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -142,8 +142,7 @@ export function CoachCard({ coach }: CoachCardProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge className="ml-2 bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-primary-foreground border-yellow-500">
-                      <Crown className="h-4 w-4 mr-1" />
-                      Premium
+                      <Crown className="h-4 w-4" />
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
