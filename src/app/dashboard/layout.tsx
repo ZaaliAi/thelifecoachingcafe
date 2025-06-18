@@ -81,9 +81,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <div className="flex mt-16 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
         {/* Mobile Sidebar Trigger */}
-        <div className="md:hidden fixed top-20 left-4 z-50">
+        <div className="md:hidden fixed top-28 left-4 z-50">
           <SidebarTrigger asChild>
-            <Button variant="outline" size="icon" className="shadow-lg">
+            <Button size="icon" className="shadow-lg bg-green-500 hover:bg-green-600 text-white focus-visible:ring-green-400">
               <Menu className="h-6 w-6" />
             </Button>
           </SidebarTrigger>
@@ -115,7 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </SidebarContent>
         </Sidebar>
 
-        <main className="flex-1 p-6 md:ml-64">
+        <main className="flex-1 p-6 md:ml-64 min-w-0">
           {children}
         </main>
       </div>
