@@ -7,8 +7,9 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react';
+import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText, Menu } from 'lucide-react';
 import React, { useEffect } from 'react';
+import { Sidebar, SidebarContent, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 // ... (navItems array remains the same)
 const navItems: NavItem[] = [
@@ -77,33 +78,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
-      <aside className="w-64 border-r bg-muted/40 p-4 hidden md:block">
-        <ScrollArea className="h-full">
-          <nav className="flex flex-col space-y-2">
-            {accessibleNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
-                  pathname === item.href && 'bg-primary/10 text-primary font-medium'
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-            ))}
-            <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
-              <LogOut className="h-5 w-5" />
-              Logout
-          </Button>
-          </nav>
-        </ScrollArea>
-      </aside>
-      <div className="flex-1 p-6">
-        {children}
+    <SidebarProvider>
+      <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
+        {/* Mobile Sidebar Trigger */}
+        <div className="md:hidden fixed top-4 left-4 z-50">
+          <SidebarTrigger asChild>
+            <Button variant="outline" size="icon" className="shadow-lg">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SidebarTrigger>
+        </div>
+
+        <Sidebar>
+          <SidebarContent>
+            <ScrollArea className="h-full">
+              <nav className="flex flex-col space-y-2 p-4">
+                {accessibleNavItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
+                      pathname === item.href && 'bg-primary/10 text-primary font-medium'
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                ))}
+                <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
+                  <LogOut className="h-5 w-5" />
+                  Logout
+                </Button>
+              </nav>
+            </ScrollArea>
+          </SidebarContent>
+        </Sidebar>
+
+        <main className="flex-1 p-6 md:ml-64">
+          {children}
+        </main>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
