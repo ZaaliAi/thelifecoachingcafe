@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { MessageSquare, UserCircle, Search, Loader2 } from "lucide-react";
+import { MessageSquare, UserCircle, Search, Loader2, Heart, Settings } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { getMessagesForUserOrCoach } from "@/lib/messageService"; // Import the message service function
@@ -64,20 +64,6 @@ export default function UserDashboardPage() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Profile</CardTitle>
-            <UserCircle className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">View & Edit</div>
-            <p className="text-xs text-muted-foreground">Keep your information up to date and update your profile.</p>
-            <Button asChild className="mt-4 w-full bg-orange-500 text-white hover:bg-orange-600">
-              <Link href="/dashboard/user/settings">Go to Profile</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
         {/* Messages Card */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -113,16 +99,35 @@ export default function UserDashboardPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Your recent searches and saved coaches will appear here (feature coming soon).</p>
-        </CardContent>
-      </Card>
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Favorites</CardTitle>
+            <Heart className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Favorite Coaches</div>
+            <p className="text-xs text-muted-foreground">View your saved coaches.</p>
+            <Button asChild className="mt-4 w-full bg-red-500 text-white hover:bg-red-600">
+              <Link href="/dashboard/user/favorites">View Favorites</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Settings</CardTitle>
+            <Settings className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Account Settings</div>
+            <p className="text-xs text-muted-foreground">Update your account preferences.</p>
+            <Button asChild className="mt-4 w-full bg-gray-500 text-white hover:bg-gray-600">
+              <Link href="/dashboard/user/settings">Update Settings</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

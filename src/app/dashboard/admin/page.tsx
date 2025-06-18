@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, FileText, MessageSquare, BarChart3, ShieldAlert, Loader2 } from "lucide-react";
+import { Users, FileText, MessageSquare, ShieldAlert, Loader2, UserX, Settings, MessageSquareText } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { 
@@ -69,7 +69,7 @@ export default function AdminDashboardPage() {
         </CardHeader>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Manage Coaches</CardTitle>
@@ -82,6 +82,22 @@ export default function AdminDashboardPage() {
             <p className="text-xs text-muted-foreground">Manage coach profiles and subscriptions.</p>
             <Button asChild variant="default" className="mt-4 w-full">
               <Link href="/dashboard/admin/coaches">Manage Coaches</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Manage Users</CardTitle>
+            <UserX className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoadingStats 
+              ? <Loader2 className="h-6 w-6 animate-spin"/> 
+              : <div className="text-2xl font-bold">{stats.totalUsers} Users</div>}
+            <p className="text-xs text-muted-foreground">Manage user accounts.</p>
+            <Button asChild variant="default" className="mt-4 w-full">
+              <Link href="/dashboard/admin/users">Manage Users</Link>
             </Button>
           </CardContent>
         </Card>
@@ -124,33 +140,32 @@ export default function AdminDashboardPage() {
         
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Stats</CardTitle>
-            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Manage Testimonials</CardTitle>
+            <MessageSquareText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : 
-             <>
-                <div className="text-lg font-bold">{stats.totalUsers} Total Users</div>
-                <div className="text-lg font-bold">{stats.totalCoaches} Total Coaches</div>
-             </>
-             }
-            <p className="text-xs text-muted-foreground mt-1">Overall platform engagement.</p>
+            <div className="text-2xl font-bold">Manage Testimonials</div>
+            <p className="text-xs text-muted-foreground">Review and approve testimonials.</p>
+            <Button asChild className="mt-4 w-full">
+              <Link href="/dashboard/admin/testimonials">Manage Testimonials</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Platform Settings</CardTitle>
+            <Settings className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Site Configuration</div>
+            <p className="text-xs text-muted-foreground">Manage platform-wide settings.</p>
+            <Button asChild className="mt-4 w-full">
+              <Link href="/dashboard/admin/settings">Platform Settings</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
-      
-      <Card>
-        <CardHeader>
-            <CardTitle>Quick Actions & Tools</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <p className="text-muted-foreground">Additional administrative functions and platform settings will be accessible here.</p>
-            <Button variant="destructive" disabled>Suspend User (Example)</Button>
-            <Button asChild variant="outline" className="ml-2">
-                <Link href="/dashboard/admin/settings">Site Configuration</Link>
-            </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }

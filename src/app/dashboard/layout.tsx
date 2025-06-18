@@ -9,9 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText, Menu } from 'lucide-react';
 import React, { useEffect } from 'react';
-import { Sidebar, SidebarContent, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
-// ... (navItems array remains the same)
 const navItems: NavItem[] = [
   // User specific
   { href: '/dashboard/user', label: 'My Profile', icon: UserCircle, roles: ['user'] },
@@ -29,7 +27,7 @@ const navItems: NavItem[] = [
   // Admin specific
   { href: '/dashboard/admin', label: 'Admin Overview', icon: ShieldAlert, roles: ['admin'] },
   { href: '/dashboard/admin/coaches', label: 'Manage Coaches', icon: Users, roles: ['admin'] },
-  { href: '/dashboard/admin/users', label: 'Manage Users', icon: UserX, roles: ['admin'] }, 
+  { href: '/dashboard/admin/users', label: 'Manage Users', icon: UserX, roles: ['admin'] },
   { href: '/dashboard/admin/blogs', label: 'Manage Blogs', icon: FileText, roles: ['admin'] },
   { href: '/dashboard/admin/testimonials', label: 'Testimonials', icon: FileText, roles: ['admin'] },
   { href: '/dashboard/admin/messages', label: 'Message Logs', icon: MessageSquare, roles: ['admin'] },
@@ -51,17 +49,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect only when loading is complete and we are certain there is no authenticated user
     if (!loading && !firebaseUser) {
       router.push('/login');
     }
   }, [firebaseUser, loading, router]);
 
-  // Show a loading screen while the auth state is being determined or the user profile is being fetched.
-  // The `!user` check handles the case where auth is complete but the profile is still loading.
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+      <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
@@ -78,47 +73,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <SidebarProvider>
-      <div className="flex mt-16 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
-        {/* Mobile Sidebar Trigger */}
-        <div className="md:hidden fixed top-28 left-4 z-50">
-          <SidebarTrigger asChild>
-            <Button size="icon" className="shadow-lg bg-green-500 hover:bg-green-600 text-white focus-visible:ring-green-400">
-              <Menu className="h-6 w-6" />
+    <div className="flex min-h-screen">
+      <aside className="fixed hidden md:block md:w-64 bg-gray-100 dark:bg-gray-800 p-4 border-r border-gray-200 dark:border-gray-700">
+        <ScrollArea className="h-full">
+          <nav className="flex flex-col space-y-2">
+            {accessibleNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
+                  pathname === item.href && 'bg-primary/10 text-primary font-medium'
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            ))}
+            <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
+              <LogOut className="h-5 w-5" />
+              Logout
             </Button>
-          </SidebarTrigger>
-        </div>
-
-        <Sidebar>
-          <SidebarContent>
-            <ScrollArea className="h-full">
-              <nav className="flex flex-col space-y-2 p-4">
-                {accessibleNavItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
-                      pathname === item.href && 'bg-primary/10 text-primary font-medium'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                ))}
-                <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
-                  <LogOut className="h-5 w-5" />
-                  Logout
-                </Button>
-              </nav>
-            </ScrollArea>
-          </SidebarContent>
-        </Sidebar>
-
-        <main className="flex-1 p-6 md:ml-64 min-w-0">
-          {children}
-        </main>
-      </div>
-    </SidebarProvider>
+          </nav>
+        </ScrollArea>
+      </aside>
+      <main className="flex-1 md:ml-64 p-6">
+        {children}
+      </main>
+    </div>
   );
 }

@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink } from "lucide-react";
+import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink, Settings, CreditCard, MessageSquareText } from "lucide-react";
 import { useAuth, type User } from "@/lib/auth"; // Assuming User type can be imported from auth
 import { useEffect, useState } from "react";
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
@@ -184,6 +184,50 @@ export default function CoachDashboardPage() {
               <Link href="/dashboard/coach/messages">View Messages</Link>
             </Button>
           </CardContent>
+        </Card>
+        
+        {isPremiumCoach && (
+            <Card className="hover:shadow-lg transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">My Testimonials</CardTitle>
+                    <MessageSquareText className="h-5 w-5 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">Manage Testimonials</div>
+                    <p className="text-xs text-muted-foreground">Share client feedback.</p>
+                    <Button asChild className="mt-4 w-full bg-teal-500 hover:bg-teal-700 text-white">
+                        <Link href="/dashboard/coach/testimonials">View Testimonials</Link>
+                    </Button>
+                </CardContent>
+            </Card>
+        )}
+
+        <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Billing</CardTitle>
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">Manage Subscription</div>
+                <p className="text-xs text-muted-foreground">View your billing history and subscription.</p>
+                <Button asChild className="mt-4 w-full bg-indigo-500 hover:bg-indigo-700 text-white">
+                    <Link href="/dashboard/coach/billing">Billing Details</Link>
+                </Button>
+            </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Settings</CardTitle>
+                <Settings className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">Account Settings</div>
+                <p className="text-xs text-muted-foreground">Update your account preferences.</p>
+                <Button asChild className="mt-4 w-full bg-gray-500 hover:bg-gray-700 text-white">
+                    <Link href="/dashboard/coach/settings">Update Settings</Link>
+                </Button>
+            </CardContent>
         </Card>
       </div>
 
