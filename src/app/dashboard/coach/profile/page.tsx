@@ -1,160 +1,117 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation'; // Added
+import { useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import type { UserProfile, SocialLink } from '@/types'; // Added SocialLink
-import { EditCoachProfileForm, type EditProfileFormSubmitData } from '@/components/dashboard/EditCoachProfileForm'; // Import form and its submit data type
-import { updateUserProfile } from '@/lib/firestore';
-import { uploadProfileImage } from '@/services/imageUpload'; // Import image upload service
-import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2 } from 'lucide-react'; // Added
+import { EditCoachProfileForm, type EditProfileFormSubmitData } from '@/components/dashboard/EditCoachProfileForm';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { uploadProfileImage } from '@/services/imageUpload';
 
 const CoachProfilePage = () => {
-  const { user, loading: authLoading } = useAuth();
-  const searchParams = useSearchParams(); // Added
-  const statusUpdatePending = searchParams.get('status_update_pending'); // Added
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const { toast } = useToast();
+    const { user, loading, refetchUserProfile } = useAuth();
+    const searchParams = useSearchParams();
+    const { toast } = useToast();
 
-  useEffect(() => {
-    if (user && user.id) {
-      setProfileLoading(true);
-      const docRef = doc(db, 'users', user.id);
-      const unsubscribe = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setUserProfile({ ...docSnap.data() as UserProfile, id: docSnap.id });
-        } else {
-          setUserProfile(null);
+    const handleProfileUpdate = useCallback(async (formData: EditProfileFormSubmitData) => {
+        if (!user) {
+            toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+            return;
         }
-        setProfileLoading(false);
-      }, (error) => {
-        console.error('[CoachProfilePage] onSnapshot: Error listening to user profile updates for ID:', user.id, error);
-        setUserProfile(null);
-        setProfileLoading(false);
-      });
-      return () => unsubscribe();
-    } else {
-      if (!authLoading && !user) {
-        setProfileLoading(false);
-      }
-    }
-  }, [user, authLoading]);
 
-  const handleProfileUpdate = useCallback(async (submitData: EditProfileFormSubmitData) => {
-    if (!user || !user.id || !userProfile) { // userProfile must exist to get currentProfileImageUrl if needed
-      toast({ title: 'Error', description: 'User session or profile data is missing. Please try again.', variant: 'destructive' });
-      throw new Error('User not authenticated or profile not loaded');
-    }
+        console.log("1. Starting profile update. Initial form data:", formData);
+        let imageUrl = formData.currentProfileImageUrl || null;
+        console.log("2. Initial imageUrl:", imageUrl);
 
-    let profileImageUrlToSave: string | null = submitData.currentProfileImageUrl || null;
+        try {
+            if (formData.imageAction === 'replace' && formData.selectedFile) {
+                toast({ title: "Uploading Image...", description: "Please wait." });
+                imageUrl = await uploadProfileImage(formData.selectedFile, user.id, formData.currentProfileImageUrl);
+                console.log("3a. Image uploaded. New imageUrl:", imageUrl);
+            } else if (formData.imageAction === 'remove') {
+                imageUrl = null;
+                if (formData.currentProfileImageUrl) {
+                    await uploadProfileImage(undefined, user.id, formData.currentProfileImageUrl);
+                }
+                console.log("3b. Image removed. New imageUrl:", imageUrl);
+            }
 
-    try {
-      if (submitData.imageAction === 'replace' && submitData.selectedFile) {
-        toast({ title: 'Uploading image...', description: 'Please wait.' });
-        profileImageUrlToSave = await uploadProfileImage(submitData.selectedFile, user.id, submitData.currentProfileImageUrl);
-      } else if (submitData.imageAction === 'remove') {
-        if (submitData.currentProfileImageUrl) { // Only attempt delete if there was an image
-          toast({ title: 'Removing image...', description: 'Please wait.' });
-          await uploadProfileImage(undefined, user.id, submitData.currentProfileImageUrl);
+            const profileData = {
+                userId: user.id,
+                name: formData.name,
+                bio: formData.bio,
+                specialties: formData.specialties,
+                keywords: formData.keywords,
+                certifications: formData.certifications,
+                location: formData.location,
+                websiteUrl: formData.websiteUrl,
+                introVideoUrl: formData.introVideoUrl,
+                linkedInUrl: formData.linkedInUrl,
+                profileImageUrl: imageUrl,
+            };
+
+            console.log("4. Sending data to API:", profileData);
+            const response = await fetch('/api/user-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profileData),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update profile from API.');
+            }
+            
+            console.log("5. API update successful. Waiting 1 second before refetching profile.");
+            toast({ title: "Success!", description: "Your profile has been updated. Refreshing data..." });
+
+            // Wait 1 second to prevent race condition with database update
+            setTimeout(() => {
+                console.log("6. Refetching user profile.");
+                refetchUserProfile();
+            }, 1000);
+
+        } catch (error: any) {
+            console.error("Full error in handleProfileUpdate:", error);
+            toast({ title: "Update Failed", description: error.message, variant: "destructive" });
         }
-        profileImageUrlToSave = null;
-      }
-      // If imageAction is 'keep', profileImageUrlToSave remains submitData.currentProfileImageUrl
+    }, [user, toast, refetchUserProfile]);
+    
+    useEffect(() => {
+        if (searchParams.get('subscription_success')) {
+            toast({
+                title: "Payment Successful!",
+                description: "Refreshing your profile...",
+                duration: 5000,
+            });
+            const timer = setTimeout(() => {
+                refetchUserProfile();
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [searchParams, refetchUserProfile, toast]);
 
-      // Reconstruct socialLinks
-      let updatedSocialLinks: SocialLink[] = userProfile.socialLinks?.filter(link => link.platform !== 'LinkedIn') || [];
-      if (submitData.linkedInUrl && submitData.linkedInUrl.trim() !== '') {
-        updatedSocialLinks.push({ platform: 'LinkedIn', url: submitData.linkedInUrl.trim() });
-      }
-      // Ensure empty array if no links, not array with empty object
-      if (updatedSocialLinks.length === 1 && updatedSocialLinks[0].platform === 'LinkedIn' && !updatedSocialLinks[0].url) {
-          updatedSocialLinks = [];
-      }
-
-
-      const { selectedFile, imageAction, currentProfileImageUrl, linkedInUrl, ...otherFormData } = submitData;
-
-      const dataForFirestore: Partial<UserProfile> = {
-        ...otherFormData, // name, bio, specialties (as array), availability (as array), etc.
-        profileImageUrl: profileImageUrlToSave,
-        socialLinks: updatedSocialLinks,
-      };
-
-      await updateUserProfile(user.id, dataForFirestore);
-      // Toast for success is now in EditCoachProfileForm, triggered after this onSubmit resolves
-      // However, we might want a specific one here if upload was involved.
-      // For now, relying on the form's toast.
-      // The onSnapshot listener will update userProfile, refreshing initialData for the form.
-    } catch (error: any) {
-      console.error("Error in handleProfileUpdate:", error);
-      toast({ title: 'Update Failed', description: error.message || 'Could not update profile.', variant: 'destructive' });
-      throw error; // Re-throw to let the form know submission failed
+    if (loading) {
+        return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
-  }, [user, userProfile, toast]);
 
+    if (!user) {
+        return <div className="p-4">You must be logged in to view this page.</div>;
+    }
 
-  if (authLoading) {
-    return ( /* Skeleton for auth loading */
-        <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1>
-            <div className="space-y-4"> <Skeleton className="h-8 w-1/4" /> <Skeleton className="h-40 w-full" /> </div>
-        </div>
-    );
-  }
-
-  if (!user) {
-    return <div className="p-4">User profile not found. Please log in.</div>;
-  }
-
-  // New condition for pending status
-  if (statusUpdatePending === 'true' && userProfile?.subscriptionTier !== 'premium' && !profileLoading && !authLoading) {
     return (
-      <div className="p-4 md:p-8 text-center">
-        <div className="flex justify-center items-center mb-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
-          <h2 className="text-xl font-semibold">Finalizing your premium upgrade...</h2>
-        </div>
-        <p className="text-muted-foreground">Please wait a moment while we update your account. This page will refresh automatically.</p>
-      </div>
-    );
-  }
-  
-  if (profileLoading) {
-    return ( /* Skeleton for profile data loading */
-        <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold mb-4">Edit Your Profile</h1>
-            <div className="space-y-4"> <Skeleton className="h-8 w-1/4" /> <Skeleton className="h-40 w-full" /> </div>
+        <div className="space-y-6">
+            <header>
+                <h1 className="text-2xl font-bold">Edit Your Coach Profile</h1>
+                <p className="text-muted-foreground">This is where you can update your public coaching profile.</p>
+            </header>
+            <EditCoachProfileForm
+                initialData={user}
+                onSubmit={handleProfileUpdate}
+                isPremiumCoach={user.subscriptionTier === 'premium'}
+            />
         </div>
     );
-  }
-
-  // Original check for userProfile, now ensuring statusUpdatePending is not the primary reason for an empty state.
-  if (!userProfile && statusUpdatePending !== 'true') {
-    return <div className="p-4">Your user profile data could not be loaded to edit. Please contact support.</div>;
-  }
-
-  // If userProfile is still null here, but statusUpdatePending was true, it means we are waiting for the update.
-  // The form should only render if userProfile is available.
-  if (!userProfile) {
-     // This case should ideally be covered by the statusUpdatePending message or profileLoading.
-     // If we reach here, it's an unexpected state, possibly profile is null after loading and not pending.
-    return <div className="p-4">Loading profile data...</div>;
-  }
-
-  return (
-    <div className="p-4 md:p-8">
-      <EditCoachProfileForm
-        initialData={userProfile}
-        onSubmit={handleProfileUpdate}
-        isPremiumCoach={userProfile.subscriptionTier === 'premium'}
-      />
-    </div>
-  );
 };
 
 export default CoachProfilePage;

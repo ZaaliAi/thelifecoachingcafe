@@ -7,17 +7,10 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react'; // Added Heart, UserX, CreditCard and MessageSquareText
+import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react';
 import React, { useEffect } from 'react';
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  roles: ('user' | 'coach' | 'admin')[];
-  requiresPremium?: boolean; // Added for premium-only links
-}
-
+// ... (navItems array remains the same)
 const navItems: NavItem[] = [
   // User specific
   { href: '/dashboard/user', label: 'My Profile', icon: UserCircle, roles: ['user'] },
@@ -42,17 +35,29 @@ const navItems: NavItem[] = [
   { href: '/dashboard/admin/settings', label: 'Platform Settings', icon: Settings, roles: ['admin'] },
 ];
 
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  roles: ('user' | 'coach' | 'admin')[];
+  requiresPremium?: boolean;
+}
+
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, logout, loading } = useAuth();
+  const { user, firebaseUser, loading, logout } = useAuth(); // Use firebaseUser for auth check
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Redirect only when loading is complete and we are certain there is no authenticated user
+    if (!loading && !firebaseUser) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [firebaseUser, loading, router]);
 
+  // Show a loading screen while the auth state is being determined or the user profile is being fetched.
+  // The `!user` check handles the case where auth is complete but the profile is still loading.
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -66,14 +71,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return false;
     }
     if (item.requiresPremium) {
-      // Assuming user object from useAuth includes subscriptionTier
       return user.subscriptionTier === 'premium';
     }
     return true;
   });
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]"> {/* Adjust based on header/footer height */}
+    <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
       <aside className="w-64 border-r bg-muted/40 p-4 hidden md:block">
         <ScrollArea className="h-full">
           <nav className="flex flex-col space-y-2">
@@ -98,7 +102,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </ScrollArea>
       </aside>
       <div className="flex-1 p-6">
-        {/* Mobile Nav can be added here using a Sheet if needed */}
         {children}
       </div>
     </div>
