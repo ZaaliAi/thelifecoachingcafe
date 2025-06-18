@@ -79,9 +79,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
+      <div className="flex mt-16 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
         {/* Mobile Sidebar Trigger */}
-        <div className="md:hidden fixed top-4 left-4 z-50">
+        <div className="md:hidden fixed top-20 left-4 z-50">
           <SidebarTrigger asChild>
             <Button variant="outline" size="icon" className="shadow-lg">
               <Menu className="h-6 w-6" />
