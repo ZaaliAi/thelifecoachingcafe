@@ -5,21 +5,29 @@ import type { BlogPost } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, UserCircle, Edit3, Eye } from 'lucide-react'; // Added Eye icon
+import { CalendarDays, UserCircle, Edit3, Eye } from 'lucide-react'; 
 import { format } from 'date-fns';
 
 interface BlogPostCardProps {
   post: BlogPost;
-  showEditButton?: boolean; // For coach dashboard
+  showEditButton?: boolean; 
 }
 
 export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps) {
+
+  const isPublished = post.status === 'published';
+  const canPreview = showEditButton && !isPublished;
+
+  const readMoreUrl = canPreview 
+    ? `/blog/${post.slug}?preview=true` 
+    : `/blog/${post.slug}`;
+
   return (
     <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
       {post.featuredImageUrl && (
         <CardHeader className="p-0 relative">
           <Link
-            href={`/blog/${post.slug}`}
+            href={readMoreUrl}
             aria-label={`Read more about ${post.title}`}
           >
             <Image
@@ -41,7 +49,7 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
         </div>
         <CardTitle className="text-xl font-semibold mb-2">
           <Link
-            href={`/blog/${post.slug}`}
+            href={readMoreUrl}
             className="hover:text-primary transition-colors"
           >
             {post.title}
@@ -72,9 +80,10 @@ export function BlogPostCard({ post, showEditButton = false }: BlogPostCardProps
       <CardFooter className="p-6 border-t">
         <div className="flex justify-between w-full items-center">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/blog/${post.slug}`}>
+            <Link href={readMoreUrl}>
               <>
-                <Eye className="mr-2 h-4 w-4" /> Read More
+                <Eye className="mr-2 h-4 w-4" /> 
+                {canPreview ? 'Preview' : 'Read More'}
               </>
             </Link>
           </Button>
