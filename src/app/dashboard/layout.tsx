@@ -5,11 +5,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import Link from 'next/link'; // Keep Link, it might be used by accessibleNavItems if they are rendered directly on pages
+import { usePathname, useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+// Button and ScrollArea might be used by accessibleNavItems if rendered directly on pages, keep for now.
+// If not, they can be removed when those pages are implemented.
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText, Menu } from 'lucide-react';
+import { LayoutDashboard, UserCircle, Edit3, FileText, MessageSquare, Users, ShieldAlert, LogOut, Settings, Loader2, UserX, Heart, CreditCard, MessageSquareText } from 'lucide-react'; // Removed Menu
 import React, { useEffect } from 'react';
-import { Sidebar, SidebarContent, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+// Removed Sidebar imports
 
 // ... (navItems array remains the same)
 const navItems: NavItem[] = [
@@ -78,47 +84,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <SidebarProvider>
+    // <SidebarProvider> REMOVED
       <div className="flex mt-16 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16)-2px)]">
-        {/* Mobile Sidebar Trigger */}
-        <div className="md:hidden fixed top-28 left-4 z-50">
-          <SidebarTrigger asChild>
-            <Button size="icon" className="shadow-lg bg-green-500 hover:bg-green-600 text-white focus-visible:ring-green-400">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SidebarTrigger>
-        </div>
+        {/* Mobile Sidebar Trigger REMOVED */}
+        {/* <div className="md:hidden fixed top-28 left-4 z-50"> ... </div> */}
 
-        <Sidebar>
-          <SidebarContent>
-            <ScrollArea className="h-full">
-              <nav className="flex flex-col space-y-2 p-4">
-                {accessibleNavItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-primary/10',
-                      pathname === item.href && 'bg-primary/10 text-primary font-medium'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                ))}
-                <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 justify-start mt-auto">
-                  <LogOut className="h-5 w-5" />
-                  Logout
-                </Button>
-              </nav>
-            </ScrollArea>
-          </SidebarContent>
-        </Sidebar>
+        {/* Sidebar component and its children REMOVED */}
+        {/* <Sidebar> ... </Sidebar> */}
 
-        <main className="flex-1 p-6 md:ml-64 min-w-0">
+        <main className="flex-1 p-6 min-w-0"> {/* md:ml-64 REMOVED */}
           {children}
         </main>
       </div>
-    </SidebarProvider>
+    // </SidebarProvider> REMOVED
   );
 }

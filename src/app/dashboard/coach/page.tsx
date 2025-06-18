@@ -3,9 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { FileText, MessageSquare, UserCircle, PlusCircle, BarChart3, Loader2, Star, ExternalLink } from "lucide-react";
-import { useAuth, type User } from "@/lib/auth"; // Assuming User type can be imported from auth
+import { useAuth, type User } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { getCoachBlogStats, getCoachUnreadMessageCount } from "@/lib/firestore";
+import { navItems } from '../layout';
+import type { NavItem } from '../layout';
+import { LogOut } from "lucide-react"; // Added LogOut
+import { cn } from "@/lib/utils"; // Added cn
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { loadStripe } from '@stripe/stripe-js';
 import { firebaseApp } from '@/lib/firebase';
@@ -19,10 +23,9 @@ interface AppUser extends User {
 
 // ... rest of your file will follow after this import section
 export default function CoachDashboardPage() {
-  const { user: authUser, loading } = useAuth(); // Removed refreshUserProfile
+  const { user: authUser, loading, logout } = useAuth(); // Added logout
   const user = authUser as AppUser | null; // Cast to AppUser
   const { toast } = useToast();
-  // const hasRefreshedInitially = useRef(false); // Removed ref
   const [coachName, setCoachName] = useState("Coach");
   const [blogStats, setBlogStats] = useState<{ pending: number, published: number }>({ pending: 0, published: 0 });
   const [newMessages, setNewMessages] = useState(0);
@@ -126,6 +129,15 @@ export default function CoachDashboardPage() {
   
   const isPremiumCoach = user.subscriptionTier === 'premium'; 
 
+
+  const isPremiumCoach = user?.subscriptionTier === 'premium';
+
+  // Filter navItems for coach role
+  const accessibleNavItems = user ? navItems.filter(item =>
+    item.roles.includes('coach') &&
+    (!item.requiresPremium || isPremiumCoach)
+  ) : [];
+
   return (
     <div className="space-y-8">
       <Card>
@@ -135,7 +147,37 @@ export default function CoachDashboardPage() {
         </CardHeader>
       </Card>
 
-      {/* Main Dashboard Function Cards */}
+      {/* === New Navigation Cards Grid === */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {accessibleNavItems.map((item) => (
+          <Link href={item.href} key={item.href} passHref legacyBehavior>
+            <a className="block hover:no-underline focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+              <Card className="h-full hover:shadow-md transition-shadow duration-150 ease-in-out flex flex-col items-center justify-center p-6 text-center">
+                <item.icon className="h-10 w-10 mb-3 text-primary" />
+                <CardTitle className="text-lg font-semibold">{item.label}</CardTitle>
+              </Card>
+            </a>
+          </Link>
+        ))}
+        {/* Logout Card */}
+        {user && (
+           <div
+             onClick={logout}
+             className="block hover:no-underline focus:outline-none focus:ring-2 focus:ring-destructive rounded-lg cursor-pointer"
+             tabIndex={0} // Make it focusable
+             onKeyPress={(e) => e.key === 'Enter' && logout()} // Keyboard accessible
+           >
+            <Card className="h-full hover:shadow-md transition-shadow duration-150 ease-in-out flex flex-col items-center justify-center p-6 text-center text-destructive border-destructive/50 hover:bg-destructive/5">
+              <LogOut className="h-10 w-10 mb-3" />
+              <CardTitle className="text-lg font-semibold">Logout</CardTitle>
+            </Card>
+          </div>
+        )}
+      </div>
+      {/* === End of New Navigation Cards Grid === */}
+
+      {/* Main Dashboard Function Cards (Existing cards) */}
+      <h2 className="text-2xl font-semibold tracking-tight">Quick Actions & Overview</h2>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

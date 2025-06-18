@@ -11,9 +11,13 @@ import {
   getTotalUserCount, 
   getTotalCoachCount 
 } from "@/lib/firestore";
+import { navItems } from '../layout';
+import type { NavItem } from '../layout';
+import { LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function AdminDashboardPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth(); // Added logout
   const [stats, setStats] = useState({
     pendingBlogPosts: 0,
     totalUsers: 0,
@@ -57,6 +61,13 @@ export default function AdminDashboardPage() {
      return <p>Access Denied. This dashboard is for administrators only.</p>;
   }
 
+
+  // Filter navItems for admin role
+  const accessibleNavItems = user ? navItems.filter(item =>
+    item.roles.includes('admin')
+    // && (!item.requiresPremium || user.subscriptionTier === 'premium') // Assuming admins don't have tiers
+  ) : [];
+
   return (
     <div className="space-y-8">
       <Card>
@@ -69,6 +80,37 @@ export default function AdminDashboardPage() {
         </CardHeader>
       </Card>
 
+      {/* === New Navigation Cards Grid === */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {accessibleNavItems.map((item) => (
+          <Link href={item.href} key={item.href} passHref legacyBehavior>
+            <a className="block hover:no-underline focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+              <Card className="h-full hover:shadow-md transition-shadow duration-150 ease-in-out flex flex-col items-center justify-center p-6 text-center">
+                <item.icon className="h-10 w-10 mb-3 text-primary" />
+                <CardTitle className="text-lg font-semibold">{item.label}</CardTitle>
+              </Card>
+            </a>
+          </Link>
+        ))}
+        {/* Logout Card */}
+        {user && (
+           <div
+             onClick={logout}
+             className="block hover:no-underline focus:outline-none focus:ring-2 focus:ring-destructive rounded-lg cursor-pointer"
+             tabIndex={0} // Make it focusable
+             onKeyPress={(e) => e.key === 'Enter' && logout()} // Keyboard accessible
+           >
+            <Card className="h-full hover:shadow-md transition-shadow duration-150 ease-in-out flex flex-col items-center justify-center p-6 text-center text-destructive border-destructive/50 hover:bg-destructive/5">
+              <LogOut className="h-10 w-10 mb-3" />
+              <CardTitle className="text-lg font-semibold">Logout</CardTitle>
+            </Card>
+          </div>
+        )}
+      </div>
+      {/* === End of New Navigation Cards Grid === */}
+
+      {/* Existing Stats/Management Cards */}
+      <h2 className="text-2xl font-semibold tracking-tight">Platform Overview & Management</h2>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
