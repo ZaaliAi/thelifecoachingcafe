@@ -5,14 +5,6 @@ import type { BlogPost } from '@/types';
 import { notFound } from 'next/navigation';
 import { currentUser } from '@/lib/auth'; // For server-side auth check if needed
 
-export async function generateStaticParams() {
-  // Assuming mockBlogPosts contains all possible blog posts for static generation
-  // In a real app, you might fetch only your own posts or a subset
-  return mockBlogPosts.map((post) => ({
-    postId: post.id,
-  }));
-}
-
 interface PageProps {
   params: { postId: string };
 }
