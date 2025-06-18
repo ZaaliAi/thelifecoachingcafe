@@ -6,14 +6,13 @@ import {
   onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
-import {onRequest, onCall} from "firebase-functions/v2/https";
+import {onCall} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import Stripe from "stripe";
 
 admin.initializeApp();
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
-const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 const corsConfig = [
   /thelifecoachingcafe\.com$/,
@@ -21,6 +20,56 @@ const corsConfig = [
   /localhost:3001/,
   /https:\/\/\d+-firebase-studio-1747477108457\.cluster-6vyo4gb53jczovun3dxslzjahs\.cloudworkstations\.dev/,
 ];
+
+/**
+ * Creates a Stripe Checkout session for a user to subscribe.
+ */
+export const createCheckoutSessionCallable = onCall(
+    {
+      secrets: [stripeSecretKey],
+      cors: corsConfig,
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "The function must be called while authenticated."
+        );
+      }
+
+      const {priceId, successUrl, cancelUrl} = request.data;
+      const userId = request.auth.uid; // Use the authenticated user's ID for security.
+
+      const stripe = new Stripe(stripeSecretKey.value());
+
+      try {
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          mode: "subscription",
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          client_reference_id: userId,
+          metadata: {
+            subscription_tier: "premium",
+          },
+        });
+
+        return {sessionId: session.id};
+      } catch (error) {
+        console.error("Stripe Checkout Session Error:", error);
+        throw new functions.https.HttpsError(
+            "internal",
+            "Unable to create checkout session."
+        );
+      }
+    }
+);
 
 /**
  * Deletes a user account, including their data and Stripe subscription.
@@ -41,9 +90,7 @@ export const deleteUserAccount = onCall(
       const uid = request.auth.uid;
       const userDocRef = admin.firestore().collection("users").doc(uid);
 
-      const stripe = new Stripe(stripeSecretKey.value(), {
-        apiVersion: "2025-05-28.basil",
-      });
+      const stripe = new Stripe(stripeSecretKey.value());
 
       try {
         const userDoc = await userDocRef.get();
@@ -108,7 +155,7 @@ export const deleteUserAccount = onCall(
  * Helper function to send a templated email.
  * @param {string} email The recipient's email address.
  * @param {string} templateName The name of the email template document.
- * @param {object} templateData The data to pass to the email template.
+ * @param {Record<string, unknown>} templateData The data for the template.
  */
 const sendEmail = async (
     email: string,
@@ -241,7 +288,7 @@ export const onNewChatMessage = onDocumentCreated(
  * @param {string} authorId ID of the blog author.
  * @param {string} blogTitle Title of the blog post.
  * @param {string} template Template name for the email.
- * @param {string} slug The slug of the blog post.
+ * @param {string | undefined} slug The slug of the blog post.
  */
 const sendBlogEmail = async (
     authorId: string,
@@ -292,138 +339,5 @@ export const onBlogPublished = onDocumentUpdated(
       if (before.status === "pending" && after.status === "published") {
         await sendBlogEmail(after.authorId, after.title, "blog_approved", after.slug);
       }
-    }
-);
-
-export const createCheckoutSessionCallable = onCall(
-    {
-      secrets: [stripeSecretKey],
-      cors: corsConfig,
-    },
-    async (request) => {
-      if (!request.auth) {
-        throw new functions.https.HttpsError(
-            "unauthenticated",
-            "The function must be called while authenticated."
-        );
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const {priceId, successUrl, cancelUrl} = request.data as any;
-      const userId = request.auth.uid;
-
-      const stripe = new Stripe(stripeSecretKey.value(), {
-        apiVersion: "2025-05-28.basil",
-      });
-
-      try {
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price: priceId,
-              quantity: 1,
-            },
-          ],
-          mode: "subscription",
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-          client_reference_id: userId,
-          metadata: {
-            subscription_tier: "premium",
-          },
-        });
-
-        return {sessionId: session.id};
-      } catch (error) {
-        console.error("Stripe Checkout Session Error:", error);
-        throw new functions.https.HttpsError(
-            "internal",
-            "Unable to create checkout session."
-        );
-      }
-    }
-);
-
-/**
- * Stripe webhook handler to process subscription payments.
- */
-export const onSubscriptionActivated = onRequest(
-    {
-      secrets: [stripeSecretKey, stripeWebhookSecret],
-      cors: corsConfig,
-    },
-    async (request, response) => {
-      const stripe = new Stripe(stripeSecretKey.value(), {
-        apiVersion: "2025-05-28.basil",
-      });
-
-      const signature = request.headers["stripe-signature"];
-      if (!signature) {
-        response.status(400).send("Missing Stripe signature.");
-        return;
-      }
-
-      let webhookEvent;
-      try {
-        webhookEvent = stripe.webhooks.constructEvent(
-            request.rawBody,
-            signature,
-            stripeWebhookSecret.value()
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        response.status(400).send(`Webhook Error: ${msg}`);
-        return;
-      }
-
-      if (webhookEvent.type === "checkout.session.completed") {
-        const session = webhookEvent.data.object as Stripe.Checkout.Session;
-        const userId = session.client_reference_id;
-
-        if (!userId) {
-          console.error("Critical: checkout.session.completed missing userId.");
-          response
-              .status(200)
-              .send("Event handled, but no userId was present.");
-          return;
-        }
-
-        const subscriptionId = session.subscription;
-        const customerId = session.customer;
-        const subscriptionTier =
-        session.metadata?.subscription_tier || "premium";
-
-        if (!subscriptionId || !customerId) {
-          console.error(
-              `Critical: Missing subscription or customer ID for user ${userId}.`
-          );
-          response
-              .status(200)
-              .send("Event handled, but subscription or customer ID was missing.");
-          return;
-        }
-
-        try {
-          await admin.firestore().collection("users").doc(userId).update({
-            subscriptionTier: subscriptionTier,
-            stripeSubscriptionId: subscriptionId,
-            stripeCustomerId: customerId.toString(),
-            subscriptionStatus: "active",
-          });
-          console.log(
-              `Successfully updated user ${userId} to premium subscription.`
-          );
-        } catch (error) {
-          console.error(
-              `Failed to update user ${userId} in Firestore:`,
-              error
-          );
-          response.status(500).send("Failed to update user record in Firestore.");
-          return;
-        }
-      }
-
-      response.status(200).send("Event received.");
     }
 );

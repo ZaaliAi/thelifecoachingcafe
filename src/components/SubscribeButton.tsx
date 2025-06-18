@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
-import { functions } from '@/lib/firebase'; 
+import { functions } from '@/lib/firebase';
 import getStripe from '@/lib/stripe';
 
 interface SubscribeButtonProps {
@@ -36,10 +36,9 @@ const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     setLoading(true);
 
     try {
-      // Corrected function name to match our implementation
       const createCheckoutSession = httpsCallable(
- functions, // Use the imported functions instance directly
- 'createCheckoutSessionCallable'
+        functions,
+        'createCheckoutSessionCallable'
       );
 
       console.log(`Creating checkout session for user: ${userId}, price: ${priceId}`);
@@ -47,12 +46,12 @@ const SubscribeButton: React.FC<SubscribeButtonProps> = ({
       const successUrl = `${window.location.origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${window.location.origin}/payment-cancelled`;
 
-      // Corrected payload to match our function's expected arguments
+      // **FIX:** Changed 'userId' to 'client_reference_id' to correctly pass the user's ID to Stripe.
       const { data }: any = await createCheckoutSession({
-        priceId: priceId,       // Corrected from 'price' to 'priceId'
+        priceId: priceId,
         successUrl: successUrl,
         cancelUrl: cancelUrl,
-        userId: userId,          // Explicitly passing userId
+        client_reference_id: userId, // Correctly pass the user ID for webhook identification
       });
 
       console.log('Stripe checkout session created:', data);
