@@ -26,9 +26,11 @@ export async function POST(request: Request) {
 
     const stripeCustomerId = userData.stripeCustomerId;
 
+    const returnUrl = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/coach/settings` : 'https://thelifecoachingcafe.com/dashboard/coach/settings';
+
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/coach/settings`,
+      return_url: returnUrl,
     });
 
     return NextResponse.json({ url: portalSession.url });
