@@ -1,7 +1,17 @@
 // next.config.ts
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Add this redirects function to handle the trailing slash issue
+  async redirects() {
+    return [
+      {
+        source: '/api/stripe-webhook/',
+        destination: '/api/stripe-webhook',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
@@ -10,14 +20,11 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // output: 'export', // This line is now commented out
-  // Your existing config options (like typescript, eslint, images) should remain
-  // If they were here before, keep them. If not, this is a typical setup.
   typescript: {
-    ignoreBuildErrors: true, // Consider removing this for production if possible
+    ignoreBuildErrors: true,
   },
   eslint: {
-    ignoreDuringBuilds: true, // Consider removing this for production if possible
+    ignoreDuringBuilds: true,
   },
   images: {
     remotePatterns: [
@@ -29,11 +36,10 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com', // If you use Firebase Storage for images
+        hostname: 'firebasestorage.googleapis.com',
         port: '',
         pathname: '/**',
-      }
-      // Add other image remote patterns if needed
+      },
     ],
   },
   devIndicators: {
@@ -41,10 +47,8 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: ["3000-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev", "9003-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev"],
   experimental: {
-    // serverComponentsExternalPackages: ['firebase-admin'], // Might be useful with app router
+    // serverComponentsExternalPackages: ['firebase-admin'],
   },
-
-  // Any other Next.js configurations you might have
 };
 
 export default nextConfig;
