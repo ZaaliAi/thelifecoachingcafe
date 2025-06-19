@@ -187,8 +187,7 @@ export default function CreateBlogPostPage() {
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('**', '**')}>Bold</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('_', '_')}>Italic</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('### ', '')}>H3</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('
-- ', '')}>List</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('- ', '')}>List</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('[', '](url)')}>Link</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('`', '`')}>Code</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('> ', '')}>Quote</Button>
