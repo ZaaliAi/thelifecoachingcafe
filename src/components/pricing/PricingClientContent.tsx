@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/accordion";
 import { Check, Crown, Users, Loader2, Minus, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
+import SchemaMarkup from '@/components/SchemaMarkup';
 
 const freeFeatures = [
   "Basic Profile (Name, Bio, Specialties, Keywords)",
@@ -153,6 +155,41 @@ export default function PricingClientContent() {
     fetchPaidProductsAndPrices();
   }, [authLoading]);
 
+  const premiumProduct = paidProducts.find(p => p.role === 'premium');
+  const premiumPrice = premiumProduct?.prices?.[0];
+  const premiumPriceAmount = typeof premiumPrice?.unit_amount === 'number' ? (premiumPrice.unit_amount / 100).toFixed(2) : 'N/A';
+  const premiumDisplayDescription = "Ideal for established coaches aiming to maximize client reach and brand visibility.";
+
+  const serviceSchema = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "serviceType": "Coach Subscription",
+    "provider": {
+      "@type": "Organization",
+      "name": "The Life Coaching Cafe"
+    },
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Coach Subscription Plans",
+      "itemListElement": [
+        {
+          "@type": "Offer",
+          "name": "Free Tier",
+          "price": "0",
+          "priceCurrency": "GBP",
+          "description": "Get started and build your presence. Perfect for new coaches or those exploring the platform."
+        },
+        premiumProduct && premiumPrice ? {
+          "@type": "Offer",
+          "name": premiumProduct.name || 'Premium Plan',
+          "price": premiumPriceAmount,
+          "priceCurrency": premiumPrice.currency.toUpperCase(),
+          "description": premiumDisplayDescription
+        } : null
+      ].filter(Boolean)
+    }
+  };
+
   if (authLoading || loadingProducts) {
     return (
       <div className="container mx-auto py-12 px-4 min-h-screen flex flex-col items-center justify-center">
@@ -181,13 +218,9 @@ export default function PricingClientContent() {
     );
   }
 
-  const premiumProduct = paidProducts.find(p => p.role === 'premium');
-  const premiumPrice = premiumProduct?.prices?.[0];
-  const premiumPriceAmount = typeof premiumPrice?.unit_amount === 'number' ? (premiumPrice.unit_amount / 100).toFixed(2) : 'N/A';
-  const premiumDisplayDescription = "Ideal for established coaches aiming to maximize client reach and brand visibility.";
-
   return (
     <main className="space-y-12 py-8 md:py-12 container mx-auto px-4 sm:px-6 lg:px-8">
+      <SchemaMarkup data={serviceSchema} />
       <section className="text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-4">Life Coach Subscription Plans</h1>
         <p className="text-lg text-muted-foreground max-w-xl mx-auto">
