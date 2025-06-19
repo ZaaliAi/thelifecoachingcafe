@@ -269,12 +269,18 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             console.log('User profile updated with image URL in Firestore.');
 
             // ADD THIS: Also update the main auth user record so the app sees the change immediately
-            if (registeredUser) {
-              await updateProfile(registeredUser, { photoURL: finalProfileImageUrl });
+            if (registeredUser && finalProfileImageUrl) { // ensure finalProfileImageUrl is not null
+              const { updateProfile } = await import('firebase/auth'); // Import updateProfile
+              const authUser = (await import('@/lib/firebase')).auth.currentUser; // Get current auth user
+              if (authUser) {
+                 await updateProfile(authUser, { photoURL: finalProfileImageUrl });
+                 console.log('Auth user profile updated with photoURL.');
+              } else {
+                console.warn('Could not update auth user profile, currentUser is null.');
+              }
             }
-
           } catch (updateError) {
-            console.error('Error updating user profile with image URL:', updateError);
+            console.error('Error updating user profile with image URL in Firestore or Auth:', updateError);
             toast({
               title: 'Profile Image Update Failed',
               description: 'Your account was created, but we couldn\'t save your profile picture. Please try updating it from your profile settings.',
@@ -283,18 +289,8 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             });
           }
         }
-            // Optionally, add a success toast here if desired
-          } catch (updateError) {
-            console.error('Error updating user profile with image URL:', updateError);
-            toast({
-              title: 'Profile Image Update Failed',
-              description: 'Your account was created, but we couldn\'t save your profile picture. Please try updating it from your profile settings.',
-              variant: 'warning',
-              duration: 8000,
-            });
-          }
-        }
-      }
+      } // This closes the "if (selectedFile && createdUserId)" block.
+      // The extraneous catch block and its contents were here and are now removed.
       
       // --- Process Testimonials (Option B) ---
       if (!isFreeTier && testimonialEntries.length > 0 && createdUserId) {
@@ -383,23 +379,26 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             if (stripeError) {
               throw new Error(stripeError.message || "Error redirecting to Stripe.");
             }
-            return;
+            return; // Important: return after redirecting to Stripe
           }
           throw new Error("Stripe.js failed to load.");
         }
         throw new Error("No sessionId returned from createCheckoutSessionCallable.");
-      }
+      } // This closes the "if (planId && createdUserId)" block.
+
       // Clear Local Storage after successful operations, before final navigation for non-Stripe path
+      // This code should only run if not redirecting to Stripe
       try {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         localStorage.removeItem('coachFormUpgradeAttempt'); // Also clear the upgrade flag
         console.log('Local storage cleared after successful submission.'); // Debug
-      } catch (error) {
-        console.error("Error clearing local storage:", error);
+      } catch (lsError) { // Changed variable name to avoid conflict
+        console.error("Error clearing local storage:", lsError);
         // Non-critical, so don't let this break the flow
       }
-      router.push('/dashboard/coach');
-    } catch (error: any) {
+      router.push('/dashboard/coach'); // Navigate for free tier or if Stripe flow somehow bypassed
+
+    } catch (error: any) { // This is the main catch block for the onSubmit function
       console.error('Error during coach registration process:', error);
       toast({
         title: 'Registration Failed',
@@ -407,7 +406,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         variant: 'destructive',
       });
     }
-  };
+  }; // This is the end of the onSubmit function
   
   const addSuggestedKeyword = (keyword: string) => {
     const currentKeywords = getValues('keywords') || '';
