@@ -232,7 +232,7 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     }
     setIsUpgrading(true);
     const result = await initiateStripeCheckout({
-      priceId: "price_1P6g6bHAbH8p1j3J5sY5e5g5", // Replace with your actual premium price ID
+      priceId: "price_1RbHz1G028VJJAft7M0DUoUF", // Replace with your actual premium price ID
       user: user,
     });
 

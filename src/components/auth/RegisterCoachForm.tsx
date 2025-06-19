@@ -28,7 +28,7 @@ import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'; // Added for testimonials
 
-const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RURVlG6UVJU45QN1mByj8Fc";
+const YOUR_DEFAULT_PREMIUM_PRICE_ID = "price_1RbHz1G028VJJAft7M0DUoUF";
 const LOCAL_STORAGE_KEY = 'registerCoachFormData';
 
 interface RegisterCoachFormProps {
@@ -341,16 +341,11 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         const functionsInstance: Functions = getFunctions(firebaseApp);
         const createCheckoutSession = httpsCallable(functionsInstance, 'createCheckoutSessionCallable');
         
-        const successUrl = `${window.location.origin}/dashboard/coach/profile?subscription_success=true`;
-        const cancelUrl = `${window.location.origin}/pricing?subscription_cancelled=true`;
-
         const { data: checkoutData }: any = await createCheckoutSession({
           priceId: planId,
-          successUrl: successUrl,
-          cancelUrl: cancelUrl,
           userId: createdUserId,
         });
-
+        
         if (checkoutData.error) {
           throw new Error(checkoutData.error.message || "Could not create Stripe session after registration.");
         }

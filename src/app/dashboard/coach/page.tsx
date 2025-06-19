@@ -82,7 +82,7 @@ export default function CoachDashboardPage() {
       const cancelUrl = `${window.location.origin}/dashboard/coach`;
 
       const result: any = await createCheckoutSession({
-        priceId: "price_1RURVlG6UVJU45QN1mByj8Fc", // Premium Price ID
+        priceId: "price_1RbHz1G028VJJAft7M0DUoUF", // Premium Price ID
         successUrl: successUrl,
         cancelUrl: cancelUrl,
         userId: user.id,
