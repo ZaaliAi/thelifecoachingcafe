@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, ChangeEvent } from 'react';
-// MARKDOWN PREVIEW: Add watch to useForm import
 import { useForm, type SubmitHandler, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-// MARKDOWN PREVIEW: Added Eye icon
-import { Loader2, PlusCircle, FileText, Save, Eye } from 'lucide-react';
+import { Loader2, PlusCircle, FileText, Save, Eye, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
@@ -20,7 +18,6 @@ import { createFirestoreBlogPost } from '@/lib/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from '@/lib/firebase';
 
-// MARKDOWN PREVIEW: Import ReactMarkdown
 import ReactMarkdown from 'react-markdown';
 
 const blogPostSchema = z.object({
@@ -40,32 +37,50 @@ export default function CreateBlogPostPage() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState('');
   const { toast } = useToast();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth(); // Assuming useAuth provides the full user object including subscriptionTier
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    control, // MARKDOWN PREVIEW: Need control for useWatch if used standalone, or just watch from useForm directly
-    getValues // Added getValues here
+    control,
+    getValues
   } = useForm<BlogPostFormData>({
     resolver: zodResolver(blogPostSchema),
     defaultValues: {
       status: 'draft',
-      content: '', // MARKDOWN PREVIEW: Ensure content has a default value for watch
+      content: '',
     }
   });
 
-  // MARKDOWN PREVIEW: Watch the content field. Using useWatch for more direct access.
-  // Alternatively, you can get `watch` from `useForm` and call `const watchedContent = watch("content");`
   const watchedContent = useWatch({
     control,
     name: "content",
-    defaultValue: "" // Default value if content is not yet set
+    defaultValue: ""
   });
 
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
+  
+  // Premium Feature Check
+  if (user && user.subscriptionTier !== 'premium') {
+    return (
+      <Card className="shadow-lg max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-2xl flex items-center text-destructive">
+            <AlertTriangle className="mr-3 h-7 w-7" />
+            Premium Feature
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>Creating blog posts is a premium feature. To share your insights with the community, please upgrade your plan.</p>
+          <Button asChild className="mt-4">
+            <a href="/pricing">View Pricing Plans</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   function insertMarkdown(prefix: string, suffix: string) {
     const textarea = contentRef.current;
@@ -79,10 +94,8 @@ export default function CreateBlogPostPage() {
       prefix + selectedText + suffix +
       textarea.value.substring(end);
 
-    // setValue is correct for react-hook-form
     setValue('content', newText, { shouldValidate: true, shouldDirty: true });
     textarea.focus();
-    // Manually set selection to after the inserted markdown
      setTimeout(() => {
         textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
     }, 0);
@@ -90,15 +103,9 @@ export default function CreateBlogPostPage() {
 
   async function uploadImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
-      if (!user) {
-        reject(new Error("No logged-in user found."));
-        return;
-      }
+      if (!user) return reject(new Error("No logged-in user found."));
       const userId = user.id || user.uid;
-      if (!userId) {
-        reject(new Error("User ID not found."));
-        return;
-      }
+      if (!userId) return reject(new Error("User ID not found."));
 
       const fileName = `${Date.now()}_${file.name}`;
       const storageRef = ref(storage, `blog-images/${userId}/${fileName}`);
@@ -106,12 +113,8 @@ export default function CreateBlogPostPage() {
 
       uploadTask.on('state_changed',
         () => {},
-        (error) => { reject(error); },
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            resolve(downloadURL);
-          });
-        }
+        (error) => reject(error),
+        () => getDownloadURL(uploadTask.snapshot.ref).then(resolve)
       );
     });
   }
@@ -124,25 +127,19 @@ export default function CreateBlogPostPage() {
       const url = await uploadImage(file);
       setUploadedImageUrl(url);
       setValue('featuredImageUrl', url, { shouldValidate: true });
-      toast({
-        title: "Image uploaded successfully",
-        description: "Your featured image has been uploaded.",
-      });
+      toast({ title: "Image uploaded successfully" });
     } catch (error) {
       console.error("Image upload error:", error);
-      toast({
-        title: "Upload Failed",
-        description: "There was an error uploading your image. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Upload Failed", variant: "destructive" });
     } finally {
       setUploading(false);
     }
   }
 
   const onSubmit: SubmitHandler<BlogPostFormData> = async (data) => {
-    if (!user || user.role !== 'coach') {
-      toast({ title: "Unauthorized", description: "You must be a coach to create a blog post.", variant: "destructive" });
+    // Redundant check, but good for defense-in-depth
+    if (user?.subscriptionTier !== 'premium') {
+      toast({ title: "Upgrade Required", description: "You must be a premium coach to create a blog post.", variant: "destructive" });
       return;
     }
     setIsLoading(true);
@@ -160,11 +157,7 @@ export default function CreateBlogPostPage() {
       router.push('/dashboard/coach/blog');
     } catch (error) {
       console.error("Failed to submit blog post:", error);
-      toast({
-        title: "Submission Failed",
-        description: "There was an error submitting your blog post. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Submission Failed", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -187,7 +180,6 @@ export default function CreateBlogPostPage() {
             {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
           </div>
 
-          {/* MARKDOWN PREVIEW: Content Area with Side-by-Side Preview */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div className="space-y-2">
               <Label htmlFor="content">Content (Markdown)</Label>
@@ -195,18 +187,19 @@ export default function CreateBlogPostPage() {
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('**', '**')}>Bold</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('_', '_')}>Italic</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('### ', '')}>H3</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('\n- ', '')}>List</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('
+- ', '')}>List</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('[', '](url)')}>Link</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('`', '`')}>Code</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => insertMarkdown('> ', '')}>Quote</Button>
               </div>
               <Textarea
                 id="content"
-                {...register('content')} // register already provides a ref
-                rows={15} // Increased rows
+                {...register('content')}
+                rows={15}
                 placeholder="Write your amazing blog post here... Supports Markdown."
                 className={`font-mono text-sm ${errors.content ? 'border-destructive' : ''}`}
-                ref={(e) => { // Combine react-hook-form's ref with your own contentRef
+                ref={(e) => {
                   register('content').ref(e);
                   contentRef.current = e;
                 }}
