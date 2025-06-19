@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import getStripe from '@/lib/stripe';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 import { firebaseApp } from '@/lib/firebase';
+import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 // Import Checkbox
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'; // Added for testimonials
@@ -250,6 +251,27 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       if (selectedFile && createdUserId) {
         finalProfileImageUrl = await uploadProfileImage(selectedFile, createdUserId, null);
         console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
+
+        // Update user profile with image URL in Firestore
+        if (finalProfileImageUrl) { // createdUserId is already confirmed by outer if
+          try {
+            const db = getFirestore(firebaseApp);
+            const userDocRef = doc(db, 'users', createdUserId);
+            await updateDoc(userDocRef, {
+              photoURL: finalProfileImageUrl
+            });
+            console.log('User profile updated with image URL in Firestore.');
+            // Optionally, add a success toast here if desired
+          } catch (updateError) {
+            console.error('Error updating user profile with image URL:', updateError);
+            toast({
+              title: 'Profile Image Update Failed',
+              description: 'Your account was created, but we couldn\'t save your profile picture. Please try updating it from your profile settings.',
+              variant: 'warning',
+              duration: 8000,
+            });
+          }
+        }
       }
       
       // --- Process Testimonials (Option B) ---
