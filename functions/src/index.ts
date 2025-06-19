@@ -73,6 +73,7 @@ export const createCheckoutSessionCallable = onCall(
 
 /**
  * Deletes a user account, including their data and Stripe subscription.
+ * This version uses a Firestore batch write to ensure atomic deletion of documents.
  */
 export const deleteUserAccount = onCall(
     {
@@ -88,19 +89,25 @@ export const deleteUserAccount = onCall(
       }
 
       const uid = request.auth.uid;
-      const userDocRef = admin.firestore().collection("users").doc(uid);
-
+      const db = admin.firestore();
+      const userDocRef = db.collection("users").doc(uid);
       const stripe = new Stripe(stripeSecretKey.value());
 
       try {
         const userDoc = await userDocRef.get();
+
+        // If the user document doesn't exist, just delete the auth user.
         if (!userDoc.exists) {
           await admin.auth().deleteUser(uid);
+          console.log(`Auth user ${uid} deleted. No Firestore doc was found.`);
           return {message: "Account deleted successfully."};
         }
 
         const userData = userDoc.data()!;
 
+        // First, attempt to cancel any active Stripe subscription.
+        // We log errors but don't block deletion if this fails, as the subscription
+        // might already be cancelled or have issues unrelated to our database.
         if (userData.stripeSubscriptionId) {
           try {
             await stripe.subscriptions.cancel(userData.stripeSubscriptionId);
@@ -111,38 +118,39 @@ export const deleteUserAccount = onCall(
             );
           } catch (error) {
             console.error(
-                `Failed to cancel Stripe subscription ${
-                  userData.stripeSubscriptionId
-                } for user ${uid}. It might have been already cancelled. Error:`,
+                `Failed to cancel Stripe subscription for user ${uid}. This might have been already cancelled or the ID is invalid. Continuing with account deletion. Error:`,
                 error
             );
           }
         }
 
-        await userDocRef.delete();
+        // Use a Firestore batch for atomic deletion of related documents.
+        const batch = db.batch();
 
+        // Add the main user document to the batch for deletion.
+        batch.delete(userDocRef);
+
+        // If the user is a coach, also add their coach profile to the batch.
         if (userData.role === "coach") {
-          const coachProfileRef = admin
-              .firestore()
-              .collection("coachProfiles")
-              .doc(uid);
-          const coachProfileDoc = await coachProfileRef.get();
-          if (coachProfileDoc.exists) {
-            await coachProfileRef.delete();
-          }
+          const coachProfileRef = db.collection("coachProfiles").doc(uid);
+          batch.delete(coachProfileRef);
         }
 
-        console.log(`Firestore documents for user ${uid} deleted.`);
+        // Commit the batch. If this fails, it will throw an error,
+        // and the auth user will NOT be deleted.
+        await batch.commit();
+        console.log(`Firestore documents for user ${uid} deleted successfully.`);
 
+        // ONLY after successful deletion of Firestore documents, delete the Auth user.
         await admin.auth().deleteUser(uid);
         console.log(`Firebase Auth user ${uid} deleted.`);
 
         return {
-          message:
-          "Your account and all associated data have been permanently deleted.",
+          message: "Your account and all associated data have been permanently deleted.",
         };
       } catch (error) {
         console.error(`Error deleting account for user ${uid}:`, error);
+        // This unified error handling will catch failures from Firestore, Auth, etc.
         throw new functions.https.HttpsError(
             "internal",
             "An error occurred while deleting your account. Please contact support."
@@ -150,6 +158,7 @@ export const deleteUserAccount = onCall(
       }
     }
 );
+
 
 /**
  * Helper function to send a templated email.
