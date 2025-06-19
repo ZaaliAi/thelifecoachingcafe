@@ -29,7 +29,7 @@ const AnnouncementBar: React.FC = () => {
       <div className="container mx-auto flex items-center justify-center">
         <Megaphone className="h-5 w-5 mr-2" />
         <span className="font-medium">
-          Limited time offer! 50% off Premium Plan.
+          Check Out The New Premium Plan Features.
         </span>
         <Link href="/pricing" className="underline ml-2 hover:text-secondary transition-colors">
           Learn More
