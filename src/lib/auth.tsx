@@ -94,21 +94,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const newFirebaseUser = userCredential.user;
 
+    // Update the separate Firebase Auth record with the user's display name.
+    // The photoURL will be added later in the form after the image is uploaded.
     await updateFirebaseProfile(newFirebaseUser, { displayName: name });
     
+    // Destructure to ensure we ONLY save the data we want in our Firestore document.
+    // This prevents stray fields like 'confirmPassword' or a mistaken 'photoURL' from being saved.
+    const { confirmPassword, password, photoURL, profileImageUrl, ...restOfAdditionalData } = additionalData || {};
+
+    // Build the exact data object we want to save for the new user.
     const initialProfileData: Partial<Omit<FirestoreUserProfile, 'id' | 'createdAt' | 'updatedAt'>> = {
         name,
         email,
         role,
-        ...additionalData
+        ...restOfAdditionalData, // This contains the clean data from the form (bio, specialties, etc.)
+        profileImageUrl: null,  // We add the field here and set it to null, so it's ready to be updated.
     };
+
     if (role === 'coach') {
         initialProfileData.subscriptionTier = 'free';
         initialProfileData.status = 'pending';
     }
 
+    // Create the user document in Firestore with the clean data
     await setUserProfile(newFirebaseUser.uid, initialProfileData);
 
+    // Fetch the newly created profile to update the app's state
     await fetchAndSetUser(newFirebaseUser);
 
     return newFirebaseUser;

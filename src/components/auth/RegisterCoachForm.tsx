@@ -56,8 +56,8 @@ const coachRegistrationSchema = z.object({
   profileImageUrl: z.string().url('Profile image URL must be a valid URL.').optional().or(z.literal('')).nullable(),
   websiteUrl: z.string().url('Invalid URL for website.').optional().or(z.literal('')),
   introVideoUrl: z.string().url('Invalid URL for intro video.').optional().or(z.literal('')),
-  socialLinkPlatform: z.string().optional(),
-  socialLinkUrl: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
+  socialLinkstform: z.string().optional(),
+  socialLinks: z.string().url('Invalid URL for social link.').optional().or(z.literal('')),
   availability: z.array(availabilitySlotSchema).min(1, "Please add at least one availability slot.").optional().default([]),
   terms: z.literal(true, {
     errorMap: () => ({
@@ -128,8 +128,8 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
       profileImageUrl: null, // Ensure this matches Zod schema (optional, nullable)
       websiteUrl: '',
       introVideoUrl: '',
-      socialLinkPlatform: '',
-      socialLinkUrl: '',
+      socialLinkstform: '',
+      socialLinks: '',
       availability: [],
       terms: false, // <-- Add initial value for terms
     };
@@ -223,14 +223,20 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
     let createdUserId: string | null = null;
 
     try {
-      const { password, confirmPassword, ...profileDetails } = data;
+      const { password, confirmPassword, socialLinkPlatform, socialLinkUrl, ...profileDetails } = data;
+      
       let additionalDataForAuth: Partial<FirestoreUserProfile> = {
         ...profileDetails,
         planId: planId || undefined,
-        photoURL: null,
         specialties: data.selectedSpecialties,
         availability: data.availability,
+        socialLinks: [], // Initialize socialLinks as an empty array
       };
+
+      // If the user provided social link info, create the array object
+      if (socialLinkPlatform && socialLinkUrl) {
+        additionalDataForAuth.socialLinks = [{ platform: socialLinkPlatform, url: socialLinkUrl }];
+      }
 
       if (selectedFile) {
         toast({ title: 'Uploading profile image...', description: 'Please wait.' });
@@ -253,14 +259,30 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         console.log("Profile image URL after upload (to be updated in Firestore):", finalProfileImageUrl);
 
         // Update user profile with image URL in Firestore
-        if (finalProfileImageUrl) { // createdUserId is already confirmed by outer if
+        if (finalProfileImageUrl) {
           try {
             const db = getFirestore(firebaseApp);
             const userDocRef = doc(db, 'users', createdUserId);
             await updateDoc(userDocRef, {
-              photoURL: finalProfileImageUrl
+              profileImageUrl: finalProfileImageUrl
             });
             console.log('User profile updated with image URL in Firestore.');
+
+            // ADD THIS: Also update the main auth user record so the app sees the change immediately
+            if (registeredUser) {
+              await updateProfile(registeredUser, { photoURL: finalProfileImageUrl });
+            }
+
+          } catch (updateError) {
+            console.error('Error updating user profile with image URL:', updateError);
+            toast({
+              title: 'Profile Image Update Failed',
+              description: 'Your account was created, but we couldn\'t save your profile picture. Please try updating it from your profile settings.',
+              variant: 'warning',
+              duration: 8000,
+            });
+          }
+        }
             // Optionally, add a success toast here if desired
           } catch (updateError) {
             console.error('Error updating user profile with image URL:', updateError);
@@ -670,14 +692,14 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="socialLinkPlatform" className="text-base font-medium">Social Media Platform</Label>
-                <Controller name="socialLinkPlatform" control={control} render={({ field }) => <Input id="socialLinkPlatform" placeholder="e.g., LinkedIn, Twitter" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
-                {errors.socialLinkPlatform && <p className="text-sm text-destructive mt-1">{errors.socialLinkPlatform.message}</p>}
+                <Label htmlFor="socialLinkstform" className="text-base font-medium">Social Media Platform</Label>
+                <Controller name="socialLinkstform" control={control} render={({ field }) => <Input id="socialLinkstform" placeholder="e.g., LinkedIn, Twitter" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
+                {errors.socialLinkstform && <p className="text-sm text-destructive mt-1">{errors.socialLinkstform.message}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="socialLinkUrl" className="text-base font-medium">Social Media URL</Label>
-                <Controller name="socialLinkUrl" control={control} render={({ field }) => <Input id="socialLinkUrl" type="url" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
-                {errors.socialLinkUrl && <p className="text-sm text-destructive mt-1">{errors.socialLinkUrl.message}</p>}
+                <Label htmlFor="socialLinks" className="text-base font-medium">Social Media URL</Label>
+                <Controller name="socialLinks" control={control} render={({ field }) => <Input id="socialLinks" type="url" placeholder="https://linkedin.com/in/yourprofile" {...field} className="text-base py-2.5" disabled={isFreeTier} />} />
+                {errors.socialLinks && <p className="text-sm text-destructive mt-1">{errors.socialLinks.message}</p>}
               </div>
               {isFreeTier && (
                 <div className="md:col-span-2 text-center p-4 mt-3 border border-custom-gold bg-light-gold-bg rounded-md">
