@@ -311,10 +311,15 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
   };
 
   let displayImageUrl: string | null = null;
-  if (imageAction === 'replace' && imagePreviewUrl) displayImageUrl = imagePreviewUrl;
-  else if (imageAction === 'keep' && initialData.profileImageUrl) displayImageUrl = initialData.profileImageUrl;
-  else if (imageAction === 'remove') displayImageUrl = null;
-  else if (initialData.profileImageUrl) displayImageUrl = initialData.profileImageUrl;
+    if (imageAction === 'replace' && imagePreviewUrl) {
+    displayImageUrl = imagePreviewUrl;
+    } else if (imageAction === 'keep' && initialData.profileImageUrl) {
+    displayImageUrl = initialData.profileImageUrl;
+    } else if (imageAction === 'remove') {
+    displayImageUrl = null;
+    } else if (initialData.profileImageUrl) {
+    displayImageUrl = initialData.profileImageUrl;
+    }
 
   const totalIsSubmitting = rhfIsSubmitting || uiIsSubmitting || isUpgrading;
 

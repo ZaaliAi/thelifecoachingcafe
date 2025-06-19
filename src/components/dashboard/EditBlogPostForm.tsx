@@ -9,14 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileEdit, Save, FileText, Eye } from 'lucide-react';
+import { Loader2, FileEdit, Save, FileText, Eye, Bold, Italic, Heading2, Link as LinkIcon, List, Quote } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { updateFirestoreBlogPost } from '@/lib/firestore';
 import type { BlogPost, FirestoreBlogPost } from '@/types';
 import Link from 'next/link';
-import { uploadProfileImage } from '@/services/imageUpload'; // Using the standardized image upload service
+import { uploadProfileImage } from '@/services/imageUpload';
 import ReactMarkdown from 'react-markdown';
 
 const blogPostEditSchema = z.object({
@@ -62,7 +62,8 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
     }
   });
 
-  const watchedContent = watch("content");
+  const contentFieldRegistration = register('content');
+  const watchedContent = watch("content", initialPostData.content);
 
   useEffect(() => {
     reset({
@@ -75,16 +76,12 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
     setImagePreview(initialPostData.featuredImageUrl || null);
   }, [initialPostData, reset]);
 
-  function insertMarkdown(prefix: string, suffix: string) {
+  const handleMarkdownClick = (prefix: string, suffix: string = '') => {
     const textarea = contentRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newText = textarea.value.substring(0, start) + prefix + selectedText + suffix + textarea.value.substring(end);
-    setValue('content', newText, { shouldValidate: true, shouldDirty: true });
-    textarea.focus();
-    // ... logic to set selection
-  }
+    if (textarea) {
+        insertMarkdown(textarea, prefix, suffix, setValue);
+    }
+  };
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -109,7 +106,6 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
             toast({ title: "Uploading image..."});
             finalImageUrl = await uploadProfileImage(featuredImageFile, user.id, initialPostData.featuredImageUrl);
         } else if (imagePreview === null && initialPostData.featuredImageUrl) {
-            // Image was removed
             await uploadProfileImage(undefined, user.id, initialPostData.featuredImageUrl);
             finalImageUrl = undefined;
         }
@@ -134,11 +130,6 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
         setIsSubmitting(false);
     }
   };
-  
-  const handleFormSubmitWithStatus = async (newStatus: BlogPost['status']) => {
-    setValue('status', newStatus, { shouldValidate: true, shouldDirty: true });
-    await handleSubmit(onSubmit)();
-  };
 
   if (authLoading) return <div className="flex justify-center items-center h-full min-h-[300px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!user || initialPostData.authorId !== user.id) return <div>Access Denied.</div>;
@@ -151,24 +142,47 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-6">
-            {/* Form Fields for Title, Content, Excerpt, Tags etc. */}
             <div className="space-y-2">
                 <Label htmlFor="title">Post Title</Label>
                 <Input id="title" {...register('title')} />
                 {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
             </div>
 
+            <div className="space-y-2">
+                <Label htmlFor="excerpt">Blog Summary / Excerpt</Label>
+                <Textarea id="excerpt" {...register('excerpt')} rows={3} placeholder="A short summary of the post."/>
+                {errors.excerpt && <p className="text-sm text-destructive">{errors.excerpt.message}</p>}
+            </div>
+            
+            <div className="space-y-2">
+                <Label>Markdown Toolbar</Label>
+                <div className="flex space-x-2 border rounded-md p-2 bg-muted">
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('**', '**')}><Bold className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('*', '*')}><Italic className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('## ')}><Heading2 className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('> ')}><Quote className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('[', '](url)')}><LinkIcon className="h-4 w-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleMarkdownClick('- ')}><List className="h-4 w-4" /></Button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Content Textarea */}
                 <div className="space-y-2">
                     <Label htmlFor="content">Content (Markdown)</Label>
-                    <Textarea id="content" {...register('content')} rows={15} />
+                    <Textarea 
+                        id="content"
+                        rows={15} 
+                        {...contentFieldRegistration}
+                        ref={(e) => {
+                          contentFieldRegistration.ref(e);
+                          contentRef.current = e;
+                        }}
+                    />
                     {errors.content && <p className="text-sm text-destructive">{errors.content.message}</p>}
                 </div>
-                {/* Markdown Preview */}
                 <div className="space-y-2">
                     <Label>Live Preview</Label>
-                    <div className="prose dark:prose-invert max-w-none p-4 border rounded-md min-h-[300px]"><ReactMarkdown>{watchedContent}</ReactMarkdown></div>
+                    <div className="prose dark:prose-invert max-w-none p-4 border rounded-md min-h-[300px] bg-muted/40"><ReactMarkdown>{watchedContent}</ReactMarkdown></div>
                 </div>
             </div>
             
@@ -182,21 +196,45 @@ export default function EditBlogPostForm({ initialPostData, postId }: EditBlogPo
                     </div>
                 )}
             </div>
+            
+            <div className="space-y-2">
+                <Label htmlFor="tags">Tags (comma-separated)</Label>
+                <Input id="tags" {...register('tags')} placeholder="e.g. mindfulness, productivity, relationships"/>
+            </div>
+
         </CardContent>
-        <CardFooter className="flex justify-between">
-            <Button type="button" variant="outline" onClick={() => handleFormSubmitWithStatus('draft')} disabled={isSubmitting}>Save Draft</Button>
-            <Button type="button" onClick={() => handleFormSubmitWithStatus('pending_approval')} disabled={isSubmitting}>Submit for Approval</Button>
+        <CardFooter className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center space-x-4">
+                <Link href="/dashboard/coach/blog" className="text-sm font-medium hover:underline">Cancel</Link>
+            </div>
+            <div className="flex items-center space-x-4">
+                <Button type="submit" variant="outline" onClick={() => setValue('status', 'draft')} disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save Draft
+                </Button>
+                <Button type="submit" onClick={() => setValue('status', 'pending_approval')} disabled={isSubmitting}>
+                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                    Submit for Approval
+                </Button>
+            </div>
         </CardFooter>
       </form>
     </Card>
   );
 }
 
-// Helper function for markdown insertion
 function insertMarkdown(textarea: HTMLTextAreaElement, prefix: string, suffix: string, setValue: Function) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = textarea.value.substring(start, end);
     const newText = textarea.value.substring(0, start) + prefix + selectedText + suffix + textarea.value.substring(end);
+    
     setValue('content', newText, { shouldValidate: true, shouldDirty: true });
+    
+    // This timeout is necessary to allow React to re-render the textarea before we set the selection
+    setTimeout(() => {
+        textarea.focus();
+        const newCursorPosition = start + prefix.length;
+        textarea.setSelectionRange(newCursorPosition, newCursorPosition + selectedText.length);
+    }, 0);
 }
