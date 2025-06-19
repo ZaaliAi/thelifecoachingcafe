@@ -341,11 +341,15 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
         const functionsInstance: Functions = getFunctions(firebaseApp);
         const createCheckoutSession = httpsCallable(functionsInstance, 'createCheckoutSessionCallable');
         
+        const successUrl = `${window.location.origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
+        const cancelUrl = `${window.location.origin}/payment-cancelled`;
+
         const { data: checkoutData }: any = await createCheckoutSession({
           priceId: planId,
-          userId: createdUserId,
+          successUrl: successUrl, // <-- ADD THIS LINE
+          cancelUrl: cancelUrl,   // <-- ADD THIS LINE
         });
-        
+                
         if (checkoutData.error) {
           throw new Error(checkoutData.error.message || "Could not create Stripe session after registration.");
         }
