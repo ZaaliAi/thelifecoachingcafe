@@ -259,7 +259,7 @@ export default function RegisterCoachForm({ planId }: RegisterCoachFormProps) {
             console.error('Error updating user profile with image URL:', updateError);
             toast({
               title: 'Profile Image Update Failed',
-              description: 'Your account was created, but we couldn't save your profile picture. Please try updating it from your profile settings.',
+              description: `Your account was created, but we couldn't save your profile picture. Please try updating it from your profile settings.`,
               variant: 'warning',
               duration: 8000,
             });
