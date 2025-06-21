@@ -69,7 +69,7 @@ export default function PrivacyPolicyPage() {
               <li>Process your transactions and send you related information, including purchase confirmations and invoices.</li>
               <li>Communicate with you, including responding to your comments, questions, and requests, and providing customer service.</li>
               <li>Send you technical notices, updates, security alerts, and support and administrative messages.</li>
-              <li>Monitor and analyze trends, usage, and activities in connection with our Services.</li>
+              <li>Monitor and analyse trends, usage, and activities in connection with our Services.</li>
             </ul>
           </section>
 

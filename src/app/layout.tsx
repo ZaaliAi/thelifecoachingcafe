@@ -68,7 +68,7 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@graph": [
                 {
-                  "@type": "Organization",
+                  "@type": "Organisation",
                   "name": "The Life Coaching Cafe",
                   "url": "https://thelifecoachingcafe.com",
                   "logo": "https://thelifecoachingcafe.com/preview.jpg",

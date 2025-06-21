@@ -165,7 +165,7 @@ export default function PricingClientContent() {
     "@type": "Service",
     "serviceType": "Coach Subscription",
     "provider": {
-      "@type": "Organization",
+      "@type": "Organisation",
       "name": "The Life Coaching Cafe"
     },
     "hasOfferCatalog": {

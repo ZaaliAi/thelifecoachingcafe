@@ -75,7 +75,7 @@ Available Coaches:
 {{/each}}
 
 Based *only* on the "Available Coaches" list provided above and the "User's Coaching Needs":
-1. Analyze the user's needs carefully.
+1. Analyse the user's needs carefully.
 2. For each coach in the "Available Coaches" list, determine how well they match the user's needs.
 3. Provide a ranked list of the top 3-5 most suitable coaches. If fewer than 3 coaches are a good match, list only those. If no coaches are a good match, return an empty list.
 4. For each coach in your ranked list, include:

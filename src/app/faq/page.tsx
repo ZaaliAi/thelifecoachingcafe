@@ -39,7 +39,7 @@ const faqs = [
   {
     question: "How does the CoachMatch AI work?",
     answer:
-      "You describe your coaching needs, goals, or challenges in your own words. Our AI analyzes your input and compares it against our database of coach profiles, specialties, and keywords to provide you with a ranked list of suitable coaches.",
+      "You describe your coaching needs, goals, or challenges in your own words. Our AI analyses your input and compares it against our database of coach profiles, specialties, and keywords to provide you with a ranked list of suitable coaches.",
   },
   {
     question: "Is it free to search for a coach?",

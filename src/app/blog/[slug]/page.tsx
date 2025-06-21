@@ -173,7 +173,7 @@ export default async function BlogPostPage({ params, searchParams }: PageProps) 
               "name": "${post.authorName.replace(/"/g, '\\"')}"
             },
             "publisher": {
-              "@type": "Organization",
+              "@type": "Organisation",
               "name": "The Life Coaching Cafe",
               "logo": {
                 "@type": "ImageObject",

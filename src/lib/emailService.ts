@@ -12,7 +12,7 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<voi
     <p><b>Ready to stand out?</b> Upgrade to our Premium plan to unlock powerful features:</p>
     <ul>
       <li><b>Profile Picture:</b> Add a personal touch and let clients see who you are.</li>
-      <li><b>Premium Badge:</b> Get recognized with a special badge on your profile.</li>
+      <li><b>Premium Badge:</b> Get recognised with a special badge on your profile.</li>
       <li><b>Website & Social Media Links:</b> Drive traffic to your personal brand.</li>
       <li><b>Embed Videos:</b> Share your message and coaching style with an intro video.</li>
     </ul>
