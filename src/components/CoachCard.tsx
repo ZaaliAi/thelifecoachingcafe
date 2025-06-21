@@ -1,92 +1,17 @@
-"use client"; 
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
-import type { Coach, FirestoreUserProfile } from '@/types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import type { Coach } from '@/types';
+import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Star } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Briefcase, MapPin, MessageSquare, Crown, Heart, Loader2 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAuth } from '@/lib/auth';
-import { addCoachToFavorites, removeCoachFromFavorites, getUserProfile } from '@/lib/firestore';
-import { useToast } from '@/hooks/use-toast';
 
 interface CoachCardProps {
   coach: Coach;
 }
 
 export function CoachCard({ coach }: CoachCardProps) {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [isFavorited, setIsFavorited] = useState(false);
-  const [isLoadingFavorite, setIsLoadingFavorite] = useState(false);
-  const [checkingFavoriteStatus, setCheckingFavoriteStatus] = useState(true);
-
-  const fetchFavoriteStatus = useCallback(async () => {
-    if (user && user.id && coach && coach.id) {
-      setCheckingFavoriteStatus(true);
-      try {
-        const userProfile = await getUserProfile(user.id);
-        if (userProfile && userProfile.favoriteCoachIds?.includes(coach.id)) {
-          setIsFavorited(true);
-        } else {
-          setIsFavorited(false);
-        }
-      } catch (error) {
-        console.error("Error fetching favorite status:", error);
-      } finally {
-        setCheckingFavoriteStatus(false);
-      }
-    } else {
-      setIsFavorited(false);
-      setCheckingFavoriteStatus(false);
-    }
-  }, [user, coach.id]);
-
-  useEffect(() => {
-    fetchFavoriteStatus();
-  }, [fetchFavoriteStatus]);
-
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!user || !user.id) {
-      toast({
-        title: "Login Required",
-        description: "Please log in to favorite a coach.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!coach || !coach.id) return;
-
-    setIsLoadingFavorite(true);
-    try {
-      if (isFavorited) {
-        await removeCoachFromFavorites(user.id, coach.id);
-        setIsFavorited(false);
-        toast({ title: "Unfavorited", description: `${coach.name} removed from your favorites.` });
-      } else {
-        await addCoachToFavorites(user.id, coach.id);
-        setIsFavorited(true);
-        toast({ title: "Favorited!", description: `${coach.name} added to your favorites.` });
-      }
-    } catch (error) {
-      console.error("Error toggling favorite:", error);
-      toast({ title: "Error", description: "Could not update favorites. Please try again.", variant: "destructive" });
-    } finally {
-      setIsLoadingFavorite(false);
-    }
-  };
-
-  if (!coach || !coach.name) {
-    return null;
-  }
-
   const initials = coach.name
     ? coach.name
         .split(' ')
@@ -97,103 +22,45 @@ export function CoachCard({ coach }: CoachCardProps) {
     : 'CC';
 
   return (
-    <Card className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
-      <CardHeader className="relative flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-6">
-        {user && (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 text-muted-foreground hover:text-primary disabled:opacity-50"
-                        onClick={handleToggleFavorite}
-                        disabled={isLoadingFavorite || checkingFavoriteStatus}
-                        aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                    >
-                        {isLoadingFavorite || checkingFavoriteStatus ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                            <Heart className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : 'fill-none'}`} />
-                        )}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>{isFavorited ? 'Remove from favorites' : 'Add to favorites'}</p>
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
-        )}
-        {coach.profileImageUrl && (
-          <Avatar className="h-24 w-24 sm:h-20 sm:w-20 flex-shrink-0">
-            <AvatarImage
-              src={coach.profileImageUrl}
-              alt={`Profile picture of ${coach.name}`}
-              data-ai-hint={(coach.dataAiHint as string) || 'person portrait'}
-            />
-            <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
-          </Avatar>
-        )}
-        <div className="flex-1 text-center sm:text-left">
-          <div className="flex items-center justify-center sm:justify-start gap-2">
-            <CardTitle className="text-xl font-semibold">{coach.name}</CardTitle>
-            {coach.subscriptionTier === 'premium' && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge className="ml-2 bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-primary-foreground border-yellow-500">
-                      <Crown className="h-4 w-4" />
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>This coach has a Premium subscription.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-          {coach.location && (
-            <p className="text-sm text-muted-foreground flex items-center justify-center sm:justify-start mt-1">
-              <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
-              {coach.location}
-            </p>
+    <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+      {coach.matchScore && (
+        <div className="absolute top-2 right-2 bg-green-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-md z-10">
+            {Math.round(coach.matchScore)}% Match
+        </div>
+      )}
+      
+      <div className="w-full h-32 bg-muted flex items-center justify-center">
+        <Avatar className="w-28 h-28 border-4 border-background shadow-lg">
+            <AvatarImage src={coach.profileImageUrl || ''} alt={`Profile picture of ${coach.name}`} className="object-cover" />
+            <AvatarFallback className="text-3xl font-semibold bg-primary/10 text-primary">
+                {initials}
+            </AvatarFallback>
+        </Avatar>
+      </div>
+
+      <CardContent className="p-6 flex-grow text-center">
+        <CardTitle className="text-2xl mb-2">
+          <Link href={`/coach/${coach.id}`} className="hover:text-primary transition-colors">
+            {coach.name}
+          </Link>
+        </CardTitle>
+        <p className="text-muted-foreground text-sm mb-4">{coach.tagline}</p>
+        <div className="h-8 mb-4 flex items-center justify-center">
+          {coach.specialties && coach.specialties[0] && (
+            <p className="text-md font-semibold text-primary">{coach.specialties[0]}</p>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="p-6 pt-0 flex-grow">
-        <p className="text-sm text-muted-foreground line-clamp-4 mb-4">{coach.bio}</p>
-        <div className="mb-2">
-          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold mb-2 flex items-center">
-            <Briefcase className="h-4 w-4 mr-1.5 flex-shrink-0" />
-            Specialties
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {coach.specialties?.slice(0, 3).map((specialty) => (
-              <Badge key={specialty} variant="default" className="text-xs">
-                {specialty}
-              </Badge>
-            ))}
-            {coach.specialties && coach.specialties.length > 3 && (
-              <Badge variant="outline" className="text-xs">
-                +{coach.specialties.length - 3} more
-              </Badge>
-            )}
-          </div>
-        </div>
+        <p className="text-foreground/80 line-clamp-3 text-left">{coach.bio}</p>
       </CardContent>
-      <CardFooter className="p-6 border-t mt-auto">
-        <div className="flex gap-2 w-full">
-          <Button asChild variant="outline" className="flex-1">
-            <Link href={`/coach/${coach.id}`}>View Profile</Link>
-          </Button>
-          <Button asChild className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href={`/messages/new?coachId=${coach.id}`}>
-              <>
-                <MessageSquare className="mr-2 h-4 w-4" /> Message
-              </>
-            </Link>
-          </Button>
+      <CardFooter className="p-6 bg-muted/50 flex justify-between items-center">
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Star className="w-4 h-4 text-yellow-500" />
+            <span>{coach.averageRating?.toFixed(1) || 'New'}</span>
+            <span className="ml-1">({coach.reviewCount || 0} reviews)</span>
         </div>
+        <Button asChild>
+          <Link href={`/coach/${coach.id}`}>View Profile</Link>
+        </Button>
       </CardFooter>
     </Card>
   );

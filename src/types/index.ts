@@ -67,6 +67,10 @@ export interface Coach {
   status?: CoachStatus;
   dataSource?: string;
   isFeaturedOnHomepage?: boolean;
+  matchScore?: number;
+  averageRating?: number;
+  reviewCount?: number;
+  tagline?: string;
 }
 
 // Type for Firestore Timestamps or JS Date objects (for flexibility)

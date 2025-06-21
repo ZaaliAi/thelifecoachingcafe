@@ -19,7 +19,7 @@ const navLinks = [
   // { href: '/pricing', label: 'Pricing', icon: Tag }, // Removed pricing link
 ];
 
-const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" }) => {
+const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: { href: string; label: string; icon: React.ElementType; onClick?: () => void, variant?: "default" | "ghost" | "primary" | "outline" }) => {
   const pathname = usePathname();
   const isActive = pathname === href;
   
@@ -30,7 +30,12 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
   if (variant === "primary") {
     activeClasses = "bg-primary text-primary-foreground"; 
     inactiveClasses = "bg-primary text-primary-foreground hover:bg-primary/90";
-  } else {
+  } else if (variant === "outline") {
+    activeClasses = "bg-primary/20 text-primary border border-primary";
+    inactiveClasses = "text-foreground/70 hover:text-foreground hover:bg-muted border border-transparent";
+  }
+  
+  else {
     activeClasses = "bg-primary/20 text-primary";
     inactiveClasses = "text-foreground/70 hover:text-foreground hover:bg-muted";
   }
@@ -42,7 +47,8 @@ const NavLinkItem = ({ href, label, icon: Icon, onClick, variant = "default" }: 
       className={cn(
         baseClasses,
         isActive ? activeClasses : inactiveClasses,
-        variant === "primary" && inactiveClasses
+        variant === "primary" && inactiveClasses,
+        variant === "outline" && "border-primary text-primary hover:bg-primary/10 hover:text-primary"
       )}
     >
       <Icon className="h-5 w-5" />
@@ -116,8 +122,8 @@ export function Header() {
             ) : (
               <>
                 <NavLinkItem href="/login" label="Login" icon={LogIn} />
-                <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} /> {/* MODIFIED HERE */}
-                <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
+                <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} variant="outline" />
+                <Button asChild>
                   <a href="/pricing">
                     Register as a Coach
                   </a>
@@ -176,8 +182,8 @@ export function Header() {
                   ) : (
                     <>
                       <NavLinkItem href="/login" label="Login" icon={LogIn} onClick={closeMobileMenu} />
-                      <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} onClick={closeMobileMenu} /> {/* MODIFIED HERE */}
-                      <Button asChild variant="outline" onClick={closeMobileMenu} className="border-primary text-primary hover:bg-primary/10 hover:text-primary w-full justify-start px-3 py-2">
+                      <NavLinkItem href="/signup" label="User Sign Up" icon={UserPlus} variant="outline" onClick={closeMobileMenu} />
+                      <Button asChild onClick={closeMobileMenu} className="w-full justify-start px-3 py-2">
                         <a href="/pricing">
                            Register as a Coach
                         </a>

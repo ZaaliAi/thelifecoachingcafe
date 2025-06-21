@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,11 +9,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CoachCard } from '@/components/CoachCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Lightbulb, Search } from 'lucide-react';
+import { Loader2, Search, Users, MessageCircle } from 'lucide-react';
 import type { CoachMatchAiSearchInput, CoachMatchAiSearchOutput } from '@/ai/flows/coach-match-ai';
 import { coachMatchAiSearch } from '@/ai/flows/coach-match-ai';
 import type { Coach } from '@/types';
-import { getCoachById } from '@/lib/firestore'; // Still needed for adaptAiCoachToAppCoach
+import { getCoachById } from '@/lib/firestore'; 
 import Link from 'next/link';
 
 const searchSchema = z.object({
@@ -21,25 +21,23 @@ const searchSchema = z.object({
 });
 type SearchFormData = z.infer<typeof searchSchema>;
 
-// Helper to adapt AI output to Coach type by fetching more details from Firestore
 const adaptAiCoachToAppCoach = async (aiCoach: CoachMatchAiSearchOutput['rankedCoachList'][0]): Promise<Coach> => {
   const firestoreCoach = await getCoachById(aiCoach.coachId);
   if (firestoreCoach) {
     return {
-      ...firestoreCoach, // All details from Firestore
-      specialties: aiCoach.specialties.length > 0 ? aiCoach.specialties : firestoreCoach.specialties, // Prefer AI specialties if available, else Firestore's
-      // matchScore: aiCoach.matchScore, // Can be added to Coach type if needed for display
+      ...firestoreCoach, 
+      specialties: aiCoach.specialties.length > 0 ? aiCoach.specialties : firestoreCoach.specialties,
+      matchScore: aiCoach.matchScore,
     };
   }
-  // Fallback if coach not found in Firestore (should be rare if AI is synced)
   return {
     id: aiCoach.coachId,
     name: aiCoach.coachName,
     bio: 'Detailed bio available on profile.',
     specialties: aiCoach.specialties,
     keywords: [],
-    subscriptionTier: 'free', // Default, as we can't confirm without Firestore record
-    // matchScore: aiCoach.matchScore,
+    subscriptionTier: 'free',
+    matchScore: aiCoach.matchScore,
   };
 };
 
@@ -48,7 +46,7 @@ export default function FindACoachClientContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<SearchFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<SearchFormData>({
     resolver: zodResolver(searchSchema),
   });
 
@@ -73,14 +71,48 @@ export default function FindACoachClientContent() {
     }
   };
 
+  useEffect(() => {
+    const searchQuery = localStorage.getItem('homePageSearchQuery');
+    if (searchQuery) {
+      setValue('userInput', searchQuery);
+      localStorage.removeItem('homePageSearchQuery'); 
+      handleSubmit(onSubmit)();
+    }
+  }, [setValue, handleSubmit, onSubmit]);
+
   return (
     <div className="space-y-8">
       <section className="text-center py-8">
-        <Lightbulb className="mx-auto h-12 w-12 text-primary mb-4" />
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">CoachMatch AI: Your Intelligent Coach Finder</h1>
-        <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          Describe your goals for personal development or mental wellness, and our AI will provide personalized coach suggestions to help you find the best-fit coach.
-        </p>
+        <h1 className="text-3xl md:text-4xl font-bold mb-4">
+            <span className="text-primary">CoachMatch AI:</span> Your Intelligent Coach Finder
+        </h1>
+      </section>
+
+      {/* 3-Step Guide */}
+      <section className="container mx-auto px-4">
+        <div className="grid md:grid-cols-3 gap-8 text-center">
+            <div className="flex flex-col items-center p-4">
+                <div className="flex-shrink-0 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Search className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">1. Describe Your Needs</h3>
+                <p className="text-muted-foreground text-sm">Tell our AI about your goals for personal development, career, or mental wellness.</p>
+            </div>
+            <div className="flex flex-col items-center p-4">
+                <div className="flex-shrink-0 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Users className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">2. Get AI Recommendations</h3>
+                <p className="text-muted-foreground text-sm">Receive a personalized list of certified life coaches with the right specialties for you.</p>
+            </div>
+            <div className="flex flex-col items-center p-4">
+                <div className="flex-shrink-0 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <MessageCircle className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">3. Connect with Your Coach</h3>
+                <p className="text-muted-foreground text-sm">Browse profiles, read reviews, and message your ideal life coach to start your journey.</p>
+            </div>
+        </div>
       </section>
 
       <Card className="shadow-xl">
