@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Loader2, Trash2, AlertTriangle, Edit, PlusCircle } from "lucide-react";
-import type { Testimonial } from '@/types';
+import type { HomepageTestimonial } from '@/types'; // Correctly import HomepageTestimonial
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,38 +22,56 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock functions for now - replace with actual API calls
-async function fetchTestimonialsFromAPI(): Promise<Testimonial[]> {
-  const response = await fetch('/api/testimonials');
+async function fetchTestimonialsFromAPI(authToken: string): Promise<HomepageTestimonial[]> {
+  const response = await fetch('/api/testimonials', {
+    headers: {
+        'Authorization': `Bearer ${authToken}`
+    }
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch testimonials');
   }
   return response.json();
 }
 
-async function deleteTestimonialFromAPI(id: string): Promise<void> {
-  const response = await fetch(`/api/testimonials/${id}`, { method: 'DELETE' });
+async function deleteTestimonialFromAPI(id: string, authToken: string): Promise<void> {
+  const response = await fetch(`/api/testimonials/${id}`, { 
+    method: 'DELETE',
+    headers: {
+        'Authorization': `Bearer ${authToken}`
+    }
+});
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({})); // Catch if response is not JSON
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to delete testimonial');
   }
 }
 
 export default function AdminManageTestimonialsPage() {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [testimonials, setTestimonials] = useState<HomepageTestimonial[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  // TODO: Replace with router push or modal for editing/creating
-  // For now, storing ID of testimonial to be deleted
+  const { getFirebaseAuthToken } = useAuth();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
 
   const fetchTestimonials = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    const authToken = await getFirebaseAuthToken();
+    if (!authToken) {
+        setError("Authentication token not found. Please log in again.");
+        setIsLoading(false);
+        return;
+    }
     try {
-      const data = await fetchTestimonialsFromAPI();
+      const data = await fetchTestimonialsFromAPI(authToken);
+      data.sort((a, b) => {
+        if (a.createdAt && b.createdAt) {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        return 0;
+      });
       setTestimonials(data);
     } catch (err: any) {
       console.error("Error fetching testimonials:", err);
@@ -64,29 +83,35 @@ export default function AdminManageTestimonialsPage() {
       });
     }
     setIsLoading(false);
-  }, [toast]);
+  }, [toast, getFirebaseAuthToken]);
 
   useEffect(() => {
     fetchTestimonials();
   }, [fetchTestimonials]);
 
   const handleDeleteTestimonial = async (id: string) => {
+    const authToken = await getFirebaseAuthToken();
+    if (!authToken) {
+        toast({ title: "Authentication Error", description: "Cannot delete without a valid token.", variant: "destructive" });
+        return;
+    }
+
     const originalTestimonials = [...testimonials];
     const testimonialToDelete = testimonials.find(t => t.id === id);
     if (!testimonialToDelete) return;
 
     setTestimonials(prev => prev.filter(t => t.id !== id));
-    setDeletingId(null); // Close dialog
+    setDeletingId(null);
 
     try {
-      await deleteTestimonialFromAPI(id);
+      await deleteTestimonialFromAPI(id, authToken);
       toast({
         title: "Testimonial Deleted",
         description: `Testimonial by "${testimonialToDelete.name}" has been successfully deleted.`,
       });
     } catch (err: any) {
       console.error("Error deleting testimonial:", err);
-      setTestimonials(originalTestimonials); // Revert UI on error
+      setTestimonials(originalTestimonials);
       toast({
         title: "Deletion Failed",
         description: err.message || "Could not delete the testimonial.",
@@ -119,12 +144,11 @@ export default function AdminManageTestimonialsPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-2xl flex items-center">
-            <FileText className="mr-3 h-7 w-7 text-primary" /> Manage Testimonials
+            <FileText className="mr-3 h-7 w-7 text-primary" /> Manage Homepage Testimonials
           </CardTitle>
-          <CardDescription>Add, edit, or delete client testimonials.</CardDescription>
+          <CardDescription>Add, edit, or delete testimonials displayed on the homepage.</CardDescription>
         </div>
         <Button asChild>
-          {/* TODO: Link to /dashboard/admin/testimonials/new or open modal */}
           <Link href="/dashboard/admin/testimonials/new">
             <PlusCircle className="mr-2 h-4 w-4" /> Add Testimonial
           </Link>
@@ -152,7 +176,6 @@ export default function AdminManageTestimonialsPage() {
                   <TableCell>{testimonial.createdAt ? format(new Date(testimonial.createdAt), 'PP pp') : 'N/A'}</TableCell>
                   <TableCell>{testimonial.updatedAt ? format(new Date(testimonial.updatedAt), 'PP pp') : 'N/A'}</TableCell>
                   <TableCell className="text-right space-x-1">
-                    {/* TODO: Link to /dashboard/admin/testimonials/edit/[id] or open modal */}
                     <Button variant="ghost" size="sm" asChild title="Edit Testimonial">
                         <Link href={`/dashboard/admin/testimonials/edit/${testimonial.id}`}>
                             <Edit className="h-4 w-4" />

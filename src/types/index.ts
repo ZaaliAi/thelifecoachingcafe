@@ -109,13 +109,23 @@ export interface FirestoreBlogPost {
 }
 
 
-export interface Testimonial {
+// Distinct type for Homepage Testimonials (managed by Admin)
+export interface HomepageTestimonial {
+  id: string;
+  name: string;  // The name of the person giving the testimonial
+  text: string;  // The content of the testimonial
+  createdAt: string | null;
+  updatedAt?: string | null;
+}
+
+// Renamed to CoachTestimonial for clarity
+export interface CoachTestimonial {
   id: string;
   coachId: string;
   clientName: string;
   testimonialText: string;
-  createdAt: string | null; // ISO date string or null
-  updatedAt?: string | null; // ISO date string, null, or undefined
+  createdAt: string | null; 
+  updatedAt?: string | null;
   dataAiHint?: string;
 }
 

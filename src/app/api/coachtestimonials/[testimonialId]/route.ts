@@ -1,79 +1,76 @@
+
 import { NextResponse } from 'next/server';
 import { adminAuth, adminFirestore } from '@/lib/firebaseAdmin';
-import type { FirestoreUserProfile } from '@/types'; // Assuming Testimonial type itself is not directly needed here, only for casting coachId from it.
+import type { FirestoreUserProfile } from '@/types';
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { testimonialId: string } }
+async function verifyUserIsCoach(authorization: string | null): Promise<string | null> {
+    if (!authorization?.startsWith('Bearer ')) return null;
+    const idToken = authorization.split('Bearer ')[1];
+    try {
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        const userDoc = await adminFirestore.collection('users').doc(decodedToken.uid).get();
+        if (userDoc.exists && (userDoc.data() as FirestoreUserProfile).role === 'coach') {
+            return decodedToken.uid;
+        }
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function handleRequest(
+    request: Request,
+    params: { testimonialId: string },
+    method: 'DELETE' | 'PUT'
 ) {
-  try {
+    const coachId = await verifyUserIsCoach(request.headers.get('Authorization'));
+    if (!coachId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { testimonialId } = params;
     if (!testimonialId) {
-      // This case should ideally be handled by Next.js routing if the path is hit
-      return NextResponse.json({ error: 'Bad Request: testimonialId is required' }, { status: 400 });
+        return NextResponse.json({ error: 'Testimonial ID is required' }, { status: 400 });
     }
 
-    const authorization = request.headers.get('Authorization');
-    if (!authorization?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized: Missing or invalid token' }, { status: 401 });
-    }
-    const idToken = authorization.split('Bearer ')[1];
-
-    let decodedToken;
     try {
-      decodedToken = await adminAuth.verifyIdToken(idToken);
+        const docRef = adminFirestore
+            .collection('users')
+            .doc(coachId)
+            .collection('clienttestimonials')
+            .doc(testimonialId);
+
+        if (method === 'DELETE') {
+            await docRef.delete();
+            return NextResponse.json({ message: 'Testimonial deleted' }, { status: 200 });
+        }
+
+        if (method === 'PUT') {
+            const body = await request.json();
+            const { clientName, testimonialText } = body;
+            if (!clientName || !testimonialText) {
+                return NextResponse.json({ error: 'Client name and text are required' }, { status: 400 });
+            }
+            await docRef.update({
+                clientName,
+                testimonialText,
+                updatedAt: adminFirestore.FieldValue.serverTimestamp(),
+            });
+            return NextResponse.json({ message: 'Testimonial updated' }, { status: 200 });
+        }
+
     } catch (error) {
-      console.error('Error verifying ID token:', error);
-      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+        console.error(`Error with testimonial ${testimonialId} for coach ${coachId}:`, error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
+    
+    return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
+}
 
-    const uid = decodedToken.uid;
+export async function DELETE(request: Request, { params }: { params: { testimonialId: string } }) {
+    return handleRequest(request, params, 'DELETE');
+}
 
-    // Fetch the testimonial document
-    const testimonialDocRef = adminFirestore.collection('coachtestimonials').doc(testimonialId); // UPDATED
-    const testimonialDocSnap = await testimonialDocRef.get();
-
-    if (!testimonialDocSnap.exists()) {
-      return NextResponse.json({ error: 'Not Found: Testimonial not found' }, { status: 404 });
-    }
-
-    const testimonialData = testimonialDocSnap.data();
-    const coachIdFromTestimonial = testimonialData?.coachId;
-
-    if (!coachIdFromTestimonial) {
-        // This would indicate a data integrity issue if a testimonial doesn't have a coachId
-        console.error(`Testimonial ${testimonialId} is missing coachId.`);
-        return NextResponse.json({ error: 'Internal Server Error: Testimonial data incomplete' }, { status: 500 });
-    }
-
-    // Fetch the user profile of the deleter to check for admin role
-    const userDocRef = adminFirestore.collection('users').doc(uid);
-    const userDocSnap = await userDocRef.get();
-
-    if (!userDocSnap.exists()) {
-      // User trying to delete must have a profile.
-      return NextResponse.json({ error: 'Forbidden: User profile not found' }, { status: 403 });
-    }
-    const userProfile = userDocSnap.data() as FirestoreUserProfile;
-
-    // Check for ownership or admin role
-    const isOwner = coachIdFromTestimonial === uid;
-    const isAdmin = userProfile.role === 'admin';
-
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: User is not authorized to delete this testimonial' }, { status: 403 });
-    }
-
-    // Perform the deletion
-    await testimonialDocRef.delete();
-
-    return NextResponse.json({ message: 'Testimonial deleted successfully' }, { status: 200 });
-
-  } catch (error: any) {
-    console.error(`Error deleting testimonial ${params.testimonialId}:`, error);
-    if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-        return NextResponse.json({ error: 'Unauthorized: Invalid or expired token' }, { status: 401 });
-    }
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
+export async function PUT(request: Request, { params }: { params: { testimonialId: string } }) {
+    return handleRequest(request, params, 'PUT');
 }
