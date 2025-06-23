@@ -256,14 +256,14 @@ export default function PricingClientContent() {
         </Card>
 
         {premiumProduct && premiumPrice ? (
-          <Card key={premiumProduct.id} className="flex flex-col shadow-2xl border-2 border-primary relative overflow-hidden bg-gray-800 text-white">
+          <Card key={premiumProduct.id} className="flex flex-col shadow-2xl border-2 border-yellow-400 relative overflow-hidden bg-gray-800 text-white">
             <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-3 py-1 text-sm font-semibold rounded-bl-md">
               Most Popular
             </div>
             <CardHeader className="p-6">
               <CardTitle className="text-2xl flex items-center text-white">
-                <Crown className="mr-3 h-7 w-7 text-primary" />
-                {premiumProduct.name || 'Premium Plan'}
+                <Crown className="mr-3 h-7 w-7 text-yellow-400" />
+                <span className="text-yellow-400">{premiumProduct.name || 'Premium Plan'}</span>
               </CardTitle>
                 <CardDescription className="text-gray-300">{premiumDisplayDescription}</CardDescription>
             </CardHeader>
@@ -286,10 +286,10 @@ export default function PricingClientContent() {
                   priceId={premiumPrice.id}
                   userId={userId}
                   buttonText={`Upgrade to ${premiumProduct.name || 'Premium'}`}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="w-full bg-yellow-400 hover:bg-yellow-300 text-white"
                 />
               ) : (
-                <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Button asChild size="lg" className="w-full bg-yellow-400 hover:bg-yellow-300 text-white">
                   <Link href={`/register-coach?planId=${premiumPrice.id}`}>Sign Up for {premiumProduct.name || 'Premium'}</Link>
                 </Button>
               )}
@@ -317,7 +317,7 @@ export default function PricingClientContent() {
                   Free
                 </th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider border-l-2 border-primary">
-                  <span className="text-primary">Premium</span>
+                  <span className="text-primary flex items-center justify-center"><Crown className="mr-2 h-5 w-5 text-yellow-500" />Premium</span>
                 </th>
               </tr>
             </thead>

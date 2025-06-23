@@ -1,6 +1,6 @@
 
 import { Button } from '@/components/ui/button';
-import { UserCheck, Clapperboard, Link as LinkIcon, Share2 } from 'lucide-react';
+import { UserCheck, Clapperboard, Link as LinkIcon, Share2, Crown } from 'lucide-react';
 import NextLink from 'next/link';
 
 const features = [
@@ -29,8 +29,9 @@ const PremiumHighlight = () => {
         {/* Top section with Title and CTA */}
         <div className="md:flex md:items-start md:justify-between">
           <div className="max-w-xl flex-shrink-0">
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Stand Out with <span className="text-yellow-400">Premium</span>
+            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl flex items-center">
+              <Crown className="h-8 w-8 mr-3 text-yellow-400 flex-shrink-0" />
+              <span>Stand Out with <span className="text-yellow-400">Premium</span></span>
             </h2>
             <p className="mt-4 text-base leading-7 text-gray-300">
               Premium accounts unlock exclusive features and connect with more clients.
