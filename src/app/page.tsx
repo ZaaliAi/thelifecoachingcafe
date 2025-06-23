@@ -6,6 +6,7 @@ import { TestimonialCard } from '@/components/TestimonialCard';
 import { getFeaturedCoaches, getTestimonials } from '@/lib/firestore';
 import { Search, Users, UserPlus, MessageCircle, HelpCircle } from 'lucide-react';
 import HomePageClientContent from '@/components/home/HomePageClientContent';
+import PremiumHighlight from '@/components/PremiumHighlight';
 import {
   Accordion,
   AccordionContent,
@@ -166,6 +167,8 @@ export default async function HomePage() {
           </Button>
         </div>
       </section>
+
+      <PremiumHighlight />
       
       {/* Testimonials Section */}
       <section>
