@@ -9,13 +9,13 @@ import type { Metadata } from 'next';
 
 export function generateMetadata({ searchParams }: { searchParams?: { search?: string } }): Metadata {
   const searchTerm = searchParams?.search;
-  const baseTitle = "Online Life Coach Directory | Browse Certified Coaches";
+  const baseTitle = "Online Life Coach Directory | Browse Coaches";
   const baseDescription = "Find and connect with certified life coaches in our comprehensive online directory. Search by specialty, name, or keyword to start your personal development journey.";
 
   if (searchTerm) {
     return {
       title: `Search Results for "${searchTerm}" | ${baseTitle}`,
-      description: `Browse certified life coaches specializing in "${searchTerm}". Find the perfect expert for your personal growth, career, or wellness goals.`,
+      description: `Browse life coaches specializing in "${searchTerm}". Find the perfect expert for your personal growth, career, or wellness goals.`,
     };
   }
 
@@ -98,7 +98,7 @@ export default async function BrowseCoachesPage({ searchParams: searchParamsProp
       ) : (
         <section className="text-center py-12">
           <p className="text-xl text-muted-foreground">No life coaches found matching your search criteria.</p>
-          <p className="text-muted-foreground mt-2">Try broadening your search terms or explore all certified life coaches.</p>
+          <p className="text-muted-foreground mt-2">Try broadening your search terms or explore all life coaches.</p>
         </section>
       )}
 

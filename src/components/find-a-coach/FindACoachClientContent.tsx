@@ -103,7 +103,7 @@ export default function FindACoachClientContent() {
                     <Users className="h-6 w-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">2. Get AI Recommendations</h3>
-                <p className="text-muted-foreground text-sm">Receive a personalized list of certified life coaches with the right specialties for you.</p>
+                <p className="text-muted-foreground text-sm">Receive a personalised list of life coaches with the right specialties for you.</p>
             </div>
             <div className="flex flex-col items-center p-4">
                 <div className="flex-shrink-0 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">

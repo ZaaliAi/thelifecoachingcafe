@@ -53,7 +53,7 @@ export default async function HomePage() {
             Find Your Perfect Life Coach with <span className="text-primary">CoachMatch AI<sup className="text-sm md:text-base align-super">&trade;</sup></span>
           </h1>
           <p className="text-lg md:text-xl max-w-2xl mx-auto mb-8 text-gray-300">
-            Discover certified life coaches across a range of specialties. Get personalised recommendations with our free AI-powered CoachMatch assistant for your personal development journey.
+            Discover life coaches across a range of specialties. Get personalised recommendations with our free AI-powered CoachMatch assistant for your personal development journey.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
             <Button asChild size="lg" className="h-12 text-base bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -110,7 +110,7 @@ export default async function HomePage() {
                      </div>
                     <div>
                         <h3 className="text-xl font-semibold mb-2">3. Connect with Your Ideal Life Coach & Grow</h3>
-                        <p className="text-muted-foreground">Browse certified life coach profiles, message coaches, and start your transformational coaching journey.</p>
+                        <p className="text-muted-foreground">Browse life coach profiles, message coaches, and start your transformational coaching journey.</p>
                     </div>
                 </div>
             </div>
@@ -228,7 +228,7 @@ export default async function HomePage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link href="/pricing">Become a Coach</Link>
+              <Link href="/pricing">Register as a Coach</Link>
             </Button>
           </div>
         </div>
