@@ -1,4 +1,3 @@
-
 import Link from 'next/link';
 import type { Coach } from '@/types';
 import { Card, CardContent, CardFooter, CardTitle } from '@/components/ui/card';
@@ -22,7 +21,7 @@ export function CoachCard({ coach }: CoachCardProps) {
     : 'CC';
 
   return (
-    <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+    <Card className="relative flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
       {coach.matchScore && (
         <div className="absolute top-2 right-2 bg-green-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-md z-10">
             {Math.round(coach.matchScore)}% Match
