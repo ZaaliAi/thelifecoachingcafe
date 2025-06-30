@@ -9,11 +9,11 @@ import type { Metadata } from 'next';
 export function generateMetadata(): Metadata {
   return {
     title: "About The Life Coaching Cafe | Our Mission, Values & Community",
-    description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+    description: "Learn about The Life Coaching Cafe: our mission to connect you with life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
     metadataBase: new URL('https://thelifecoachingcafe.com'), 
     openGraph: {
       title: "About The Life Coaching Cafe | Our Mission, Values & Community",
-      description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+      description: "Learn about The Life Coaching Cafe: our mission to connect you with life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
       images: ['/preview.jpg'], 
       url: 'https://thelifecoachingcafe.com/about', 
       type: 'website',
@@ -21,7 +21,7 @@ export function generateMetadata(): Metadata {
     twitter: {
       card: 'summary_large_image',
       title: "About The Life Coaching Cafe | Our Mission, Values & Community",
-      description: "Learn about The Life Coaching Cafe: our mission to connect you with certified life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
+      description: "Learn about The Life Coaching Cafe: our mission to connect you with life coaches, our core values, and our commitment to your personal development and mental wellness journey.",
       images: ['/preview.jpg'],
     },
   };
@@ -37,7 +37,7 @@ export default function AboutUsPage() {
             About <span className="text-primary">The Life Coaching Cafe</span>
           </h1>
           <p className="text-lg md:text-xl max-w-3xl mx-auto text-muted-foreground">
-            Your premier online directory for finding and connecting with certified life coaches who can help you unlock your potential and achieve your goals.
+            Your premier online directory for finding and connecting with Llfe coaches who can help you unlock your potential and achieve your goals.
           </p>
         </div>
       </section>
@@ -82,7 +82,7 @@ export default function AboutUsPage() {
                           <h3 className="text-2xl font-semibold mb-2">Our Values</h3>
                           <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                             <li><span className="font-semibold text-foreground">Empowerment:</span> We empower individuals to take control of their personal development.</li>
-                            <li><span className="font-semibold text-foreground">Connection:</span> We foster meaningful connections between clients and certified coaches.</li>
+                            <li><span className="font-semibold text-foreground">Connection:</span> We foster meaningful connections between clients and coaches.</li>
                             <li><span className="font-semibold text-foreground">Innovation:</span> We embrace technology to enhance the coach matching experience.</li>
                           </ul>
                       </div>
@@ -146,7 +146,7 @@ export default function AboutUsPage() {
         <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold mb-6">Join Us on This Journey</h2>
             <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
-                Whether you're looking to find a life coach for personal development or you're a certified life coach wanting to expand your reach, The Life Coaching Cafe is here to support you.
+                Whether you're looking to find a life coach for personal development or you're a life coach wanting to expand your reach, The Life Coaching Cafe is here to support you.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">

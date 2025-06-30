@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'The Life Coaching Cafe - Find Your Perfect Life Coach',
-  description: 'AI-powered coach matching to find the right life coach for your needs. Connect with certified life coaches, and discover resources for personal development and mental wellness.',
+  description: 'AI-powered coach matching to find the right life coach for your needs. Connect with life coaches, and discover resources for personal development and mental wellness.',
   metadataBase: new URL('https://thelifecoachingcafe.com'), // Replace with your actual domain
   openGraph: {
     title: 'The Life Coaching Cafe - Find Your Perfect Life Coach',

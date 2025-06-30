@@ -22,7 +22,7 @@ export default async function HomePage() {
   const faqs = [
     {
       question: "What is The Life Coaching Cafe?",
-      answer: "The Life Coaching Cafe is a directory connecting users with certified life coaches. Our CoachMatch AI helps you find the perfect coach for your needs, whether for personal development or mental wellness. We also offer resources for aspiring and established coaches."
+      answer: "The Life Coaching Cafe is a directory connecting users with life coaches. Our CoachMatch AI helps you find the perfect coach for your needs, whether for personal development or mental wellness. We also offer resources for aspiring and established coaches."
     },
     {
       question: "How does the CoachMatch AI work?",
@@ -150,7 +150,7 @@ export default async function HomePage() {
       <section>
         <div className="flex items-center mb-8">
           <Users className="h-8 w-8 text-accent mr-3" />
-          <h2 className="text-3xl font-semibold">Our Featured Certified Life Coaches</h2>
+          <h2 className="text-3xl font-semibold">Our Featured Life Coaches</h2>
         </div>
         {featuredCoaches.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -217,7 +217,7 @@ export default async function HomePage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-semibold mb-6">Ready to Begin Your Coaching Journey?</h2>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-8">
-            Join our community to find your ideal life coach or expand your reach as a certified professional. Your path to personal development and mental wellness starts here.
+            Join our community to find your ideal life coach or expand your reach as a professional. Your path to personal development and mental wellness starts here.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
