@@ -1,6 +1,36 @@
+
 import { NextResponse } from 'next/server';
 import { adminFirestore, FirebaseFirestoreNamespace } from '@/lib/firebaseAdmin';
-import type { Testimonial } from '@/types';
+import type { HomepageTestimonial } from '@/types';
+import { Timestamp } from 'firebase-admin/firestore';
+
+// Helper to safely convert a Firestore timestamp or other date format to an ISO string.
+function safeToISOString(dateValue: any): string | null {
+  if (!dateValue) {
+    return null;
+  }
+  // If it's a Firestore Timestamp, convert it
+  if (dateValue instanceof Timestamp) {
+    return dateValue.toDate().toISOString();
+  }
+  // If it's a JS Date object
+  if (dateValue instanceof Date) {
+    return dateValue.toISOString();
+  }
+  // If it's a string or number, try to parse it
+  if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+    try {
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    } catch (e) {
+      // Ignore parsing errors and return null below
+    }
+  }
+  // Return null if conversion is not possible or input is invalid
+  return null;
+}
 
 // GET handler to fetch a single testimonial by ID
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -17,15 +47,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Testimonial not found.' }, { status: 404 });
     }
 
-    const testimonialData = { id: doc.id, ...doc.data() } as Testimonial;
-    
-    // Convert Firestore Timestamps to ISO strings
-    if (testimonialData.createdAt && typeof testimonialData.createdAt !== 'string') {
-      testimonialData.createdAt = testimonialData.createdAt.toDate().toISOString();
-    }
-    if (testimonialData.updatedAt && typeof testimonialData.updatedAt !== 'string') {
-      testimonialData.updatedAt = testimonialData.updatedAt.toDate().toISOString();
-    }
+    const data = doc.data();
+
+    const testimonialData: HomepageTestimonial = { 
+      id: doc.id,
+      name: data?.name ?? 'No Name',
+      text: data?.text ?? 'No Text',
+      createdAt: safeToISOString(data?.createdAt) ?? new Date(0).toISOString(),
+      updatedAt: safeToISOString(data?.updatedAt),
+    };
 
     return NextResponse.json(testimonialData, { status: 200 });
 
@@ -55,32 +85,28 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Testimonial not found.' }, { status: 404 });
     }
 
-    const updateData: Partial<Testimonial> = { ...testimonialData };
-    updateData.updatedAt = FirebaseFirestoreNamespace.Timestamp.now();
+    // Create a clean update object, excluding fields that shouldn't be changed by the client.
+    const updateData: { [key: string]: any } = {
+      name: testimonialData.name,
+      text: testimonialData.text,
+      updatedAt: FieldValue.serverTimestamp(), // Use FieldValue for server-side timestamp
+    };
 
-    // Remove id from updateData if present, as it should not be changed
-    if (updateData.id) {
-      delete updateData.id;
-    }
-    // Ensure createdAt is not overwritten
-    if (updateData.createdAt) {
-        delete updateData.createdAt;
-    }
-
+    // Remove any undefined fields to avoid errors
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
     await testimonialRef.update(updateData);
 
     const updatedDoc = await testimonialRef.get();
-    const updatedTestimonial = { id: updatedDoc.id, ...updatedDoc.data() } as Testimonial;
+    const updatedData = updatedDoc.data();
 
-    // Convert Firestore Timestamps to ISO strings for the response
-    if (updatedTestimonial.createdAt && typeof updatedTestimonial.createdAt !== 'string') {
-        updatedTestimonial.createdAt = updatedTestimonial.createdAt.toDate ? updatedTestimonial.createdAt.toDate().toISOString() : new Date(updatedTestimonial.createdAt._seconds * 1000).toISOString();
-    }
-    if (updatedTestimonial.updatedAt && typeof updatedTestimonial.updatedAt !== 'string') {
-        updatedTestimonial.updatedAt = updatedTestimonial.updatedAt.toDate ? updatedTestimonial.updatedAt.toDate().toISOString() : new Date(updatedTestimonial.updatedAt._seconds * 1000).toISOString();
-    }
-
+    const updatedTestimonial: HomepageTestimonial = {
+      id: updatedDoc.id,
+      name: updatedData?.name,
+      text: updatedData?.text,
+      createdAt: safeToISOString(updatedData?.createdAt),
+      updatedAt: safeToISOString(updatedData?.updatedAt),
+    };
 
     return NextResponse.json(updatedTestimonial, { status: 200 });
   } catch (error: any) {
