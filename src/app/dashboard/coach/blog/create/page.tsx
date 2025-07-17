@@ -62,26 +62,6 @@ export default function CreateBlogPostPage() {
 
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   
-  // Premium Feature Check
-  if (user && user.subscriptionTier !== 'premium') {
-    return (
-      <Card className="shadow-lg max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="text-2xl flex items-center text-destructive">
-            <AlertTriangle className="mr-3 h-7 w-7" />
-            Premium Feature
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Creating blog posts is a premium feature. To share your insights with the community, please upgrade your plan.</p>
-          <Button asChild className="mt-4">
-            <a href="/pricing">View Pricing Plans</a>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   function insertMarkdown(prefix: string, suffix: string) {
     const textarea = contentRef.current;
     if (!textarea) return;
@@ -137,11 +117,6 @@ export default function CreateBlogPostPage() {
   }
 
   const onSubmit: SubmitHandler<BlogPostFormData> = async (data) => {
-    // Redundant check, but good for defense-in-depth
-    if (user?.subscriptionTier !== 'premium') {
-      toast({ title: "Upgrade Required", description: "You must be a premium coach to create a blog post.", variant: "destructive" });
-      return;
-    }
     setIsLoading(true);
     try {
       const blogPostPayload = {
