@@ -22,6 +22,15 @@ export function CoachCard({ coach }: CoachCardProps) {
 
   return (
     <Card className="relative flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+      {coach.subscriptionTier === 'premium' && (
+        <Badge
+          variant="default"
+          className="absolute top-2 left-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-none shadow-lg z-10"
+        >
+          <Star className="w-3 h-3 mr-1.5" />
+          Premium
+        </Badge>
+      )}
       {coach.matchScore && (
         <div className="absolute top-2 right-2 bg-green-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-md z-10">
             {Math.round(coach.matchScore)}% Match

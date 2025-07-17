@@ -49,6 +49,7 @@ const availabilitySlotSchema = z.object({
 
 const editCoachProfileSchema = z.object({
   name: z.string().min(1, 'Full name is required'),
+  tagline: z.string().optional(),
   bio: z.string().min(50, 'Bio must be at least 50 characters for AI suggestions.').optional().or(z.literal('')),
   selectedSpecialties: z.array(z.string()).min(1, 'Please select or add at least one specialty.'),
   keywords: z.string().optional(),
@@ -64,6 +65,7 @@ type EditCoachProfileFormData = z.infer<typeof editCoachProfileSchema>;
 
 export interface EditProfileFormSubmitData extends Omit<Partial<UserProfile>, 'profileImageUrl' | 'socialLinks' | 'availability' | 'availabilityText' | 'specialties'> {
   name: string;
+  tagline?: string;
   bio?: string;
   specialties: string[];
   keywords: string[];
@@ -123,6 +125,7 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
     resolver: zodResolver(editCoachProfileSchema),
     defaultValues: {
       name: initialData.name || '',
+      tagline: initialData.tagline || '',
       bio: initialData.bio || '',
       selectedSpecialties: Array.isArray(initialData.specialties) ? initialData.specialties : [],
       keywords: prepareArrayLikeFieldForInput(initialData.keywords),
@@ -174,6 +177,7 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
   useEffect(() => {
     reset({
       name: initialData.name || '',
+      tagline: initialData.tagline || '',
       bio: initialData.bio || '',
       selectedSpecialties: Array.isArray(initialData.specialties) ? initialData.specialties : [],
       keywords: prepareArrayLikeFieldForInput(initialData.keywords),
@@ -367,6 +371,11 @@ export const EditCoachProfileForm: React.FC<EditCoachProfileFormProps> = ({ init
                 <Label htmlFor="name">Full Name</Label>
                 <Controller name="name" control={control} render={({ field }) => <Input {...field} placeholder="Your full name" />} />
                 {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="tagline">Tagline</Label>
+                <Controller name="tagline" control={control} render={({ field }) => <Input {...field} placeholder="Your professional tagline" />} />
+                {errors.tagline && <p className="text-sm text-destructive">{errors.tagline.message}</p>}
               </div>
               <div>
                 <Label htmlFor="location">Location</Label>

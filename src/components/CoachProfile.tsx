@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, UserCircle, MapPin, Globe, Image as ImageIcon, Video, MessageSquare, Heart } from "lucide-react";
+import { Loader2, UserCircle, MapPin, Globe, Image as ImageIcon, Video, MessageSquare, Heart, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NextImage from "next/image";
@@ -260,19 +260,14 @@ export default function CoachProfile({ coachData, coachId, testimonials }: Coach
           <div className="text-base text-gray-500 font-medium flex flex-wrap items-center gap-2 mt-1">
             <UserCircle className="h-5 w-5" />
             {coach.role ? coach.role.charAt(0).toUpperCase() + coach.role.slice(1) : "Coach"}
-            {coach.subscriptionTier && (
-              <Badge
-                className={`ml-2 px-3 py-1 rounded-full border-0`}
-                style={isPremium ? {
-                  background:
-                    "linear-gradient(90deg,#FFD700 20%, #FFEA70 100%)",
-                  color: "#7c6600",
-                  fontWeight: 700,
-                  letterSpacing: "1px"
-                } : {}}
-              >
-                {coach.subscriptionTier.toUpperCase()}
-              </Badge>
+            {coach.subscriptionTier === 'premium' && (
+                <Badge
+                    variant="default"
+                    className="ml-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white border-none shadow-lg"
+                >
+                    <Star className="w-3 h-3 mr-1.5" />
+                    Premium
+                </Badge>
             )}
           </div>
           {coach.location && (
