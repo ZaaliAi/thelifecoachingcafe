@@ -14,8 +14,12 @@ import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-// Firebase auth functions for password change & account deletion
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from 'firebase/auth';
+// Firebase auth functions for password change
+import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
+// Firebase Functions import for calling the backend function
+import { getFunctions, httpsCallable } from 'firebase/functions'; 
+import { firebaseApp } from '@/lib/firebase'; // Correctly import firebaseApp
+
 
 // Zod Schema for Password Change
 const passwordChangeSchema = z.object({
@@ -28,13 +32,6 @@ const passwordChangeSchema = z.object({
 });
 type PasswordChangeFormData = z.infer<typeof passwordChangeSchema>;
 
-// Zod Schema for Delete Account
-const deleteAccountSchema = z.object({
-  password: z.string().min(1, "Password is required for re-authentication."),
-});
-type DeleteAccountFormData = z.infer<typeof deleteAccountSchema>;
-
-
 export default function SettingsPage() {
   const { user, firebaseUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -42,48 +39,52 @@ export default function SettingsPage() {
 
   // --- Delete Account State & Logic ---
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showReauthDialog, setShowReauthDialog] = useState(false);
-  const {
-    control: deleteAccountControl,
-    handleSubmit: handleDeleteAccountSubmit,
-    formState: { errors: deleteAccountErrors, isSubmitting: isDeleteAccountSubmitting },
-    reset: resetDeleteAccountForm,
-  } = useForm<DeleteAccountFormData>({
-    resolver: zodResolver(deleteAccountSchema),
-    defaultValues: { password: '' },
-  });
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
-  const onReauthenticateAndDelete: SubmitHandler<DeleteAccountFormData> = async (data) => {
-    if (!firebaseUser || !firebaseUser.email) {
-      toast({ title: "Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+
+  const triggerDeleteAccountProcess = () => {
+    if (!user) {
+      toast({ title: "Error", description: "You must be logged in to delete your account.", variant: "destructive" });
       return;
     }
+    setShowDeleteConfirmDialog(true);
+  };
+
+  const executeAccountDeletion = async () => {
     setIsDeleting(true);
+    setShowDeleteConfirmDialog(false); 
     try {
-      const credential = EmailAuthProvider.credential(firebaseUser.email, data.password);
-      await reauthenticateWithCredential(firebaseUser, credential);
-      await deleteUser(firebaseUser);
-      toast({ title: "Account Deleted", description: "Your account has been successfully deleted." });
-      router.push('/');
+      const functionsInstance = getFunctions(firebaseApp); 
+      const deleteUserCallable = httpsCallable(functionsInstance, 'deleteUserAccount');
+      const result = await deleteUserCallable();
+      
+      toast({
+        title: "Account Deletion Successful",
+        description: (result.data as {message: string}).message || "Your account has been permanently deleted.",
+      });
+      
+      const auth = getAuth(firebaseApp); 
+      await signOut(auth);
+      window.location.href = '/'; 
+
     } catch (error: any) {
       console.error("Error deleting account:", error);
-      let errorMessage = "Failed to delete account. Please try again.";
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect password. Please try again.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many attempts. Please try again later.";
+      let description = "Could not delete your account. Please try again later.";
+      if (error && typeof error.code === 'string' && typeof error.message === 'string') {
+        description = error.message; 
+      } else if (error.message) {
+        description = error.message;
       }
       toast({
-        title: "Error Deleting Account",
-        description: errorMessage,
+        title: "Account Deletion Failed",
+        description: description,
         variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
-      setShowReauthDialog(false);
-      resetDeleteAccountForm();
     }
   };
+
 
   // --- Password Change State & Logic ---
   const {
@@ -206,38 +207,14 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {showReauthDialog ? (
-            <form onSubmit={handleDeleteAccountSubmit(onReauthenticateAndDelete)} className="space-y-4">
-              <div>
-                <Label htmlFor="reauthPassword">Enter Password to Confirm Deletion</Label>
-                 <Controller
-                    name="password"
-                    control={deleteAccountControl}
-                    render={({ field }) =>  <Input id="reauthPassword" type="password" {...field} placeholder="Enter your password" />}
-                  />
-                {deleteAccountErrors.password && <p className="text-sm text-destructive mt-1">{deleteAccountErrors.password.message}</p>}
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setShowReauthDialog(false); resetDeleteAccountForm(); }} disabled={isDeleting}>Cancel</Button>
-                <Button type="submit" variant="destructive" disabled={isDeleting || isDeleteAccountSubmitting}>
-                  {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Confirm Deletion
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              If you are sure you want to delete your account, click the button below.
-              You will be asked to re-authenticate.
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            If you are sure you want to delete your account, click the button below.
+          </p>
         </CardContent>
         <CardFooter>
-          {!showReauthDialog && (
-            <Button variant="destructive" onClick={() => setShowReauthDialog(true)} disabled={isDeleting}>
+            <Button variant="destructive" onClick={triggerDeleteAccountProcess} disabled={isDeleting}>
               Delete My Account
             </Button>
-          )}
         </CardFooter>
       </Card>
     </div>
