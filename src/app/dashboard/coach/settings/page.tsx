@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2, KeyRound, Mail } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { DeleteAccountDialog } from '@/components/dashboard/DeleteAccountDialog';
 
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -133,6 +134,7 @@ export default function SettingsPage() {
   }
 
   return (
+    <>
     <div className="container mx-auto p-4 md:p-8 max-w-2xl">
       <h1 className="text-3xl font-bold mb-8 text-center">Account Settings</h1>
 
@@ -218,5 +220,12 @@ export default function SettingsPage() {
         </CardFooter>
       </Card>
     </div>
+    <DeleteAccountDialog
+        isOpen={showDeleteConfirmDialog}
+        onClose={() => setShowDeleteConfirmDialog(false)}
+        onConfirm={executeAccountDeletion}
+        isDeleting={isDeleting}
+      />
+    </>
   );
 }
