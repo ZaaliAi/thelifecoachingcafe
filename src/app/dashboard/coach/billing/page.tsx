@@ -9,10 +9,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { doc, getDoc } from "firebase/firestore";
 import { db } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { loadStripe } from '@stripe/stripe-js';
+import { firebaseApp } from '@/lib/firebase';
 
-const createCheckoutSessionCallable = httpsCallable(functions, 'createCheckoutSessionCallable');
+const createCheckoutSessionCallable = httpsCallable(getFunctions(firebaseApp), 'createCheckoutSessionCallable');
 
 export default function CoachBillingPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -39,15 +40,55 @@ export default function CoachBillingPage() {
   }, [user]);
 
   const handleUpgrade = async () => {
+    if (!user || !user.id) {
+      console.error("User not authenticated for upgrade.");
+      toast({ title: "Authentication Error", description: "Please log in again to upgrade.", variant: "destructive" });
+      return;
+    }
+    const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    if (!stripePublishableKey) {
+        console.error("Stripe publishable key is not set in environment variables.");
+        toast({ title: "Configuration Error", description: "Stripe payments are not configured correctly. Please contact support.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     try {
-        const result: any = await createCheckoutSessionCallable({ returnUrl: window.location.href });
-        window.location.href = result.data.url;
+      const functions = getFunctions(firebaseApp);
+      const createCheckoutSession = httpsCallable(functions, 'createCheckoutSessionCallable');
+
+      const successUrl = `${window.location.origin}/payment-success?upgrade=true&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/dashboard/coach`;
+
+      const result: any = await createCheckoutSession({
+        priceId: "price_1RbHz1G028VJJAft7M0DUoUF", // Premium Price ID
+        successUrl: successUrl,
+        cancelUrl: cancelUrl,
+        userId: user.id,
+      });
+
+      if (result.data.sessionId) {
+        const stripe = await loadStripe(stripePublishableKey);
+        if (stripe) {
+          const { error: stripeError } = await stripe.redirectToCheckout({ sessionId: result.data.sessionId });
+          if (stripeError) {
+            console.error("Stripe redirect error:", stripeError);
+            toast({ title: "Payment Error", description: stripeError.message || "Could not redirect to Stripe. Please try again.", variant: "destructive" });
+          }
+        } else {
+          console.error("Stripe.js failed to load.");
+          toast({ title: "Payment Error", description: "Stripe.js failed to load. Please try again.", variant: "destructive" });
+        }
+      } else {
+        const errorMessage = result.data.error || "Failed to create Stripe session. Please try again.";
+        console.error("Failed to create Stripe session:", errorMessage);
+        toast({ title: "Upgrade Error", description: errorMessage, variant: "destructive" });
+      }
     } catch (error: any) {
-        console.error("Error creating checkout session:", error);
-        toast({ title: "Error", description: "Could not initiate upgrade. Please try again.", variant: "destructive" });
-        setIsLoading(false);
+      console.error("Error calling createCheckoutSessionCallable:", error);
+      toast({ title: "Upgrade Error", description: error.message || "An unexpected error occurred. Please try again.", variant: "destructive" });
     }
+    setIsLoading(false);
   };
 
   const handleManageBilling = async () => {
