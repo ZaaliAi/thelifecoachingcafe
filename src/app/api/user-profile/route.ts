@@ -3,34 +3,10 @@ import { NextResponse } from 'next/server';
 import { admin } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
-// This helper function ensures that any keys with an undefined value
-// are instead set to null, which is a valid Firestore type.
-const cleanData = (obj: { [key: string]: any }) => {
-  const newObj: { [key: string]: any } = {};
-  for (const key in obj) {
-    newObj[key] = obj[key] === undefined ? null : obj[key];
-  }
-  return newObj;
-};
-
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    console.log('[api/user-profile] Received data for update:', data);
-
-    const {
-      userId,
-      name,
-      bio,
-      specialties,
-      keywords,
-      certifications,
-      location,
-      websiteUrl,
-      introVideoUrl,
-      linkedInUrl,
-      profileImageUrl
-    } = data;
+    const { userId, ...profileData } = data;
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required.' }, { status: 400 });
@@ -38,36 +14,59 @@ export async function POST(request: Request) {
 
     const db = admin.firestore();
     const userRef = db.collection('users').doc(userId);
-    
-    // Construct the data payload exactly as the Firestore document expects.
-    const userUpdateData = {
-      name,
-      bio,
-      specialties,
-      keywords,
-      certifications,
-      location,
-      websiteUrl,
-      introVideoUrl,
-      // Create the socialLinks array structure
-      socialLinks: linkedInUrl ? [{ platform: 'LinkedIn', url: linkedInUrl }] : [],
-      profileImageUrl,
-      updatedAt: FieldValue.serverTimestamp(),
+
+    // Build a clean update object from scratch to ensure no invalid data is sent.
+    const userUpdateData: { [key: string]: any } = {
+        updatedAt: FieldValue.serverTimestamp(),
     };
 
-    // Clean the data to prevent 'undefined' errors before saving.
-    const cleanedData = cleanData(userUpdateData);
-
-    console.log(`[api/user-profile] Attempting to update user ${userId} with cleaned data.`);
+    // Conditionally add each field, converting empty strings to null for optional fields.
+    if (profileData.name !== undefined) userUpdateData.name = profileData.name;
+    if (profileData.bio !== undefined) userUpdateData.bio = profileData.bio;
+    if (profileData.tagline !== undefined) userUpdateData.tagline = profileData.tagline || null;
+    if (profileData.location !== undefined) userUpdateData.location = profileData.location || null;
+    if (profileData.websiteUrl !== undefined) userUpdateData.websiteUrl = profileData.websiteUrl || null;
+    if (profileData.introVideoUrl !== undefined) userUpdateData.introVideoUrl = profileData.introVideoUrl || null;
+    if (profileData.profileImageUrl !== undefined) userUpdateData.profileImageUrl = profileData.profileImageUrl;
     
-    // Use set with merge:true to update the single user document.
-    await userRef.set(cleanedData, { merge: true });
+    // Safely handle array fields.
+    if (Array.isArray(profileData.specialties)) userUpdateData.specialties = profileData.specialties;
+    if (Array.isArray(profileData.keywords)) userUpdateData.keywords = profileData.keywords;
+    if (Array.isArray(profileData.certifications)) userUpdateData.certifications = profileData.certifications;
 
-    console.log(`[api/user-profile] Successfully updated profile for user ${userId}.`);
+    // Explicitly validate and sanitize the availability array.
+    if (Array.isArray(profileData.availability)) {
+        userUpdateData.availability = profileData.availability
+            .map((slot: any) => ({
+                day: slot.day || null,
+                time: slot.time || null,
+            }))
+            .filter((slot: any) => slot.day && slot.time);
+    } else {
+        // If no availability is provided, ensure it's a clean empty array.
+        userUpdateData.availability = [];
+    }
+    
+    // Safely update socialLinks (specifically for LinkedIn).
+    if (profileData.linkedInUrl !== undefined) {
+        if (profileData.linkedInUrl) {
+            userUpdateData.socialLinks = [{ platform: 'LinkedIn', url: profileData.linkedInUrl }];
+        } else {
+            userUpdateData.socialLinks = [];
+        }
+    }
+    
+    // Use the `update` method, which is safer than `set` with merge for this case.
+    await userRef.update(userUpdateData);
+
     return NextResponse.json({ message: 'Profile updated successfully.' });
 
   } catch (error: any) {
     console.error('[api/user-profile] Critical error updating profile:', error);
-    return NextResponse.json({ error: 'Failed to update profile due to a server error.', details: error.message }, { status: 500 });
+    return NextResponse.json({ 
+        error: 'Failed to update profile due to a server error.', 
+        details: error.message,
+    }, { status: 500 });
   }
 }
+

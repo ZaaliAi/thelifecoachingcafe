@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Profile images
+    match /profile-images/{userId}/{fileName} {
+      // Public read access for profile images
+      allow read: if true;
+
+      // Only authenticated user can write to their own profile image folder
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Blog images uploaded by authors
+    match /blog-images/{authorId}/{fileName} {
+      // Public read access for blog images so they can display on blog posts
+      allow read: if true;
+
+      // Only authenticated author can upload/update/delete their own blog images
+      allow write: if request.auth != null && request.auth.uid == authorId;
+    }
+  }
+}

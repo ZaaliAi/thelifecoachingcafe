@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // This is the corrected configuration key for your version of Next.js.
+  // It tells the server how to correctly handle the firebase-admin package.
+  serverExternalPackages: ['firebase-admin'],
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -45,10 +48,7 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: 'bottom-right',
   },
-  allowedDevOrigins: ["3000-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev", "9003-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev"],
-  experimental: {
-    // serverComponentsExternalPackages: ['firebase-admin'],
-  },
+  allowedDevOrigins: ["3000-firebase-studio-1747477108457.cluster-6vyo4g b53jczovun3dxslzjahs.cloudworkstations.dev", "9003-firebase-studio-1747477108457.cluster-6vyo4gb53jczovun3dxslzjahs.cloudworkstations.dev"],
 };
 
 export default nextConfig;

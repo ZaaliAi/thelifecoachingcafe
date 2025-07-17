@@ -48,6 +48,7 @@ const CoachProfilePage = () => {
                 introVideoUrl: formData.introVideoUrl,
                 linkedInUrl: formData.linkedInUrl,
                 profileImageUrl: imageUrl,
+                availability: formData.availability,
             };
 
             console.log("4. Sending data to API:", profileData);
