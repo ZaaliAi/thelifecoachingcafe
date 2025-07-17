@@ -1,3 +1,4 @@
+// Force redeploy
 const productionBaseUrl = "https://www.thelifecoachingcafe.com";
 
 import * as admin from "firebase-admin";
