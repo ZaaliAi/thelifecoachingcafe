@@ -15,6 +15,17 @@ import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 // Firebase auth functions for password change
 import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
 // Firebase Functions import for calling the backend function
@@ -41,6 +52,7 @@ export default function SettingsPage() {
   // --- Delete Account State & Logic ---
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
 
 
   const triggerDeleteAccountProcess = () => {
@@ -53,8 +65,26 @@ export default function SettingsPage() {
 
   const executeAccountDeletion = async () => {
     setIsDeleting(true);
-    setShowDeleteConfirmDialog(false); 
+    
+    const auth = getAuth(firebaseApp);
+    const currentUser = auth.currentUser;
+
+    if (!currentUser || !currentUser.email) {
+      toast({ title: "Authentication Error", description: "Could not find user to re-authenticate.", variant: "destructive" });
+      setIsDeleting(false);
+      return;
+    }
+
+    if (!deletePassword) {
+      toast({ title: "Password Required", description: "Please enter your password to confirm deletion.", variant: "destructive" });
+      setIsDeleting(false);
+      return;
+    }
+
     try {
+      const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      
       const functionsInstance = getFunctions(firebaseApp); 
       const deleteUserCallable = httpsCallable(functionsInstance, 'deleteUserAccount');
       const result = await deleteUserCallable();
@@ -64,15 +94,14 @@ export default function SettingsPage() {
         description: (result.data as {message: string}).message || "Your account has been permanently deleted.",
       });
       
-      const auth = getAuth(firebaseApp); 
       await signOut(auth);
       window.location.href = '/'; 
 
     } catch (error: any) {
       console.error("Error deleting account:", error);
       let description = "Could not delete your account. Please try again later.";
-      if (error && typeof error.code === 'string' && typeof error.message === 'string') {
-        description = error.message; 
+      if (error.code === 'auth/wrong-password') {
+        description = "The password you entered is incorrect.";
       } else if (error.message) {
         description = error.message;
       }
@@ -83,6 +112,7 @@ export default function SettingsPage() {
       });
     } finally {
       setIsDeleting(false);
+      setDeletePassword('');
     }
   };
 
@@ -220,12 +250,40 @@ export default function SettingsPage() {
         </CardFooter>
       </Card>
     </div>
-    <DeleteAccountDialog
-        isOpen={showDeleteConfirmDialog}
-        onClose={() => setShowDeleteConfirmDialog(false)}
-        onConfirm={executeAccountDeletion}
-        isDeleting={isDeleting}
-      />
+    <AlertDialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action is irreversible. To confirm, please enter your password below.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="delete-password-confirm" className="sr-only">Password</Label>
+            <Input 
+              id="delete-password-confirm"
+              type="password"
+              placeholder="Enter your password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={executeAccountDeletion} 
+              disabled={isDeleting || !deletePassword}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {isDeleting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
+              ) : (
+                'Yes, Delete My Account'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

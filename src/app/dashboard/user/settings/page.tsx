@@ -62,6 +62,7 @@ export default function UserSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false); 
   const [isFetchingProfile, setIsFetchingProfile] = useState(true);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
   const { user, loading: authLoading } = useAuth(); 
   const { toast } = useToast();
 
@@ -78,10 +79,9 @@ export default function UserSettingsPage() {
   });
 
   useEffect(() => {
-    // Only attempt to fetch profile if user is loaded and auth is not loading
     if (user && user.id && !authLoading) {
       const fetchProfile = async () => {
-        setIsFetchingProfile(true); // Indicate start of profile fetching for this component
+        setIsFetchingProfile(true);
         try {
           const userProfileData = await getUserProfile(user.id) as FirestoreUserProfile | null;
 
@@ -90,48 +90,29 @@ export default function UserSettingsPage() {
               name: userProfileData.name || (user as FirebaseUser).displayName || '',
               email: (user as FirebaseUser).email || '', 
               enableNotifications: userProfileData.enableNotifications === undefined ? true : userProfileData.enableNotifications,
-              currentPassword: '',
-              newPassword: '',
-              confirmNewPassword: '',
             });
           } else {
-            // User exists in Auth, but no profile document in Firestore (e.g., new user)
             reset({
               name: (user as FirebaseUser).displayName || '',
               email: (user as FirebaseUser).email || '',
-              enableNotifications: true, // Default value
-            });
-            toast({
-              title: "Set up your profile",
-              description: "It looks like this is your first time, or your profile isn't fully set up. Please review and save your settings.",
-              variant: "default",
-              duration: 7000,
+              enableNotifications: true,
             });
           }
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
-          toast({
-            title: "Error Loading Profile",
-            description: "There was an issue fetching your profile settings. Using defaults.",
-            variant: "destructive",
-          });
-          // Reset with auth defaults if profile fetch fails
           reset({ 
             name: (user as FirebaseUser).displayName || '',
             email: (user as FirebaseUser).email || '',
             enableNotifications: true,
           });
         } finally {
-          setIsFetchingProfile(false); // Indicate end of profile fetching
+          setIsFetchingProfile(false);
         }
       };
       fetchProfile();
     } else if (!user && !authLoading) {
-      // If there's no user and auth is done loading, no profile to fetch.
       setIsFetchingProfile(false);
     }
-    // Dependencies: effect runs if user or authLoading state changes.
-    // reset and toast are stable references from hooks.
   }, [user, authLoading, reset, toast]);
 
   const onSubmit: SubmitHandler<UserSettingsFormData> = async (data) => {
@@ -151,7 +132,6 @@ export default function UserSettingsPage() {
       profileUpdateData = pruneUndefined(profileUpdateData);
       await setUserProfile(user.id, profileUpdateData);
 
-      let passwordChanged = false;
       if (data.newPassword && data.currentPassword) {
         const auth = getAuth(firebaseApp); 
         const userObj = auth.currentUser;
@@ -161,25 +141,15 @@ export default function UserSettingsPage() {
         const credential = EmailAuthProvider.credential(userObj.email, data.currentPassword);
         await reauthenticateWithCredential(userObj, credential);
         await updatePassword(userObj, data.newPassword);
-        passwordChanged = true;
         toast({ title: "Password Updated", description: "Your password was updated successfully." });
-      } else if (data.newPassword && !data.currentPassword){
-         toast({ title: "Password Error", description: "Current password is required to set a new password.", variant: "destructive" });
-         setIsLoading(false);
-         return;
       }
 
-      toast({ 
-        title: "Settings Updated!", 
-        description: `Your settings have been saved. ${passwordChanged ? "Password has been changed." : ""}` 
-      });
+      toast({ title: "Settings Updated!", description: `Your settings have been saved.` });
       reset({ ...data, currentPassword: '', newPassword: '', confirmNewPassword: '' }, { keepDirty: false });
     } catch (error: any) {
       console.error("Error updating settings:", error);
       let errorMessage = error?.message || "Could not save settings. Please try again.";
       if (error.code === "auth/wrong-password") errorMessage = "The current password you entered is incorrect.";
-      if (error.code === "auth/weak-password") errorMessage = "The new password is too weak. Please use at least 8 characters."; 
-      if (error.code === "auth/too-many-requests") errorMessage = "Too many failed attempts. Please try again later.";
       toast({ title: "Update Failed", description: errorMessage, variant: "destructive"});
     } finally {
       setIsLoading(false);
@@ -196,8 +166,26 @@ export default function UserSettingsPage() {
 
   const executeAccountDeletion = async () => {
     setIsDeleting(true);
-    setShowDeleteConfirmDialog(false); 
+    
+    const auth = getAuth(firebaseApp);
+    const currentUser = auth.currentUser;
+
+    if (!currentUser || !currentUser.email) {
+      toast({ title: "Authentication Error", description: "Could not find user to re-authenticate.", variant: "destructive" });
+      setIsDeleting(false);
+      return;
+    }
+
+    if (!deletePassword) {
+      toast({ title: "Password Required", description: "Please enter your password to confirm deletion.", variant: "destructive" });
+      setIsDeleting(false);
+      return;
+    }
+
     try {
+      const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      
       const functionsInstance = getFunctions(firebaseApp); 
       const deleteUserCallable = httpsCallable(functionsInstance, 'deleteUserAccount');
       const result = await deleteUserCallable();
@@ -207,15 +195,14 @@ export default function UserSettingsPage() {
         description: (result.data as {message: string}).message || "Your account has been permanently deleted.",
       });
       
-      const auth = getAuth(firebaseApp); 
       await signOut(auth);
       window.location.href = '/'; 
 
     } catch (error: any) {
       console.error("Error deleting account:", error);
       let description = "Could not delete your account. Please try again later.";
-      if (error && typeof error.code === 'string' && typeof error.message === 'string') {
-        description = error.message; 
+      if (error.code === 'auth/wrong-password') {
+        description = "The password you entered is incorrect.";
       } else if (error.message) {
         description = error.message;
       }
@@ -226,10 +213,10 @@ export default function UserSettingsPage() {
       });
     } finally {
       setIsDeleting(false);
+      setDeletePassword('');
     }
   };
 
-  // This is the main page loading state, waiting for Firebase Auth to be ready.
   if (authLoading) { 
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -238,7 +225,6 @@ export default function UserSettingsPage() {
     );
   }
   
-  // After Auth is ready, if there's no user, deny access.
   if (!user && !authLoading) { 
      return (
         <Card className="shadow-lg max-w-2xl mx-auto">
@@ -250,15 +236,11 @@ export default function UserSettingsPage() {
             </CardHeader>
             <CardContent>
                 <p>You need to be logged in to access this page.</p>
-                <Button asChild variant="link" className="mt-4 px-0">
-                    <a href="/login">Go to Login</a>
-                </Button>
             </CardContent>
         </Card>
      );
   }
 
-  // If user is authenticated, render the settings page content.
   return (
     <>
       <Card className="shadow-lg max-w-2xl mx-auto">
@@ -267,9 +249,8 @@ export default function UserSettingsPage() {
             <UserCircle className="mr-3 h-7 w-7 text-primary" />
             Account Settings
           </CardTitle>
-          <CardDescription>Manage your profile information, password, and notification preferences.</CardDescription>
+          <CardDescription>Manage your profile information and password.</CardDescription>
         </CardHeader>
-        {/* This loader is for fetching the profile data for the form after user is confirmed.*/}
         {isFetchingProfile ? (
            <CardContent className="py-10 flex items-center justify-center">
              <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -277,105 +258,62 @@ export default function UserSettingsPage() {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)}>
             <CardContent className="space-y-8 pt-6">
-              {/* Profile Information Section */}
               <section>
                 <h3 className="text-lg font-semibold mb-4 border-b pb-2">Profile Information</h3>
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <Label htmlFor="name">Full Name</Label>
-                    <Controller
-                      name="name"
-                      control={control}
-                      render={({ field }) => <Input id="name" {...field} className={errors.name ? 'border-destructive' : ''} />}
-                    />
+                    <Controller name="name" control={control} render={({ field }) => <Input id="name" {...field} />} />
                     {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="email">Email Address</Label>
-                    <Controller
-                      name="email"
-                      control={control}
-                      render={({ field }) => <Input id="email" type="email" {...field} readOnly className="bg-muted/50 cursor-not-allowed" />}
-                    />
+                    <Controller name="email" control={control} render={({ field }) => <Input id="email" type="email" {...field} readOnly className="bg-muted/50" />} />
                   </div>
                 </div>
               </section>
 
-              {/* Change Password Section */}
               <section>
                 <h3 className="text-lg font-semibold mb-4 border-b pb-2 flex items-center">
-                    <ShieldCheck className="mr-2 h-5 w-5 text-muted-foreground" />Change Password
+                    <ShieldCheck className="mr-2 h-5 w-5" />Change Password
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <Label htmlFor="currentPassword">Current Password</Label>
-                    <Input id="currentPassword" type="password" {...register('currentPassword')} autoComplete="current-password" />
-                     {errors.confirmNewPassword && !errors.newPassword && <p className="text-sm text-destructive">{errors.confirmNewPassword.message}</p>}
+                    <Input id="currentPassword" type="password" {...register('currentPassword')} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <Label htmlFor="newPassword">New Password</Label>
-                      <Input id="newPassword" type="password" {...register('newPassword')} className={errors.newPassword ? 'border-destructive' : ''} autoComplete="new-password" />
+                      <Input id="newPassword" type="password" {...register('newPassword')} />
                       {errors.newPassword && <p className="text-sm text-destructive">{errors.newPassword.message}</p>}
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
-                      <Input id="confirmNewPassword" type="password" {...register('confirmNewPassword')} className={errors.confirmNewPassword ? 'border-destructive' : ''} autoComplete="new-password" />
-                       {errors.confirmNewPassword && errors.newPassword && <p className="text-sm text-destructive">{errors.confirmNewPassword.message}</p>}
+                      <Input id="confirmNewPassword" type="password" {...register('confirmNewPassword')} />
+                       {errors.confirmNewPassword && <p className="text-sm text-destructive">{errors.confirmNewPassword.message}</p>}
                     </div>
                   </div>
                 </div>
               </section>
               
-              {/* Notification Settings Section */}
-              <section>
-                <h3 className="text-lg font-semibold mb-4 border-b pb-2 flex items-center">
-                    <Bell className="mr-2 h-5 w-5 text-muted-foreground" />Notification Settings
-                </h3>
-                <div className="flex items-center justify-between p-4 border rounded-md bg-muted/20">
-                    <div>
-                        <Label htmlFor="enableNotifications" className="text-base font-medium">Enable Email Notifications</Label>
-                        <p className="text-sm text-muted-foreground">Receive updates about messages and platform news.</p>
-                    </div>
-                    <Controller
-                        name="enableNotifications"
-                        control={control}
-                        render={({ field }) => (
-                            <Switch
-                            id="enableNotifications"
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            aria-label="Toggle email notifications"
-                            />
-                        )}
-                    />
-                </div>
-              </section>
-
-              {/* Danger Zone Section */}
               <section>
                   <h3 className="text-lg font-semibold mb-4 border-b pb-2 flex items-center text-destructive">
                       <AlertTriangle className="mr-2 h-5 w-5" />Danger Zone
                   </h3>
-                  <div className="p-4 border border-destructive/50 rounded-md bg-destructive/5 space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                  <div className="p-4 border border-destructive/50 rounded-md bg-destructive/5">
+                      <div className="flex items-center justify-between">
                           <div>
-                              <Label htmlFor="deleteAccountButton" className="text-base font-medium text-destructive">Delete Account</Label>
-                              <p className="text-sm text-muted-foreground">Permanently delete your account and all associated data. This action cannot be undone.</p>
+                              <Label className="text-base font-medium text-destructive">Delete Account</Label>
+                              <p className="text-sm text-muted-foreground">Permanently delete your account and all data.</p>
                           </div>
                           <Button
-                              id="deleteAccountButton"
                               variant="destructive"
                               type="button" 
                               onClick={triggerDeleteAccountProcess} 
-                              className="mt-3 sm:mt-0 sm:ml-4"
                               disabled={isDeleting || isLoading} 
                           >
-                            {isDeleting ? (
-                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
-                            ) : (
-                              'Delete My Account'
-                            )}
+                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Delete Account'}
                           </Button>
                       </div>
                   </div>
@@ -383,12 +321,9 @@ export default function UserSettingsPage() {
 
             </CardContent>
             <CardFooter className="pt-6 border-t mt-6">
-              <Button type="submit" disabled={isLoading || isFetchingProfile || !isDirty || isDeleting} size="lg" className="w-full sm:w-auto ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-                {isLoading ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Saving...</>
-                ) : (
-                  <><Save className="mr-2 h-5 w-5" /> Save Changes</>
-                )}
+              <Button type="submit" disabled={isLoading || isFetchingProfile || !isDirty || isDeleting} size="lg">
+                {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                 Save Changes
               </Button>
             </CardFooter>
           </form>
@@ -400,16 +335,24 @@ export default function UserSettingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your account 
-              and remove all your data from our servers. 
-              Please be certain before proceeding.
+              This action is irreversible. To confirm, please enter your password below.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="delete-password-confirm" className="sr-only">Password</Label>
+            <Input 
+              id="delete-password-confirm"
+              type="password"
+              placeholder="Enter your password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={executeAccountDeletion} 
-              disabled={isDeleting}
+              disabled={isDeleting || !deletePassword}
               className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
               {isDeleting ? (
