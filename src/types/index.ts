@@ -39,7 +39,7 @@ export interface FirestoreUserProfile {
   status?: CoachStatus; // For coach approval by admin
   dataAiHint?: string;
   availability?: CoachAvailability; // Uses the new array-based type
-  isFeaturedOnHomepage?: boolean; 
+  isFeatured?: boolean; 
   favoriteCoachIds?: string[]; // Added for favoriting coaches
   enableNotifications?: boolean; // For user settings
 }
@@ -66,7 +66,7 @@ export interface Coach {
   updatedAt?: string; // ISO date string
   status?: CoachStatus;
   dataSource?: string;
-  isFeaturedOnHomepage?: boolean;
+  isFeatured?: boolean;
   matchScore?: number;
   averageRating?: number;
   reviewCount?: number;

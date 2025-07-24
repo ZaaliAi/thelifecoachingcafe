@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { getAllCoaches, updateCoachSubscriptionTier, updateCoachFeatureStatus } from '@/lib/firestore';
 
 // The AdminCoachView type no longer needs a separate 'status' field from the Coach type, as it's part of the Coach type itself.
-type AdminCoachView = Coach & { isFeaturedOnHomepage?: boolean };
+type AdminCoachView = Coach & { isFeatured?: boolean };
 
 export default function AdminManageCoachesPage() {
   const [coachesList, setCoachesList] = useState<AdminCoachView[]>([]);
@@ -28,7 +28,7 @@ export default function AdminManageCoachesPage() {
       const allCoachesFromDb = await getAllCoaches(); 
       const applications: AdminCoachView[] = allCoachesFromDb.map(coach => ({
         ...coach,
-        isFeaturedOnHomepage: coach.isFeaturedOnHomepage || false,
+        isFeatured: coach.isFeatured || false,
       }));
       setCoachesList(applications);
     } catch (error) {
@@ -64,7 +64,7 @@ export default function AdminManageCoachesPage() {
     try {
       await updateCoachFeatureStatus(coachId, isFeatured);
       setCoachesList(prev =>
-        prev.map(coach => coach.id === coachId ? { ...coach, isFeaturedOnHomepage: isFeatured } : coach)
+        prev.map(coach => coach.id === coachId ? { ...coach, isFeatured: isFeatured } : coach)
       );
       toast({
         title: `Homepage Feature Status Updated`,
@@ -151,12 +151,12 @@ export default function AdminManageCoachesPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     <Switch
-                      checked={coach.isFeaturedOnHomepage}
+                      checked={coach.isFeatured}
                       onCheckedChange={(isChecked) => handleFeatureOnHomepageChange(coach.id, isChecked)}
                       aria-label={`Feature ${coach.name} on homepage`}
                       className="data-[state=checked]:bg-green-500"
                     />
-                    {coach.isFeaturedOnHomepage && <Star className="inline-block ml-1 h-4 w-4 text-yellow-400" />}
+                    {coach.isFeatured && <Star className="inline-block ml-1 h-4 w-4 text-yellow-400" />}
                   </TableCell>
                 </TableRow>
               ))}

@@ -46,7 +46,7 @@ const mapCoachFromFirestore = (docData: any, id: string): Coach => {
     createdAt: data.createdAt?.toDate().toISOString(),
     updatedAt: data.updatedAt?.toDate().toISOString(),
     dataSource: 'Firestore',
-    isFeaturedOnHomepage: data.isFeaturedOnHomepage || false,
+    isFeatured: data.isFeatured || false,
   };
 };
 
@@ -141,7 +141,7 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
       dataToSet.subscriptionTier = dataToSet.subscriptionTier ?? 'free';
       dataToSet.status = 'active';
       dataToSet.availability = dataToSet.availability ?? [];
-      dataToSet.isFeaturedOnHomepage = dataToSet.isFeaturedOnHomepage ?? false;
+      dataToSet.isFeatured = dataToSet.isFeatured ?? false;
     }
   } else {
     dataToSet.profileImageUrl = profileData.profileImageUrl === undefined ? userSnap.data()?.profileImageUrl : (profileData.profileImageUrl ?? null);
@@ -150,8 +150,8 @@ export async function setUserProfile(userId: string, profileData: Partial<Omit<F
     dataToSet.introVideoUrl = profileData.introVideoUrl === undefined ? userSnap.data()?.introVideoUrl : (profileData.introVideoUrl ?? null);
     
     if (profileData.role === 'coach') { 
-        if (profileData.isFeaturedOnHomepage === undefined) {
-            dataToSet.isFeaturedOnHomepage = userSnap.data()?.isFeaturedOnHomepage ?? false;
+        if (profileData.isFeatured === undefined) {
+            dataToSet.isFeatured = userSnap.data()?.isFeatured ?? false;
         }
     }
   }
@@ -172,7 +172,7 @@ export async function getUserProfile(userId: string): Promise<FirestoreUserProfi
       id: userSnap.id,
       ...data,
       availability: data.availability || [],
-      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined,
+      isFeatured: data.role === 'coach' ? (data.isFeatured || false) : undefined,
       favoriteCoachIds: data.favoriteCoachIds || [], 
       enableNotifications: data.enableNotifications === undefined ? true : data.enableNotifications,
     } as FirestoreUserProfile;
@@ -191,7 +191,7 @@ export async function getAllUserProfilesForAdmin(): Promise<FirestoreUserProfile
       ...data,
       createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
       updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
-      isFeaturedOnHomepage: data.role === 'coach' ? (data.isFeaturedOnHomepage || false) : undefined,
+      isFeatured: data.role === 'coach' ? (data.isFeatured || false) : undefined,
       favoriteCoachIds: data.favoriteCoachIds || [],
       enableNotifications: data.enableNotifications === undefined ? true : data.enableNotifications,
     } as FirestoreUserProfile;
@@ -219,7 +219,7 @@ export async function getFeaturedCoaches(count = 3): Promise<Coach[]> {
   const q = query(
     collection(db, "users"),
     where("role", "==", "coach"),
-    where("isFeaturedOnHomepage", "==", true),
+    where("isFeatured", "==", true),
     firestoreLimit(count)
   );
   const querySnapshot = await getDocs(q);
@@ -321,7 +321,7 @@ export async function updateCoachFeatureStatus(coachId: string, isFeatured: bool
   }
   const coachRef = doc(db, "users", coachId);
   await updateDoc(coachRef, {
-    isFeaturedOnHomepage: isFeatured,
+    isFeatured: isFeatured,
     updatedAt: serverTimestamp()
   });
 }
