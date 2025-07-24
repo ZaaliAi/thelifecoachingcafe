@@ -1,15 +1,4 @@
-// src/lib/firebaseAdmin.ts
 import * as admin from 'firebase-admin';
-
-// --- DIAGNOSTIC LOGGING ---
-// This code will run when the server starts or when an API route is first hit.
-console.log('--- [firebaseAdmin.ts] Diagnostic Check ---');
-console.log(`Value for FIREBASE_PROJECT_ID: ${process.env.FIREBASE_PROJECT_ID}`);
-console.log(`Value for FIREBASE_CLIENT_EMAIL: ${process.env.FIREBASE_CLIENT_EMAIL}`);
-const privateKeyExists = !!process.env.FIREBASE_PRIVATE_KEY;
-console.log(`Does FIREBASE_PRIVATE_KEY exist?: ${privateKeyExists}`);
-console.log('------------------------------------------');
-// --- END DIAGNOSTIC LOGGING ---
 
 if (!admin.apps.length) {
   try {
@@ -18,7 +7,7 @@ if (!admin.apps.length) {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
     if (!projectId || !clientEmail || !privateKey) {
-      throw new Error('One or more required Firebase Admin SDK environment variables were not found.');
+      throw new Error('Missing Firebase Admin SDK environment variables.');
     }
 
     admin.initializeApp({
@@ -29,14 +18,18 @@ if (!admin.apps.length) {
       }),
     });
 
-    console.log('[firebaseAdmin] Firebase Admin SDK initialized successfully.');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[firebaseAdmin] Initialized');
+    }
 
   } catch (error: any) {
-    console.error('[firebaseAdmin] CRITICAL ERROR: Failed to initialize Firebase Admin SDK.', {
+    console.error('[firebaseAdmin] Failed to initialize Firebase Admin SDK.', {
       message: error.message,
     });
   }
 }
 
-export { admin };
+const adminAuth = admin.auth();
+const adminFirestore = admin.firestore();
 
+export { admin, adminAuth, adminFirestore };
