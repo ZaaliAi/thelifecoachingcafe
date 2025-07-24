@@ -16,7 +16,7 @@ import {
 
 
 export default async function HomePage() {
-  const featuredCoaches = await getFeaturedCoaches(3);
+  const featuredCoaches = await getFeaturedCoaches(9);
   const testimonials = await getTestimonials(3);
 
   const faqs = [
